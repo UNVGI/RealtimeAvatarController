@@ -16,26 +16,42 @@
 
 ## 1. Slot データモデル
 
-<!-- TODO: slot-core agent - Slot 構造体 / クラス / ScriptableObject の骨格を記述 -->
+Slot は VTuber アバター制御の設定単位。`SlotSettings` を ScriptableObject として定義し、Unity 標準シリアライズで保存・復元を可能にする。
 
 ### 1.1 保持する設定項目
 
-想定される項目:
-- Slot 識別子 (ID)
-- 紐付けアバター参照
-- 紐付け MoCap ソース参照
-- 紐付け Facial Controller 参照 (抽象)
-- 紐付け LipSync Source 参照 (抽象)
-- Weight 値 (0.0〜1.0)
-- Slot 名 / 表示名など運用メタデータ
+| フィールド | 型 | 必須/省略可 | 説明 |
+|-----------|---|:---------:|------|
+| `slotId` | `string` | 必須 | Slot を一意に識別する主キー |
+| `displayName` | `string` | 必須 | エディタ・UI 向け表示名 |
+| `avatarProvider` | `IAvatarProvider` | 必須 | 紐付けアバター供給元 (抽象参照) |
+| `moCapSource` | `IMoCapSource` | 必須 | 紐付け MoCap ソース (抽象参照) |
+| `facialController` | `IFacialController` | 省略可 (null 許容) | 紐付け表情制御 (抽象参照) |
+| `lipSyncSource` | `ILipSyncSource` | 省略可 (null 許容) | 紐付けリップシンクソース (抽象参照) |
+| `weight` | `float` | 必須 | モーション合成ウェイト (0.0〜1.0、範囲外はクランプ) |
 
 ### 1.2 シリアライズ形式
 
-<!-- TODO: slot-core agent - ScriptableObject / JSON / MonoBehaviour のどれを採用するか -->
+- **採用**: Unity `ScriptableObject`
+  - `SlotSettings` は `ScriptableObject` を継承し、Unity エディタでアセット (.asset) として保存・管理する
+  - インターフェース参照フィールドはシリアライズ可能な形式 (アセット参照または型名文字列) で保持する
+  - JSON エクスポート / インポートの拡張余地を設計上確保する (design フェーズで具体化)
+- **不採用の理由**:
+  - MonoBehaviour は Scene に依存するためランタイム外での再利用性が低い
+  - 純 JSON は Unity エディタとの統合性が低い (ただし将来の拡張として許容)
 
 ### 1.3 ライフサイクル
 
-<!-- TODO: slot-core agent - 生成・破棄タイミング、リソース所有関係 -->
+| 状態 | 説明 |
+|------|------|
+| `Created` | `SlotRegistry.AddSlot()` 呼び出し後、リソース未初期化 |
+| `Active` | `SlotManager` が `IAvatarProvider`・`IMoCapSource` の初期化を完了し、動作中 |
+| `Inactive` | リソースを保持したまま一時停止中 (再アクティブ化可能) |
+| `Disposed` | `SlotRegistry.RemoveSlot()` 呼び出し後、全リソース解放済み |
+
+- **リソース所有**: `SlotManager` が Slot に紐付くリソースのライフサイクルを管理し、`IAvatarProvider` / `IMoCapSource` の初期化・解放を制御する
+- **破棄タイミング**: `SlotRegistry.RemoveSlot()` 呼び出し時、または `SlotManager` の `Dispose()` 時に全 Slot を一括破棄する
+- **エラー処理**: 破棄中の例外はキャッチしてログ記録し、残余リソースの解放を継続する
 
 ---
 
@@ -43,12 +59,32 @@
 
 ### 2.1 `IMoCapSource` (仮) シグネチャ
 
-<!-- TODO: slot-core agent - 以下観点を埋める -->
-- 初期化 / 破棄
-- モーションデータ取得 API (pull 型 / push 型 / イベント型のどれか)
-- ソース種別メタデータ
-- 通信パラメータ設定 (Slot 単位)
-- スレッド安全性の要求
+> **注意**: 具体的な引数型・戻り値型はすべて design フェーズで確定する。ここでは骨格・契約のみ定義する。
+
+```csharp
+// 骨格 (C# 疑似コード / 型名は仮)
+public interface IMoCapSource : IDisposable
+{
+    // ソース種別識別子 (例: "VMC", "Custom" 等)
+    string SourceType { get; }
+
+    // 初期化: 通信パラメータ (ポート番号等) を Slot 単位で受け取る
+    // 引数型は design フェーズで確定
+    void Initialize(/* MoCapSourceConfig config */);
+
+    // モーションデータ取得 (pull 型を基本とするが push / イベント型も design フェーズで検討)
+    // 戻り値型は motion-pipeline が定義するモーションデータ中立表現 (2.2 章) に依存
+    /* MotionData */ object FetchLatestMotion();
+
+    // 破棄 (IDisposable.Dispose() で代替可)
+    void Shutdown();
+}
+```
+
+**スレッド安全性の要求**:
+- `FetchLatestMotion()` はメインスレッド以外 (受信スレッド等) からも呼び出される可能性がある
+- 具象実装はスレッドセーフなデータ交換バッファ (例: ロックレスキュー) を提供すること
+- `Initialize()` / `Shutdown()` はメインスレッドからの呼び出しを前提とする
 
 ### 2.2 モーションデータ中立表現
 
@@ -64,11 +100,32 @@
 
 ### 3.1 `IAvatarProvider` (仮) シグネチャ
 
-<!-- TODO: slot-core agent - 以下観点を埋める -->
-- アバター要求 API (同期 / 非同期)
-- アバター解放 API
-- Provider 種別メタデータ
-- 供給結果 (Prefab インスタンス / GameObject 参照)
+> **注意**: 具体的な引数型・戻り値型はすべて design フェーズで確定する。ここでは骨格・契約のみ定義する。
+
+```csharp
+// 骨格 (C# 疑似コード / 型名は仮)
+public interface IAvatarProvider : IDisposable
+{
+    // Provider 種別識別子 (例: "Builtin", "Addressable" 等)
+    string ProviderType { get; }
+
+    // アバター要求 (同期版)
+    // 戻り値は供給された GameObject 参照 (Prefab インスタンス)
+    GameObject RequestAvatar(/* AvatarRequest request */);
+
+    // アバター要求 (非同期版): Addressable 等の将来実装に対応する拡張余地
+    // UniTask / Task<GameObject> どちらを採用するかは design フェーズで確定
+    /* Task<GameObject> */ object RequestAvatarAsync(/* AvatarRequest request */);
+
+    // アバター解放: 供給した GameObject を受け取りリソースを解放する
+    void ReleaseAvatar(GameObject avatar);
+}
+```
+
+**同期 / 非同期の許容方針**:
+- `IAvatarProvider` は同期・非同期のいずれの具象実装も許容する
+- ビルトイン Provider (初期段階) は同期版を実装する
+- Addressable Provider (将来) は非同期版を実装し、同期版は NotImplementedException でも可
 
 ### 3.2 Addressable 拡張余地
 
@@ -81,7 +138,22 @@
 
 ### 4.1 `IFacialController` (仮) シグネチャ
 
-<!-- TODO: slot-core agent - 骨格のみ定義。実装はしない -->
+> **注意**: 具体的な引数型・戻り値型はすべて design フェーズで確定する。ここでは骨格のみ定義する。
+
+```csharp
+// 骨格 (C# 疑似コード / 型名は仮)
+public interface IFacialController : IDisposable
+{
+    // 初期化: 制御対象アバターの GameObject を受け取る
+    void Initialize(/* GameObject avatarRoot */);
+
+    // 表情データ適用: 表情データ型は design フェーズで確定
+    void ApplyFacialData(/* FacialData data */);
+
+    // 解放 (IDisposable.Dispose() で代替可)
+    void Shutdown();
+}
+```
 
 ### 4.2 備考
 
@@ -93,7 +165,23 @@
 
 ### 5.1 `ILipSyncSource` (仮) シグネチャ
 
-<!-- TODO: slot-core agent - 骨格のみ定義。実装はしない -->
+> **注意**: 具体的な引数型・戻り値型はすべて design フェーズで確定する。ここでは骨格のみ定義する。
+
+```csharp
+// 骨格 (C# 疑似コード / 型名は仮)
+public interface ILipSyncSource : IDisposable
+{
+    // 初期化
+    void Initialize(/* LipSyncSourceConfig config */);
+
+    // リップシンクデータ取得 (pull 型を基本とする; push / イベント型は design フェーズで検討)
+    // 戻り値型は design フェーズで確定 (母音ブレンドシェイプ値配列等を想定)
+    /* LipSyncData */ object FetchLatestLipSync();
+
+    // 解放 (IDisposable.Dispose() で代替可)
+    void Shutdown();
+}
+```
 
 ### 5.2 備考
 
