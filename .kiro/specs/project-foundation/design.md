@@ -89,7 +89,8 @@ m_EditorVersionWithRevision: 6000.3.10f1 (abcdef012345)
   "license": "MIT",
   "dependencies": {
     "com.neuecc.unirx": "7.1.0",
-    "com.cysharp.unitask": "2.5.10"
+    "com.cysharp.unitask": "2.5.10",
+    "com.hidano.uosc": "1.0.0"
   },
   "samples": [
     {
@@ -114,8 +115,11 @@ m_EditorVersionWithRevision: 6000.3.10f1 (abcdef012345)
 |------------|-----------|------|
 | `com.neuecc.unirx` | `7.1.0` | 2024 年時点の最新安定版。OpenUPM で配布。NuGet 依存なし |
 | `com.cysharp.unitask` | `2.5.10` | 2024 年時点の最新安定版。OpenUPM で配布。`SlotManager.AddSlotAsync` で必須 |
+| `com.hidano.uosc` | `1.0.0` | VMC OSC 受信用 OSC ライブラリ。MIT ライセンス。`SO_REUSEADDR` 有効版。npm scoped registry (`https://registry.npmjs.com`) で配布。scope: `com.hidano` |
 
 > バージョン固定 (exact version) を採用し再現性を優先する。アップグレード時はパッケージ管理者が `package.json` を更新する。
+>
+> **バージョン固定ポリシー (Minor #1 対応)**: 全依存パッケージは exact version 固定を採用する。patch バージョンのアップグレード適用方針 (セキュリティ修正対応等) は tasks.md に引き継ぎ、依存管理ドキュメントに明記する予定。
 
 ### 3.3 Samples~ 配下の構成
 
@@ -212,7 +216,7 @@ Samples~/
 
 - **担当 Spec**: mocap-vmc
 - **配置パス**: `Runtime/MoCap/VMC/RealtimeAvatarController.MoCap.VMC.asmdef`
-- **役割**: VMC OSC 受信具象実装。`IMoCapSource` の具象実装を提供する。UniRx / UniTask は Core 経由で間接利用。
+- **役割**: VMC OSC 受信具象実装。`IMoCapSource` の具象実装を提供する。UniRx / UniTask は Core 経由で間接利用。OSC 受信には `com.hidano.uosc` ライブラリを使用する。
 
 #### 4.1.4 `RealtimeAvatarController.Avatar.Builtin`
 
@@ -448,7 +452,151 @@ Samples~/
 
 - **配置パス**: `Tests/PlayMode/slot-core/RealtimeAvatarController.Core.Tests.PlayMode.asmdef`
 
-> 他の機能 Spec のテスト asmdef も同一パターンで作成する。詳細は第 10 章の配置方針を参照。
+#### `RealtimeAvatarController.Motion.Tests.EditMode`
+
+```json
+{
+  "name": "RealtimeAvatarController.Motion.Tests.EditMode",
+  "rootNamespace": "RealtimeAvatarController.Motion.Tests",
+  "references": [
+    "RealtimeAvatarController.Motion"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
+```
+
+- **配置パス**: `Tests/EditMode/motion-pipeline/RealtimeAvatarController.Motion.Tests.EditMode.asmdef`
+
+#### `RealtimeAvatarController.Motion.Tests.PlayMode`
+
+```json
+{
+  "name": "RealtimeAvatarController.Motion.Tests.PlayMode",
+  "rootNamespace": "RealtimeAvatarController.Motion.Tests",
+  "references": [
+    "RealtimeAvatarController.Motion"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
+```
+
+- **配置パス**: `Tests/PlayMode/motion-pipeline/RealtimeAvatarController.Motion.Tests.PlayMode.asmdef`
+
+#### `RealtimeAvatarController.MoCap.VMC.Tests.EditMode`
+
+```json
+{
+  "name": "RealtimeAvatarController.MoCap.VMC.Tests.EditMode",
+  "rootNamespace": "RealtimeAvatarController.MoCap.VMC.Tests",
+  "references": [
+    "RealtimeAvatarController.MoCap.VMC"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
+```
+
+- **配置パス**: `Tests/EditMode/mocap-vmc/RealtimeAvatarController.MoCap.VMC.Tests.EditMode.asmdef`
+
+#### `RealtimeAvatarController.MoCap.VMC.Tests.PlayMode`
+
+```json
+{
+  "name": "RealtimeAvatarController.MoCap.VMC.Tests.PlayMode",
+  "rootNamespace": "RealtimeAvatarController.MoCap.VMC.Tests",
+  "references": [
+    "RealtimeAvatarController.MoCap.VMC"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
+```
+
+- **配置パス**: `Tests/PlayMode/mocap-vmc/RealtimeAvatarController.MoCap.VMC.Tests.PlayMode.asmdef`
+
+#### `RealtimeAvatarController.Avatar.Builtin.Tests.EditMode`
+
+```json
+{
+  "name": "RealtimeAvatarController.Avatar.Builtin.Tests.EditMode",
+  "rootNamespace": "RealtimeAvatarController.Avatar.Builtin.Tests",
+  "references": [
+    "RealtimeAvatarController.Avatar.Builtin"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
+```
+
+- **配置パス**: `Tests/EditMode/avatar-provider-builtin/RealtimeAvatarController.Avatar.Builtin.Tests.EditMode.asmdef`
+
+#### `RealtimeAvatarController.Avatar.Builtin.Tests.PlayMode`
+
+```json
+{
+  "name": "RealtimeAvatarController.Avatar.Builtin.Tests.PlayMode",
+  "rootNamespace": "RealtimeAvatarController.Avatar.Builtin.Tests",
+  "references": [
+    "RealtimeAvatarController.Avatar.Builtin"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
+```
+
+- **配置パス**: `Tests/PlayMode/avatar-provider-builtin/RealtimeAvatarController.Avatar.Builtin.Tests.PlayMode.asmdef`
+
+> **重要**: 全テスト asmdef で `optionalUnityReferences: ["TestAssemblies"]` を省略しないこと。このフィールドが欠落すると Unity Test Runner (NUnit) が asmdef を認識できず、テストが実行されない。
 
 ### 4.4 依存関係図
 
@@ -544,9 +692,9 @@ RealtimeAvatarController
 - Unity 6000.3.10f1 以降
 - OpenUPM CLI (任意、手動 `manifest.json` 編集でも可)
 
-### 6.2 Step 1: OpenUPM scoped registry の追加
+### 6.2 Step 1: scoped registry の追加
 
-Unity プロジェクトの `Packages/manifest.json` を開き、`scopedRegistries` セクションに以下を追加する。
+Unity プロジェクトの `Packages/manifest.json` を開き、`scopedRegistries` セクションに以下の **2 つのレジストリ**を追加する。両レジストリの追加が必須である。
 
 ```json
 {
@@ -558,12 +706,22 @@ Unity プロジェクトの `Packages/manifest.json` を開き、`scopedRegistri
         "com.neuecc",
         "com.cysharp"
       ]
+    },
+    {
+      "name": "npm (hidano)",
+      "url": "https://registry.npmjs.com",
+      "scopes": [
+        "com.hidano"
+      ]
     }
   ]
 }
 ```
 
-> **既存の `scopedRegistries` がある場合**: 上記オブジェクトを配列に**追記**する (既存エントリは削除しない)。
+> **既存の `scopedRegistries` がある場合**: 上記 2 つのオブジェクトを配列に**追記**する (既存エントリは削除しない)。
+>
+> - **OpenUPM** (`https://package.openupm.com`): UniRx (`com.neuecc`) および UniTask (`com.cysharp`) の取得に使用する。
+> - **npm (hidano)** (`https://registry.npmjs.com`): OSC ライブラリ `com.hidano.uosc` の取得に使用する。
 
 ### 6.3 Step 2: dependencies への追加
 
@@ -589,6 +747,13 @@ Unity プロジェクトの `Packages/manifest.json` を開き、`scopedRegistri
         "com.neuecc",
         "com.cysharp"
       ]
+    },
+    {
+      "name": "npm (hidano)",
+      "url": "https://registry.npmjs.com",
+      "scopes": [
+        "com.hidano"
+      ]
     }
   ],
   "dependencies": {
@@ -598,7 +763,7 @@ Unity プロジェクトの `Packages/manifest.json` を開き、`scopedRegistri
 }
 ```
 
-> `com.unity.ugui` は例示用。実際のプロジェクト依存は適宜追加する。
+> `com.unity.ugui` は例示用。実際のプロジェクト依存は適宜追加する。`com.hidano` スコープの `npm (hidano)` registry は `com.hidano.uosc` を解決するために必須。
 
 ### 6.5 Step 3: Package Manager UI での確認
 
@@ -623,6 +788,28 @@ openupm add com.cysharp.realtimeavatarcontroller
 ```
 
 `openupm-cli` は scoped registry の追加と `dependencies` への追記を自動で行う。UniRx・UniTask も依存として自動解決される。
+
+> **注意**: `openupm-cli` は OpenUPM レジストリの scoped registry のみを自動追加する。`com.hidano.uosc` の取得に必要な npm (hidano) registry は **手動で追加**する必要がある。6.2 章のスニペットを参照すること。
+
+### 6.8 git URL を使ってインストールする場合 (任意・参考)
+
+scoped registry を使わずに git URL で直接インストールする場合は、`?path=` パラメータでパッケージパスを指定する必要がある。
+
+```
+https://github.com/Hidano/RealtimeAvatarController.git?path=RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller
+```
+
+`Packages/manifest.json` の `dependencies` に以下のように記述する。
+
+```json
+{
+  "dependencies": {
+    "com.cysharp.realtimeavatarcontroller": "https://github.com/Hidano/RealtimeAvatarController.git?path=RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller"
+  }
+}
+```
+
+> **注意**: git URL インストールでは Unity が依存パッケージ (`com.neuecc.unirx`・`com.cysharp.unitask`・`com.hidano.uosc`) を自動解決しない。6.2 章の scoped registry 追加と 6.3 章の各依存パッケージの手動追加が別途必要になる。通常のインストールには **scoped registry 方式 (6.2〜6.4 章) を推奨**する。
 
 ---
 

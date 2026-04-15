@@ -40,41 +40,138 @@ Slot は VTuber アバター制御の設定単位。`SlotSettings` は Descripto
 ```csharp
 // 各 Descriptor は typed POCO としてシリアライズ可能
 // Config フィールドは ScriptableObject 基底型を継承した ProviderConfigBase を参照する
+// IEquatable<T> を実装し、IMoCapSourceRegistry の参照共有辞書キーとして利用可能にする
 [Serializable]
-public class AvatarProviderDescriptor
+public class AvatarProviderDescriptor : IEquatable<AvatarProviderDescriptor>
 {
     // Registry に登録された具象型を識別するキー (例: "Builtin", "Addressable")
     public string ProviderTypeId;
 
     // 具象型ごとのコンフィグ。ProviderConfigBase (ScriptableObject 派生) を参照。
     // Inspector でドラッグ&ドロップ可能。Factory 側はキャストで具象 Config を取得する。
+    // 等価判定は参照等価 (ReferenceEquals) を使用する。
     public ProviderConfigBase Config;
+
+    public bool Equals(AvatarProviderDescriptor other)
+        => other != null
+           && ProviderTypeId == other.ProviderTypeId
+           && ReferenceEquals(Config, other.Config);
+
+    public override bool Equals(object obj) => Equals(obj as AvatarProviderDescriptor);
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            int hash = 17;
+            hash = hash * 31 + (ProviderTypeId != null ? ProviderTypeId.GetHashCode() : 0);
+            hash = hash * 31 + (Config != null ? System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(Config) : 0);
+            return hash;
+        }
+    }
+
+    public static bool operator ==(AvatarProviderDescriptor a, AvatarProviderDescriptor b)
+        => a is null ? b is null : a.Equals(b);
+    public static bool operator !=(AvatarProviderDescriptor a, AvatarProviderDescriptor b)
+        => !(a == b);
 }
 
 [Serializable]
-public class MoCapSourceDescriptor
+public class MoCapSourceDescriptor : IEquatable<MoCapSourceDescriptor>
 {
     // Registry に登録された具象型を識別するキー (例: "VMC", "Custom")
     public string SourceTypeId;
 
     // 具象型ごとのコンフィグ。MoCapSourceConfigBase (ScriptableObject 派生) を参照。
+    // 等価判定は参照等価 (ReferenceEquals) を使用する。
     public MoCapSourceConfigBase Config;
+
+    public bool Equals(MoCapSourceDescriptor other)
+        => other != null
+           && SourceTypeId == other.SourceTypeId
+           && ReferenceEquals(Config, other.Config);
+
+    public override bool Equals(object obj) => Equals(obj as MoCapSourceDescriptor);
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            int hash = 17;
+            hash = hash * 31 + (SourceTypeId != null ? SourceTypeId.GetHashCode() : 0);
+            hash = hash * 31 + (Config != null ? System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(Config) : 0);
+            return hash;
+        }
+    }
+
+    public static bool operator ==(MoCapSourceDescriptor a, MoCapSourceDescriptor b)
+        => a is null ? b is null : a.Equals(b);
+    public static bool operator !=(MoCapSourceDescriptor a, MoCapSourceDescriptor b)
+        => !(a == b);
 }
 
 [Serializable]
-public class FacialControllerDescriptor
+public class FacialControllerDescriptor : IEquatable<FacialControllerDescriptor>
 {
     public string ControllerTypeId;
     public FacialControllerConfigBase Config;
+
+    public bool Equals(FacialControllerDescriptor other)
+        => other != null
+           && ControllerTypeId == other.ControllerTypeId
+           && ReferenceEquals(Config, other.Config);
+
+    public override bool Equals(object obj) => Equals(obj as FacialControllerDescriptor);
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            int hash = 17;
+            hash = hash * 31 + (ControllerTypeId != null ? ControllerTypeId.GetHashCode() : 0);
+            hash = hash * 31 + (Config != null ? System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(Config) : 0);
+            return hash;
+        }
+    }
+
+    public static bool operator ==(FacialControllerDescriptor a, FacialControllerDescriptor b)
+        => a is null ? b is null : a.Equals(b);
+    public static bool operator !=(FacialControllerDescriptor a, FacialControllerDescriptor b)
+        => !(a == b);
 }
 
 [Serializable]
-public class LipSyncSourceDescriptor
+public class LipSyncSourceDescriptor : IEquatable<LipSyncSourceDescriptor>
 {
     public string SourceTypeId;
     public LipSyncSourceConfigBase Config;
+
+    public bool Equals(LipSyncSourceDescriptor other)
+        => other != null
+           && SourceTypeId == other.SourceTypeId
+           && ReferenceEquals(Config, other.Config);
+
+    public override bool Equals(object obj) => Equals(obj as LipSyncSourceDescriptor);
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            int hash = 17;
+            hash = hash * 31 + (SourceTypeId != null ? SourceTypeId.GetHashCode() : 0);
+            hash = hash * 31 + (Config != null ? System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(Config) : 0);
+            return hash;
+        }
+    }
+
+    public static bool operator ==(LipSyncSourceDescriptor a, LipSyncSourceDescriptor b)
+        => a is null ? b is null : a.Equals(b);
+    public static bool operator !=(LipSyncSourceDescriptor a, LipSyncSourceDescriptor b)
+        => !(a == b);
 }
 ```
+
+> **Descriptor 等価判定方針 (design フェーズ確定)**: Config フィールドの等価判定は ScriptableObject の**参照等価** (`ReferenceEquals`) を使用する。これは `MoCapSourceRegistry` が `Dictionary<MoCapSourceDescriptor, IMoCapSource>` を辞書キーとして使用する際の前提条件であり、`GetHashCode()` は `typeId` の文字列ハッシュと Config の参照ハッシュ (`RuntimeHelpers.GetHashCode`) を組み合わせる。同一 SO アセットを参照している場合は参照が等価となるため、参照共有が正しく機能する。
 
 > **設計の意図**: インターフェース型フィールド (`IAvatarProvider` 等) を Unity シリアライズに直接配置することはできない。Descriptor パターンにより、具象型の選択をランタイムの Registry/Factory 解決に委ねる。利用可能な具象型はランタイムのプロジェクト構成に応じて動的に決まるため、エディタ UI も Registry から候補を列挙して表示する。Config フィールドを `ScriptableObject` 直参照ではなく各基底クラス型にすることで、Inspector での型安全な参照とアセット管理を両立する。
 
@@ -347,60 +444,95 @@ public class BuiltinAvatarProviderFactory : IAvatarProviderFactory
 
 ### RegistryLocator 骨格 (C# 疑似コード)
 
+> **最終確定 (design フェーズ)**: contracts.md は design.md §3.7 に同期済み。以下が正式仕様。
+
 ```csharp
 namespace RealtimeAvatarController.Core
 {
     /// <summary>
-    /// IProviderRegistry / IMoCapSourceRegistry への静的アクセスポイント。
-    /// Editor 起動時およびランタイム起動時に同一インスタンスを共有する。
-    /// テスト時は ResetForTest() を呼び出してインスタンスをリセットできる。
+    /// IProviderRegistry / IMoCapSourceRegistry / IFacialControllerRegistry /
+    /// ILipSyncSourceRegistry / ISlotErrorChannel への静的アクセスポイント。
+    /// Editor 起動時・ランタイム起動時に同一インスタンスを共有する。
+    /// Domain Reload OFF 対応: SubsystemRegistration タイミングで自動リセットする。
+    /// テスト時は ResetForTest() / Override*() を使用してインスタンスを差し替える。
     /// </summary>
     public static class RegistryLocator
     {
-        // IProviderRegistry への静的アクセスポイント
-        // 属性ベース自動登録 (1.4 章) により Factory が自己登録する
-        public static IProviderRegistry ProviderRegistry => GetOrCreate(ref s_providerRegistry);
+        // --- 公開プロパティ ---
 
-        // IMoCapSourceRegistry への静的アクセスポイント
-        public static IMoCapSourceRegistry MoCapSourceRegistry => GetOrCreate(ref s_moCapSourceRegistry);
+        /// <summary>IProviderRegistry への静的アクセスポイント。遅延初期化 (スレッドセーフ)。</summary>
+        public static IProviderRegistry ProviderRegistry
+            => s_providerRegistry
+               ?? Interlocked.CompareExchange(ref s_providerRegistry, new DefaultProviderRegistry(), null)
+               ?? s_providerRegistry;
 
-        // --- テスト・Domain Reload OFF 対応 ---
+        /// <summary>IMoCapSourceRegistry への静的アクセスポイント。遅延初期化 (スレッドセーフ)。</summary>
+        public static IMoCapSourceRegistry MoCapSourceRegistry
+            => s_moCapSourceRegistry
+               ?? Interlocked.CompareExchange(ref s_moCapSourceRegistry, new DefaultMoCapSourceRegistry(), null)
+               ?? s_moCapSourceRegistry;
+
+        /// <summary>IFacialControllerRegistry への静的アクセスポイント。遅延初期化 (将来用)。</summary>
+        public static IFacialControllerRegistry FacialControllerRegistry
+            => s_facialControllerRegistry
+               ?? Interlocked.CompareExchange(ref s_facialControllerRegistry, new DefaultFacialControllerRegistry(), null)
+               ?? s_facialControllerRegistry;
+
+        /// <summary>ILipSyncSourceRegistry への静的アクセスポイント。遅延初期化 (将来用)。</summary>
+        public static ILipSyncSourceRegistry LipSyncSourceRegistry
+            => s_lipSyncSourceRegistry
+               ?? Interlocked.CompareExchange(ref s_lipSyncSourceRegistry, new DefaultLipSyncSourceRegistry(), null)
+               ?? s_lipSyncSourceRegistry;
+
+        /// <summary>ISlotErrorChannel への静的アクセスポイント。遅延初期化。</summary>
+        public static ISlotErrorChannel ErrorChannel
+            => s_errorChannel
+               ?? Interlocked.CompareExchange(ref s_errorChannel, new DefaultSlotErrorChannel(), null)
+               ?? s_errorChannel;
+
+        // --- テスト・Domain Reload OFF 対応 API ---
 
         /// <summary>
-        /// テスト用: Registry インスタンスを破棄してリセットする。
-        /// Domain Reload OFF (Enter Play Mode 最適化) 設定下でも使用可。
+        /// 全 Registry インスタンスをリセットする。
+        /// Domain Reload OFF 設定下での二重登録防止。SubsystemRegistration タイミングで自動実行される。
+        /// ユニットテストの [TearDown] でも明示的に呼び出すこと。
         /// </summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         public static void ResetForTest()
         {
             s_providerRegistry = null;
             s_moCapSourceRegistry = null;
+            s_facialControllerRegistry = null;
+            s_lipSyncSourceRegistry = null;
+            s_errorChannel = null;
         }
 
-        /// <summary>
-        /// テスト用: 任意の IProviderRegistry 実装を注入する (モック差し替え等)。
-        /// </summary>
+        /// <summary>テスト用: 任意の IProviderRegistry 実装を注入する (モック差し替え等)。</summary>
         public static void OverrideProviderRegistry(IProviderRegistry registry)
             => s_providerRegistry = registry;
 
-        /// <summary>
-        /// テスト用: 任意の IMoCapSourceRegistry 実装を注入する。
-        /// </summary>
+        /// <summary>テスト用: 任意の IMoCapSourceRegistry 実装を注入する。</summary>
         public static void OverrideMoCapSourceRegistry(IMoCapSourceRegistry registry)
             => s_moCapSourceRegistry = registry;
 
-        // --- 内部実装 (design フェーズ最終確定) ---
+        /// <summary>テスト用: 任意の IFacialControllerRegistry 実装を注入する (将来用)。</summary>
+        public static void OverrideFacialControllerRegistry(IFacialControllerRegistry registry)
+            => s_facialControllerRegistry = registry;
+
+        /// <summary>テスト用: 任意の ILipSyncSourceRegistry 実装を注入する (将来用)。</summary>
+        public static void OverrideLipSyncSourceRegistry(ILipSyncSourceRegistry registry)
+            => s_lipSyncSourceRegistry = registry;
+
+        /// <summary>テスト用: 任意の ISlotErrorChannel 実装を注入する。</summary>
+        public static void OverrideErrorChannel(ISlotErrorChannel channel)
+            => s_errorChannel = channel;
+
+        // --- 内部フィールド ---
         private static IProviderRegistry s_providerRegistry;
         private static IMoCapSourceRegistry s_moCapSourceRegistry;
-        // IFacialControllerRegistry / ILipSyncSourceRegistry も同パターン (design フェーズ確定)
-
-        private static T GetOrCreate<T>(ref T field) where T : class
-        {
-            // デフォルト実装インスタンスを遅延生成する (null チェック + 代入)
-            // マルチスレッド競合は起動時登録完了後は読み取り専用のため許容する
-            // ...
-            return field;
-        }
+        private static IFacialControllerRegistry s_facialControllerRegistry;
+        private static ILipSyncSourceRegistry s_lipSyncSourceRegistry;
+        private static ISlotErrorChannel s_errorChannel;
     }
 }
 ```
@@ -411,8 +543,9 @@ namespace RealtimeAvatarController.Core
 |---------|---------|
 | Editor / Runtime で同一インスタンス共有 | 静的フィールドで保持。Domain Reload ON なら Editor 再起動時に自動リセット |
 | Domain Reload OFF (Enter Play Mode 最適化) での二重登録 | `SubsystemRegistration` タイミングの `ResetForTest()` で自動リセット |
-| ユニットテストでの Registry 差し替え | `OverrideProviderRegistry()` / `OverrideMoCapSourceRegistry()` で任意実装を注入 |
-| 正式なインスタンス生成責務 | 遅延初期化 (null チェック + DefaultXxxRegistry 生成) — design フェーズ確定 |
+| ユニットテストでの Registry 差し替え | `Override*()` メソッド群で任意実装を注入 |
+| 遅延初期化のスレッド安全性 | `Interlocked.CompareExchange` によりアトミック初期化を保証 (volatile キーワード不要) |
+| IFacialControllerRegistry / ILipSyncSourceRegistry | design フェーズで追加確定。`Override*()` および `ErrorChannel` も提供 |
 
 ---
 
@@ -421,6 +554,8 @@ namespace RealtimeAvatarController.Core
 > **記入者**: `slot-core` エージェント (dig ラウンド 3 確定)
 
 ### ISlotErrorChannel インターフェース骨格
+
+> **最終確定 (design フェーズ)**: `Publish(SlotError)` メソッドを正式追加。slot-core/design.md §3.8 と同期済み。
 
 ```csharp
 namespace RealtimeAvatarController.Core
@@ -434,8 +569,15 @@ namespace RealtimeAvatarController.Core
         /// <summary>
         /// Slot エラーの通知ストリーム。
         /// UniRx Subject<SlotError> で実装し、ObserveOnMainThread() で受信できる。
+        /// 発行は抑制なく毎回行う。
         /// </summary>
         IObservable<SlotError> Errors { get; }
+
+        /// <summary>
+        /// エラーを発行する。SlotManager・Factory 自己登録コードから呼び出す。
+        /// Debug.LogError の出力は同一 (SlotId, Category) 組合せにつき初回 1F のみ行い、以降は抑制する。
+        /// </summary>
+        void Publish(SlotError error);
     }
 }
 ```
@@ -509,12 +651,14 @@ namespace RealtimeAvatarController.Core
 
 ### エラー通知の責務分担
 
-| エラー発生箇所 | 通知方法 |
-|-------------|---------|
-| Slot 初期化失敗 | `SlotManager` が `ISlotErrorChannel` に発行 |
-| Applier エラー | `SlotManager` が `ISlotErrorChannel` に発行 (フォールバック後) |
-| VMC 受信エラー | `IMoCapSource` 具象実装が `ISlotErrorChannel` に発行 (または SlotManager 経由) |
-| Registry 競合 | `IProviderRegistry` / `IMoCapSourceRegistry` が `ISlotErrorChannel` に発行 |
+> **最終確定 (design フェーズ)**: 各発行主体と経路を以下に確定する。
+
+| エラー発生箇所 | 発行主体 | 通知方法 |
+|-------------|---------|---------|
+| Slot 初期化失敗 | `SlotManager` | `AddSlotAsync` 内で例外をキャッチし、`ISlotErrorChannel.Publish(SlotError(slotId, InitFailure, ex, UtcNow))` を呼ぶ |
+| Applier エラー | `SlotManager` | Applier は例外を throw するだけ。`SlotManager` が catch して FallbackBehavior 実行後に `ISlotErrorChannel.Publish(SlotError(slotId, ApplyFailure, ex, UtcNow))` を呼ぶ |
+| VMC 受信エラー | `IMoCapSource` 具象実装 | 受信スレッドで発生した場合はメインスレッドに移行後に `RegistryLocator.ErrorChannel.Publish(...)` を呼ぶ |
+| Registry 競合 | **呼び出し元 (Factory 自己登録コード)** | Registry の `Register()` は `RegistryConflictException` を throw するだけ。**Registry 自身は ErrorChannel に発行しない**。Factory の `RegisterRuntime()` / `RegisterEditor()` が try-catch で捕捉し、必要に応じて `RegistryLocator.ErrorChannel.Publish(SlotError("", RegistryConflict, ex, UtcNow))` を呼ぶ |
 
 > **確定 (design フェーズ)**: `ISlotErrorChannel` のインスタンスは `RegistryLocator.ErrorChannel` 静的プロパティ経由で取得する。テスト時は `RegistryLocator.OverrideErrorChannel()` でモックを注入できる。
 
@@ -549,7 +693,9 @@ namespace RealtimeAvatarController.Core
 
         /// <summary>
         /// エラー発生時、アバターを非表示にする。
-        /// アバターが破綻した状態で表示されることを防ぐ。
+        /// 実装: アバター GameObject に紐付く全 Renderer コンポーネントの enabled を false にする。
+        /// GameObject 自体は生存させる (SetActive(false) は使用しない)。
+        /// エラー解消後の次フレーム正常 Apply 時に Renderer.enabled = true へ復元する。
         /// </summary>
         Hide,
     }
@@ -947,15 +1093,20 @@ public interface ILipSyncSource : IDisposable
 - `RealtimeAvatarController.Core` は UniRx (`com.neuecc.unirx`) の asmdef (`UniRx`) および UniTask (`com.cysharp.unitask`) の asmdef (`UniTask`) を `references` に追加し、`IObservable<T>` 拡張メソッド・`Subject<T>`・`UniTask<T>` 等を直接利用する
 - `RealtimeAvatarController.Motion`・`RealtimeAvatarController.MoCap.VMC`・`RealtimeAvatarController.Avatar.Builtin` は UniRx / UniTask の asmdef を直接 `references` に持たず、`RealtimeAvatarController.Core` 経由で型を間接利用する (二重依存禁止)
 - ただし各アセンブリが UniRx の拡張メソッド (`ObserveOnMainThread()` 等) を直接呼び出す技術的必要が生じた場合は、design フェーズで要否を個別判断し本章に追記する
-- `RealtimeAvatarController.Samples.UI` も同様に UniRx / UniTask への直接依存は持たず、機能部 API 経由で利用する
-- **package.json の dependencies (project-foundation design フェーズ確定)**:
+- **原則**: `RealtimeAvatarController.Samples.UI` は UniRx / UniTask への直接依存を持たず、機能部 API 経由で利用する
+- **例外 (design フェーズ確定)**: `RealtimeAvatarController.Samples.UI` は `ISlotErrorChannel.Errors` の `.ObserveOnMainThread()` 拡張メソッドを直接呼び出すため、**UniRx の直接参照を例外的に許容する**。具体的には `Samples.UI` の asmdef `references` に `UniRx` を追加する。UniTask の `Samples.UI` 直接参照は現時点で技術的必要がないため不要 (必要になった場合は改めて本章に追記する)。
+- **package.json の dependencies (project-foundation design フェーズ確定 / com.hidano.uosc 追加)**:
   ```json
   "dependencies": {
     "com.neuecc.unirx": "7.1.0",
-    "com.cysharp.unitask": "2.5.10"
+    "com.cysharp.unitask": "2.5.10",
+    "com.hidano.uosc": "1.0.0"
   }
   ```
-- **OpenUPM scoped registry**: `com.neuecc` および `com.cysharp` の両スコープを `https://package.openupm.com` に追加する (manifest.json の `scopedRegistries` セクション)
+- **scoped registry (利用者の manifest.json へ追加必須)**:
+  - **OpenUPM**: `https://package.openupm.com` — scopes: `com.neuecc`, `com.cysharp`
+  - **npm (hidano)**: `https://registry.npmjs.com` — scopes: `com.hidano`
+  - 両レジストリの追加が必須。`com.hidano.uosc` (OSC ライブラリ、MIT、`SO_REUSEADDR` 有効版) は npm scoped registry から配布される。
 
 ### 6.2 名前空間規約
 

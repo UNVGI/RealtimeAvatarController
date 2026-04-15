@@ -205,21 +205,46 @@ public BuiltinAvatarProvider(BuiltinAvatarProviderConfig config, ISlotErrorChann
 public GameObject RequestAvatar(ProviderConfigBase config)
 {
     ThrowIfDisposed();
-    var builtinConfig = ResolveConfig(config);      // null チェック + キャスト
-    ThrowIfPrefabNull(builtinConfig.avatarPrefab);  // null Prefab ガード
+
+    // --- config 解決方針 ---
+    // 引数 config を優先してキャストする。
+    // 引数が null の場合はコンストラクタで格納済みのフィールド _config を使用する。
+    // どちらも null か BuiltinAvatarProviderConfig にキャストできない場合は
+    // InitFailure を発行して InvalidOperationException をスローする。
+    var builtinConfig = (config as BuiltinAvatarProviderConfig) ?? _config;
+    if (builtinConfig == null)
+    {
+        var ex = new InvalidOperationException(
+            $"config は BuiltinAvatarProviderConfig でなければなりません。実際の型: {config?.GetType().Name ?? "null"}");
+        _errorChannel.Publish(new SlotError(null, SlotErrorCategory.InitFailure, ex, DateTime.UtcNow));
+        throw ex;
+    }
+
     try
     {
+        // null Prefab ガード — try ブロック内に配置し、catch で InitFailure を発行できるようにする
+        if (builtinConfig.avatarPrefab == null)
+        {
+            throw new InvalidOperationException(
+                "BuiltinAvatarProviderConfig.avatarPrefab が null です。Prefab を設定してください。");
+        }
+
         var instance = Object.Instantiate(builtinConfig.avatarPrefab);
         _managedAvatars.Add(instance);
         return instance;
     }
     catch (Exception ex)
     {
-        _errorChannel.Publish(new SlotError(/* slotId */null, SlotErrorCategory.InitFailure, ex, DateTime.UtcNow));
+        // null Prefab 例外・Object.Instantiate 例外いずれも InitFailure として発行する。
+        // contracts.md §1.7 / slot-core/design.md §3.8 の Publish(SlotError) に従い
+        // RegistryLocator.ErrorChannel 経由の _errorChannel に発行する。
+        _errorChannel.Publish(new SlotError(null, SlotErrorCategory.InitFailure, ex, DateTime.UtcNow));
         throw;  // SlotManager に再スロー
     }
 }
 ```
+
+> **config 引数の設計意図**: `IAvatarProvider` インターフェース契約 (contracts.md §3、slot-core/design.md §3.7) では `RequestAvatar(ProviderConfigBase config)` に config 引数が存在する。`BuiltinAvatarProvider` はコンストラクタ時点で `_config` を保持しているため、引数 config は**省略可能な上書きパス**として機能する。呼び出し元が `null` を渡した場合はコンストラクタ引数の `_config` を使用する。これにより将来的に同一 Provider インスタンスを異なる Config で再利用する拡張余地を確保しつつ、通常の Factory 経由フローでは `_config` を透過的に使用できる。
 
 - `Object.Instantiate(prefab)` でアバターを Scene に配置する
 - 生成した `GameObject` を `_managedAvatars` に登録し、`ReleaseAvatar()` / `Dispose()` での追跡に使用する
@@ -359,9 +384,20 @@ namespace RealtimeAvatarController.Avatar.Builtin
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void RegisterRuntime()
         {
-            RegistryLocator.ProviderRegistry.Register(
-                BuiltinProviderTypeId,
-                new BuiltinAvatarProviderFactory());
+            try
+            {
+                RegistryLocator.ProviderRegistry.Register(
+                    BuiltinProviderTypeId,
+                    new BuiltinAvatarProviderFactory());
+            }
+            catch (RegistryConflictException ex)
+            {
+                // 二重登録 (Domain Reload OFF 環境等) を ErrorChannel に通知する。
+                // contracts.md §1.7 / slot-core/design.md §8.1 の確定パターンに従い
+                // slotId は空文字列、カテゴリは RegistryConflict を使用する。
+                RegistryLocator.ErrorChannel.Publish(
+                    new SlotError("", SlotErrorCategory.RegistryConflict, ex, DateTime.UtcNow));
+            }
         }
 
 #if UNITY_EDITOR
@@ -372,9 +408,19 @@ namespace RealtimeAvatarController.Avatar.Builtin
         [UnityEditor.InitializeOnLoadMethod]
         private static void RegisterEditor()
         {
-            RegistryLocator.ProviderRegistry.Register(
-                BuiltinProviderTypeId,
-                new BuiltinAvatarProviderFactory());
+            try
+            {
+                RegistryLocator.ProviderRegistry.Register(
+                    BuiltinProviderTypeId,
+                    new BuiltinAvatarProviderFactory());
+            }
+            catch (RegistryConflictException ex)
+            {
+                // Editor リロード時の二重登録を ErrorChannel に通知する。
+                // contracts.md §1.7 / slot-core/design.md §8.1 の確定パターンに従う。
+                RegistryLocator.ErrorChannel.Publish(
+                    new SlotError("", SlotErrorCategory.RegistryConflict, ex, DateTime.UtcNow));
+            }
         }
 #endif
 
@@ -406,14 +452,18 @@ namespace RealtimeAvatarController.Avatar.Builtin
 
 ## 8. エラーハンドリング
 
-### InitFailure 発生パターン
+### InitFailure / RegistryConflict 発生パターン
+
+> **ISlotErrorChannel.Publish() 参照**: 本節のエラー発行はすべて `contracts.md §1.7`（`ISlotErrorChannel` インターフェース骨格・`Publish(SlotError error)` メソッド確定）および `slot-core/design.md §3.8`（`DefaultSlotErrorChannel` 実装）に基づく。`_errorChannel.Publish(new SlotError(...))` の呼び出し形式はこれらの最終確定シグネチャと完全に一致する。
 
 | パターン | 発生箇所 | 処理 |
 |---------|---------|------|
-| `Create()` に `BuiltinAvatarProviderConfig` 以外の Config が渡された | `BuiltinAvatarProviderFactory.Create()` | `ISlotErrorChannel` に `InitFailure` を発行後、`ArgumentException` をスロー |
-| `avatarPrefab` が null の状態で `RequestAvatar()` が呼ばれた | `BuiltinAvatarProvider.RequestAvatar()` | `ISlotErrorChannel` に `InitFailure` を発行後、`InvalidOperationException` をスロー |
-| `Object.Instantiate()` が例外を発生させた | `BuiltinAvatarProvider.RequestAvatar()` | `ISlotErrorChannel` に `InitFailure` を発行後、例外を再スロー |
+| `Create()` に `BuiltinAvatarProviderConfig` 以外の Config が渡された | `BuiltinAvatarProviderFactory.Create()` | `_errorChannel.Publish(new SlotError(null, SlotErrorCategory.InitFailure, ex, DateTime.UtcNow))` を呼び出し後、`ArgumentException` をスロー |
+| `RequestAvatar()` の config 引数と `_config` フィールドがともに null またはキャスト不可 | `BuiltinAvatarProvider.RequestAvatar()` | `_errorChannel.Publish(new SlotError(null, SlotErrorCategory.InitFailure, ex, DateTime.UtcNow))` を呼び出し後、`InvalidOperationException` をスロー |
+| `avatarPrefab` が null の状態で `RequestAvatar()` が呼ばれた | `BuiltinAvatarProvider.RequestAvatar()` (try ブロック内) | try ブロック内で `InvalidOperationException` をスローし、catch ブロックで `_errorChannel.Publish(new SlotError(null, SlotErrorCategory.InitFailure, ex, DateTime.UtcNow))` を呼び出してから再スロー |
+| `Object.Instantiate()` が例外を発生させた | `BuiltinAvatarProvider.RequestAvatar()` (try ブロック内) | catch ブロックで `_errorChannel.Publish(new SlotError(null, SlotErrorCategory.InitFailure, ex, DateTime.UtcNow))` を呼び出し後、例外を再スロー |
 | `Dispose()` 後に `RequestAvatar()` が呼ばれた | `BuiltinAvatarProvider.RequestAvatar()` | `ObjectDisposedException` をスロー (ErrorChannel 発行なし) |
+| `Register()` 呼び出し時の typeId 重複 (`RegistryConflictException`) | `RegisterRuntime()` / `RegisterEditor()` (catch ブロック) | `RegistryLocator.ErrorChannel.Publish(new SlotError("", SlotErrorCategory.RegistryConflict, ex, DateTime.UtcNow))` を呼び出す (再スローなし) |
 
 ### SlotManager との責務分担
 
@@ -432,6 +482,15 @@ SlotManager (slot-core)
 ### ISlotErrorChannel へのアクセス
 
 `BuiltinAvatarProvider` および `BuiltinAvatarProviderFactory` は `ISlotErrorChannel` を DI (コンストラクタ引数) または `RegistryLocator.ErrorChannel` の静的アクセスで取得する。テスト時は `RegistryLocator.OverrideErrorChannel()` でモック実装を注入できる。
+
+**ISlotErrorChannel.Publish() の最終シグネチャ確認先**:
+
+| 文書 | 章 | 内容 |
+|------|---|------|
+| `contracts.md` | §1.7 | `void Publish(SlotError error)` — Wave A で正式追記済み |
+| `slot-core/design.md` | §3.8 | `DefaultSlotErrorChannel` 実装・`Subject<SlotError>.Synchronize()` によるスレッドセーフ保証 |
+
+本 Spec のすべてのエラー発行は `_errorChannel.Publish(new SlotError(slotId, category, ex, DateTime.UtcNow))` の形式で統一する。`_errorChannel` は `BuiltinAvatarProviderFactory.Create()` でコンストラクタに渡されるインスタンス (DI 優先) であり、null の場合は `RegistryLocator.ErrorChannel` にフォールバックする (§6 エラーチャネル解決順序を参照)。
 
 ---
 

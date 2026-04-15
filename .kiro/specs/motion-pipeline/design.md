@@ -19,7 +19,7 @@
 | **Weight 適用** | `SlotSettings.weight` を参照した二値 (0.0/1.0) 制御 |
 | **Humanoid 適用層** | `HumanoidMotionApplier` / `HumanPoseHandler` を使ったアバター骨格制御 |
 | **Fallback 挙動** | `FallbackBehavior` 参照によるエラー時挙動分岐 |
-| **エラー通知** | Applier 例外時の `ISlotErrorChannel` への `ApplyFailure` 発行 |
+| **エラー通知** | Applier 例外時の `ISlotErrorChannel` への `ApplyFailure` 発行 (発行主体: SlotManager) |
 | **ランタイム切替** | MoCap ソース切替・アバター切替のシームレス対応 |
 
 ### slot-core との境界
@@ -242,7 +242,11 @@ namespace RealtimeAvatarController.Motion
         /// Unity メインスレッド (LateUpdate タイミング) からのみ呼び出すこと。
         /// </summary>
         /// <param name="frame">適用するフレーム。null または無効フレームの場合はスキップ。</param>
-        /// <param name="weight">適用ウェイト (0.0〜1.0、範囲外はクランプ)。初期版有効値: 0.0 / 1.0。</param>
+        /// <param name="weight">
+        /// 適用ウェイト (0.0〜1.0)。
+        /// <b>呼び出し元 (SlotManager) が事前に Mathf.Clamp01 でクランプした値を渡すこと。</b>
+        /// Applier 内部ではクランプ処理を行わない。初期版有効値: 0.0 / 1.0。
+        /// </param>
         /// <param name="settings">対象 Slot の設定 (fallbackBehavior 等の参照に使用)。</param>
         void Apply(MotionFrame frame, float weight, SlotSettings settings);
 
@@ -270,17 +274,14 @@ namespace RealtimeAvatarController.Motion
         /// <summary>
         /// コンストラクタ。
         /// </summary>
-        /// <param name="errorChannel">
-        /// ApplyFailure 発生時の通知先。
-        /// RegistryLocator.ErrorChannel または DI 経由で渡す。
-        /// </param>
-        /// <param name="slotId">このアプライヤーが属する Slot の識別子。エラー発行時に使用。</param>
-        public HumanoidMotionApplier(ISlotErrorChannel errorChannel, string slotId);
+        /// <param name="slotId">このアプライヤーが属する Slot の識別子。例外メッセージ生成に使用。</param>
+        public HumanoidMotionApplier(string slotId);
 
         /// <inheritdoc/>
         /// <remarks>
-        /// frame が HumanoidMotionFrame 以外の場合は適用をスキップし、エラーも発行しない。
-        /// Apply 処理中に例外が発生した場合は FallbackBehavior を実行し ISlotErrorChannel に発行する。
+        /// frame が HumanoidMotionFrame 以外の場合は適用をスキップし、例外もスローしない。
+        /// Apply 処理中に例外が発生した場合はそのまま throw する。
+        /// FallbackBehavior の実行および ISlotErrorChannel への発行は呼び出し元 (SlotManager) の責務。
         /// </remarks>
         public void Apply(MotionFrame frame, float weight, SlotSettings settings);
 
@@ -426,6 +427,12 @@ struct 採用を検討したが、以下の理由により class を選定した
 | **方式 A** | `.ObserveOnMainThread()` でメインスレッドに切り替えてから書込 | UniRx キュー経由のため、高頻度フレームでキューが積み重なる可能性がある。LateUpdate タイミングで最新フレームのみを使用する本設計では不必要なキュー処理が発生する |
 | **方式 B** (採用) | 受信スレッドで `Interlocked.Exchange` によりアトミックに参照を更新し、メインスレッドで読み出す | ロックフリーで最新フレームのみを保持できる。キューの蓄積なし。フレームドロップを許容する設計と整合する |
 
+> **slot-core §3.1 推奨からの意図的逸脱**: slot-core design.md §3.1 の `IMoCapSource` doccomment には「購読側は `.ObserveOnMainThread()` でメインスレッドに同期すること」と記載されており、これは方式 A 相当のガイダンスである。motion-pipeline は以下の理由により方式 B を採用し、この推奨に従わない。
+>
+> - **高頻度フレームでのキュー蓄積リスク回避**: UniRx の `ObserveOnMainThread()` は内部的に LateUpdate/Update キューを介するため、MoCap 受信レート (60〜120fps 以上) では LateUpdate 1 回あたり複数フレームがキューに積まれ、処理遅延が増大する可能性がある。
+> - **常時最新フレームのみ保持**: リアルタイム MoCap 制御では「全フレームを逃さず処理する」より「最新フレームを低レイテンシで適用する」ことが優先される。`Interlocked.Exchange` による上書き方式はこの要件に直接対応する。
+> - **フレームドロップ許容**: 本設計はフレームドロップを許容する設計方針をとっており (§5.2 参照)、キューによる全フレーム保証は不要。
+
 ### 5.2 実装方式: 単一最新フレーム保持 (Interlocked)
 
 ダブルバッファではなく「常に最新フレームのみ保持」方式を採用する。
@@ -471,6 +478,8 @@ SlotB
 | `SetSource(null)` 呼び出し | 旧購読の `Dispose()` のみ実行。`_latestFrame` は保持 (前フレーム維持) |
 | `MotionCache.Dispose()` | 購読の `Dispose()` を実行。`IMoCapSource` 本体の `Dispose()` は**呼び出さない** |
 
+> **OnError 非発行の前提**: contracts.md §2.1 および slot-core design.md §3.1 により「`MotionStream` は `OnError` を発行しない」ことが保証されている。`MotionCache` は `Subscribe(OnReceive)` 呼び出し時に `onError` コールバックを省略してよい。MoCap ソース内部エラーは `IMoCapSource` 具象実装が `ISlotErrorChannel` に通知する責務を持つ (contracts.md §1.7 参照)。
+
 ### 5.5 IMoCapSource Dispose 禁止
 
 `MotionCache` は `IMoCapSource` のライフサイクルを所有しない。`IMoCapSource.Dispose()` は `MoCapSourceRegistry` が参照カウントをもとに管理する (slot-core 設計)。`MotionCache.Dispose()` / `SetSource(null)` では購読解除 (`IDisposable.Dispose()`) のみを行う。
@@ -488,19 +497,24 @@ SlotB
 | 範囲外 (`< 0.0` or `> 1.0`) | クランプして `0.0` または `1.0` として扱う | |
 | `0.0 < w < 1.0` | **未定義** (将来の複数ソース混合シナリオで定義する) | 初期版では実装しない |
 
-### 6.2 IMotionApplier シグネチャでの Weight 扱い
+### 6.2 SlotManager での Weight クランプと Apply 呼び出し
+
+Weight のクランプ処理は **SlotManager** が担う。`SlotSettings.weight` を読み取った時点で `Mathf.Clamp01` を適用し、クランプ済みの値を `IMotionApplier.Apply()` に渡す。**Applier 内部ではクランプ処理を行わない** (二重クランプ禁止)。
 
 ```csharp
-// SlotManager (または上位コンポーネント) での呼び出しイメージ
-float clampedWeight = Mathf.Clamp01(settings.weight);
+// SlotManager (LateUpdate) での呼び出しイメージ
+float clampedWeight = Mathf.Clamp01(settings.weight);  // クランプ責務は SlotManager
 if (clampedWeight == 0f)
 {
     // skip: Apply を呼び出さない → 前フレームポーズ維持
     return;
 }
 // weight == 1.0 の場合のみ Apply を呼び出す (初期版)
+// Apply には既にクランプ済みの値を渡す
 applier.Apply(cache.LatestFrame, clampedWeight, settings);
 ```
+
+> **Req 5 AC4 との整合**: Req 5 AC4「`IMotionApplier` shall 値を `0.0〜1.0` にクランプして処理を継続する」の「クランプ」責務は SlotManager が `Apply()` 呼び出し前に遂行する設計とする。Applier は既にクランプ済みの値を受け取る前提であり、`IMotionApplier.Apply()` の doccomment にもその旨を明記している (§3.6 参照)。これにより Req 5 AC4 の「クランプして処理継続」要件を満たす。
 
 ### 6.3 将来拡張
 
@@ -514,13 +528,14 @@ applier.Apply(cache.LatestFrame, clampedWeight, settings);
 
 ```
 HumanoidMotionApplier
-  ├─ _poseHandler: HumanPoseHandler       // アバター骨格操作
-  ├─ _lastGoodPose: HumanPose             // HoldLastPose 用の直前正常ポーズ
-  ├─ _renderers: Renderer[]              // Hide/復帰用 Renderer キャッシュ
-  ├─ _isFallbackHiding: bool             // Hide 状態フラグ
-  ├─ _errorChannel: ISlotErrorChannel    // エラー発行先 (コンストラクタ注入)
-  └─ _slotId: string                     // エラー発行時の Slot 識別子
+  ├─ _poseHandler: HumanPoseHandler   // アバター骨格操作
+  ├─ _lastGoodPose: HumanPose         // HoldLastPose 用の直前正常ポーズ
+  ├─ _renderers: Renderer[]           // Hide/復帰用 Renderer キャッシュ
+  ├─ _isFallbackHiding: bool          // Hide 状態フラグ
+  └─ _slotId: string                  // 例外メッセージ生成用の Slot 識別子
 ```
+
+> **_errorChannel を持たない設計**: ApplyFailure の ErrorChannel 発行責務は SlotManager が担う (§9 参照)。Applier は例外を throw するだけであり、`ISlotErrorChannel` への参照を保持しない。これにより Applier の依存が最小化され、単体テストでのモック設定が不要になる。
 
 ### 7.2 HumanPoseHandler の初期化・破棄
 
@@ -583,23 +598,33 @@ SetAvatar(newAvatar) 呼び出し (メインスレッド)
 
 ### 8.1 概要
 
-`HumanoidMotionApplier.Apply()` 内でモーション適用処理が例外をスローした場合、`SlotSettings.fallbackBehavior` を参照して以下のいずれかの処理を実行する。
+`HumanoidMotionApplier.Apply()` 内でモーション適用処理が例外をスローした場合、Applier は例外をそのまま呼び出し元へ伝搬する。`FallbackBehavior` の実行および `ISlotErrorChannel` への `ApplyFailure` 発行は、呼び出し元である **SlotManager** が担う。
 
 ```csharp
-// Apply() 内の例外処理イメージ
+// HumanoidMotionApplier.Apply() 内の例外処理イメージ
+// ---- Applier は例外を catch せず、throw させるだけ ----
+ApplyInternal(humanoidFrame);  // 例外が発生すれば呼び出し元に伝搬
+// 正常完了時のみここに到達
+_lastGoodPose を更新
+if (_isFallbackHiding) RestoreRenderers(); // Hide からの復帰
+```
+
+```csharp
+// SlotManager (LateUpdate) での呼び出しイメージ
+// ---- FallbackBehavior 実行と ApplyFailure 発行は SlotManager が担う ----
 try
 {
-    ApplyInternal(humanoidFrame);
-    // 正常完了
-    _lastGoodPose 更新
-    if (_isFallbackHiding) RestoreRenderers(); // Hide からの復帰
+    applier.Apply(cache.LatestFrame, clampedWeight, settings);
 }
 catch (Exception ex)
 {
-    ExecuteFallback(settings.fallbackBehavior);
-    _errorChannel.Publish(new SlotError(_slotId, SlotErrorCategory.ApplyFailure, ex, DateTime.UtcNow));
+    ExecuteFallback(applier, settings.fallbackBehavior);  // Fallback 処理を先に実行
+    RegistryLocator.ErrorChannel.Publish(
+        new SlotError(slotId, SlotErrorCategory.ApplyFailure, ex, DateTime.UtcNow));
 }
 ```
+
+> **責務分担の根拠**: contracts.md §1.7「エラー通知の責務分担」テーブルに「Applier エラー | SlotManager が catch して FallbackBehavior 実行後に `ISlotErrorChannel.Publish()` を呼ぶ」と確定されている。Applier は例外を throw するだけ。
 
 ### 8.2 HoldLastPose
 
@@ -681,36 +706,44 @@ HumanoidMotionApplier.Apply(frame, weight, settings)
 
 ## 9. ErrorChannel 連携
 
-### 9.1 ApplyFailure 発行タイミング
+### 9.1 ApplyFailure 発行タイミングと責務分担
 
 ```
-Apply() 例外発生
-  │
-  ├─ 1. ExecuteFallback() 実行 (FallbackBehavior 分岐)
-  │        └─ フォールバック処理が先に完了することを保証
-  │
-  └─ 2. _errorChannel.Publish() 実行
-           └─ new SlotError(
-                  slotId:    _slotId,
-                  category:  SlotErrorCategory.ApplyFailure,
-                  exception: ex,
-                  timestamp: DateTime.UtcNow
-              )
+[HumanoidMotionApplier.Apply()]
+    │
+    ├─ ApplyInternal() 実行中に例外発生
+    │        └─ 例外をそのまま throw (Applier は catch しない)
+    │
+[SlotManager (LateUpdate) の catch ブロック]
+    │
+    ├─ 1. ExecuteFallback() 実行 (FallbackBehavior 分岐)
+    │        └─ フォールバック処理が先に完了することを保証
+    │
+    └─ 2. RegistryLocator.ErrorChannel.Publish() 実行
+               └─ new SlotError(
+                      slotId:    slotId,
+                      category:  SlotErrorCategory.ApplyFailure,
+                      exception: ex,
+                      timestamp: DateTime.UtcNow
+                  )
 ```
 
-### 9.2 ISlotErrorChannel の取得方法
+**発行主体は SlotManager である。** `HumanoidMotionApplier` は `ISlotErrorChannel` の参照を持たず、例外を throw するだけ。この責務分担は contracts.md §1.7「エラー通知の責務分担」テーブルに準拠する。
 
-`HumanoidMotionApplier` は `ISlotErrorChannel` をコンストラクタで受け取る。
+### 9.2 RegistryLocator.ErrorChannel 参照経路
+
+`SlotManager` は `RegistryLocator.ErrorChannel` 静的プロパティ経由で `ISlotErrorChannel` に直接アクセスして `Publish()` を呼び出す。
 
 ```csharp
-// 生成例 (SlotManager や上位コンポーネントから)
-var applier = new HumanoidMotionApplier(
-    errorChannel: RegistryLocator.ErrorChannel,
-    slotId: slot.SlotId
-);
+// SlotManager での ApplyFailure 発行イメージ
+// contracts.md §1.6: RegistryLocator.ErrorChannel は ISlotErrorChannel への静的アクセスポイント
+RegistryLocator.ErrorChannel.Publish(
+    new SlotError(slotId, SlotErrorCategory.ApplyFailure, ex, DateTime.UtcNow));
 ```
 
-`RegistryLocator.ErrorChannel` 経由でデフォルト実装にアクセスできる。テスト時は `RegistryLocator.OverrideErrorChannel(mock)` でモックに差し替える。
+`RegistryLocator.ErrorChannel` は遅延初期化 (`Interlocked.CompareExchange`) でスレッドセーフに `DefaultSlotErrorChannel` を返す (contracts.md §1.6 参照)。テスト時は `RegistryLocator.OverrideErrorChannel(mock)` でモックに差し替え、`RegistryLocator.ResetForTest()` でリセットする。
+
+`HumanoidMotionApplier` のコンストラクタから `ISlotErrorChannel` パラメータは**削除**されている。Applier は `slotId` のみを受け取る。
 
 ### 9.3 発行対象外のケース
 
@@ -824,20 +857,27 @@ sequenceDiagram
     SM->>AP: Apply(frame, 1.0, settings)
     AP->>PH: SetHumanPose(ref pose)
     PH-->>AP: 例外スロー (InvalidOperationException 等)
+    AP-->>SM: 例外を再スロー (Applier は catch しない)
 
-    AP->>AP: ExecuteFallback(settings.fallbackBehavior)
+    Note over SM: catch ブロックで以下を実行
+
+    SM->>SM: ExecuteFallback(applier, settings.fallbackBehavior)
 
     alt HoldLastPose
-        AP->>AP: 何もしない (_lastGoodPose 維持)
+        SM->>SM: 何もしない (_lastGoodPose 維持)
     else TPose
+        SM->>AP: TPose フォールバック指示
         AP->>PH: SetHumanPose(ref tPose) // 全 Muscle = 0
     else Hide
+        SM->>AP: Hide フォールバック指示
         AP->>AP: Renderer.enabled = false (全 Renderer)
         AP->>AP: _isFallbackHiding = true
     end
 
-    AP->>EC: Publish(SlotError{ApplyFailure, ex, DateTime.UtcNow})
+    SM->>EC: RegistryLocator.ErrorChannel.Publish(SlotError{ApplyFailure, ex, DateTime.UtcNow})
 ```
+
+> **注記**: FallbackBehavior の各処理 (HoldLastPose / TPose / Hide) は SlotManager が Applier のメソッドを経由して実行する場合と、SlotManager が直接制御する場合がある。詳細な委譲パターンは tasks フェーズで確定する。重要なのは「Publish の発行主体は SlotManager」であり、Applier は例外を throw するだけという責務分担である。
 
 ### 11.3 MoCap ソース切替時のフロー
 
@@ -924,8 +964,8 @@ Unity ランタイムを必要としない純粋なロジックテスト。
 | `MotionFrameTimestampTests` | `HumanoidMotionFrame` | Timestamp が正値・単調増加であること、コンストラクタで正しく保持されること |
 | `HumanoidMotionFrameTests` | `HumanoidMotionFrame` | `IsValid` (Muscles.Length 95 → true、0 → false)、null Muscles 時のデフォルト空配列化、イミュータブル確認 |
 | `MotionCacheTests` | `MotionCache` | 購読開始 / 解除 / ソース切替時の動作 (Subject を使ったスタブ)、`LatestFrame` の更新確認、`Dispose()` 後の購読解除確認、`IMoCapSource.Dispose()` が呼ばれないことの確認 |
-| `WeightTests` | 呼び出しロジック | weight == 0.0 → Apply スキップ確認、weight == 1.0 → Apply 呼び出し確認、範囲外クランプ確認 |
-| `HumanoidMotionApplierFallbackTests` | `HumanoidMotionApplier` | HoldLastPose / TPose / Hide 各 enum 値での分岐確認 (モック `HumanPoseHandler` または テスト用スタブを使用)、ISlotErrorChannel への発行確認、無効フレームで発行しないことの確認 |
+| `WeightTests` | SlotManager 呼び出しロジック | weight == 0.0 → Apply スキップ確認、weight == 1.0 → Apply 呼び出し確認、範囲外 → SlotManager 側で Clamp01 後に Apply 呼び出し確認 (Applier 内クランプは行わない) |
+| `HumanoidMotionApplierFallbackTests` | `HumanoidMotionApplier` / SlotManager | HumanoidMotionApplier が例外を throw することの確認、SlotManager の catch ブロックで HoldLastPose / TPose / Hide 各分岐が実行されることの確認、SlotManager が RegistryLocator.ErrorChannel に ApplyFailure を発行することの確認、無効フレームで発行しないことの確認 |
 
 ### 13.2 PlayMode テスト (`RealtimeAvatarController.Motion.Tests.PlayMode`)
 
@@ -939,7 +979,7 @@ Unity ランタイムを必要としない純粋なロジックテスト。
 ### 13.3 テスト用スタブ・モック方針
 
 - `MotionCacheTests` では UniRx の `Subject<MotionFrame>` をスタブとして使用し、実 `IMoCapSource` を使わずに購読ライフサイクルを検証する
-- `HumanoidMotionApplierFallbackTests` では `ISlotErrorChannel` モックを `RegistryLocator.OverrideErrorChannel()` 経由で差し込む。テスト終了時に `RegistryLocator.ResetForTest()` でリセットする
+- `HumanoidMotionApplierFallbackTests` では SlotManager の catch ブロックが `RegistryLocator.ErrorChannel.Publish()` を呼び出すことを検証するため、`ISlotErrorChannel` モックを `RegistryLocator.OverrideErrorChannel()` 経由で差し込む。テスト終了時に `RegistryLocator.ResetForTest()` でリセットする。`HumanoidMotionApplier` コンストラクタへの `ISlotErrorChannel` 注入は不要 (Applier は ErrorChannel を持たない)
 - PlayMode テスト用 Humanoid Prefab は `Tests/PlayMode/Motion/Fixtures/` に配置する
 
 ---

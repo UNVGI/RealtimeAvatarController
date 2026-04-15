@@ -269,7 +269,67 @@ private void DrawAvatarProviderSection()
 }
 ```
 
-**MoCap ソース ドロップダウン** も同じパターンで実装する (`sourceTypeId` / `MoCapSourceConfigBase`)。
+**MoCap ソース ドロップダウン** (`DrawMoCapSourceSection`):
+
+```csharp
+private void DrawMoCapSourceSection()
+{
+    EditorGUILayout.LabelField("MoCap ソース", EditorStyles.boldLabel);
+
+    var typeIdProp = _moCapSourceDescriptorProp.FindPropertyRelative("SourceTypeId");
+    var configProp = _moCapSourceDescriptorProp.FindPropertyRelative("Config");
+
+    // --- 未割り当て選択肢の処理 ---
+    // ドロップダウン先頭に "(未割り当て)" を追加し、typeId を空文字列に設定できるようにする
+    // これは Req 3 AC 8「未割り当て状態を選択できる」の実装
+    string[] options = _moCapSourceTypeIds.Length > 0
+        ? new[] { "(未割り当て)" }.Concat(_moCapSourceTypeIds).ToArray()
+        : null;
+
+    if (options == null)
+    {
+        EditorGUILayout.HelpBox("Registry に MoCapSource が未登録です。\n[InitializeOnLoadMethod] が実行されているか確認してください。", MessageType.Warning);
+        // 未登録時は手入力フィールドにフォールバック
+        EditorGUILayout.PropertyField(typeIdProp, new GUIContent("Source Type ID (手入力)"));
+    }
+    else
+    {
+        // 現在の typeId に対応する index を取得 (空文字列 or null → 0 = 未割り当て)
+        int currentIndex = string.IsNullOrEmpty(typeIdProp.stringValue)
+            ? 0
+            : System.Array.IndexOf(_moCapSourceTypeIds, typeIdProp.stringValue) + 1; // +1 は "(未割り当て)" 分のオフセット
+        if (currentIndex < 0) currentIndex = 0;
+
+        int newIndex = EditorGUILayout.Popup("MoCap Source Type", currentIndex, options);
+
+        if (newIndex == 0)
+        {
+            // "(未割り当て)" が選択された場合: typeId を空文字列に設定
+            // IMoCapSourceRegistry.Release() は SlotManager が Slot 削除時に呼び出すため、
+            // Editor 操作時の直接 Release() 呼び出しは不要 (SlotSettings はデータコンテナのため)
+            typeIdProp.stringValue = string.Empty;
+        }
+        else
+        {
+            typeIdProp.stringValue = _moCapSourceTypeIds[newIndex - 1];
+        }
+    }
+
+    // MoCapSourceConfigBase 派生 SO のドラッグ&ドロップ参照欄
+    EditorGUILayout.PropertyField(configProp, new GUIContent("MoCap Source Config (SO)"));
+
+    if (GUILayout.Button("候補を更新"))
+        RefreshTypeIds();
+}
+```
+
+> **IMoCapSourceRegistry.Release() 呼び出しタイミング (Req 3 AC 7)**  
+> Editor の `SlotSettingsEditor` はデータ編集ツールであり、`IMoCapSource` インスタンスを直接保持しない。  
+> そのため `Release()` は `SlotSettingsEditor` からは呼び出さない。`Release()` を呼び出すのは以下のタイミングのみ:  
+> - ランタイム: `SlotManager.RemoveSlot()` が対象 Slot の `IMoCapSource` を Registry に返却する際  
+> - デモシーン: ユーザーが「Slot 削除」ボタンを押し、`SlotManager.RemoveSlot()` を経由する場合  
+>
+> 同一ソースを複数 Slot が共有している場合 (参照カウント > 1)、`Release()` はカウントをデクリメントするのみで `IMoCapSource.Dispose()` は呼ばれない。最後の `Release()` でカウントが 0 になった時点で `Dispose()` が呼ばれる。この動作は `IMoCapSourceRegistry` が管理する。
 
 ### 4.3 Fallback 設定 enum ドロップダウン
 
@@ -473,13 +533,24 @@ Packages/com.realtimeavatarcontroller/          ← UPM パッケージルート
         ├── Prefabs/
         │   ├── SlotListItem.prefab
         │   └── ErrorLogItem.prefab
-        └── Tests/                               ← 任意
-            ├── EditMode/
-            │   ├── RealtimeAvatarController.Samples.UI.Tests.EditMode.asmdef
-            │   └── SlotSettingsEditorTests.cs
-            └── PlayMode/
-                ├── RealtimeAvatarController.Samples.UI.Tests.PlayMode.asmdef
-                └── SlotManagementDemoTests.cs
+```
+
+> **テスト asmdef の配置方針 (CC-4 解消)**  
+> テストファイルは `Samples~/UI/Tests/` ではなく、パッケージルート直下の `Tests/` に配置する。  
+> `Samples~` 機構ではサンプルディレクトリがユーザープロジェクトにコピーされるため、テストコードをユーザープロジェクトへ混入させないことが設計意図である。  
+> contracts.md §6.1 テスト asmdef テーブルの標準配置 (`Tests/EditMode/ui-sample/` / `Tests/PlayMode/ui-sample/`) に準拠する。
+
+```
+Packages/com.realtimeavatarcontroller/
+├── Tests/                               ← テストはパッケージルート直下 (任意)
+│   ├── EditMode/
+│   │   └── ui-sample/
+│   │       ├── RealtimeAvatarController.Samples.UI.Tests.EditMode.asmdef
+│   │       └── SlotSettingsEditorTests.cs
+│   └── PlayMode/
+│       └── ui-sample/
+│           ├── RealtimeAvatarController.Samples.UI.Tests.PlayMode.asmdef
+│           └── SlotManagementDemoTests.cs
 ```
 
 ### 8.2 `package.json` の samples エントリ
@@ -511,9 +582,14 @@ Packages/com.realtimeavatarcontroller/          ← UPM パッケージルート
 |-----------|---|
 | `name` | `RealtimeAvatarController.Samples.UI` |
 | `rootNamespace` | `RealtimeAvatarController.Samples.UI` |
-| `references` | `RealtimeAvatarController.Core`, `RealtimeAvatarController.Motion`, `RealtimeAvatarController.MoCap.VMC`, `RealtimeAvatarController.Avatar.Builtin`, `UniRx`, `UniTask` |
+| `references` | `RealtimeAvatarController.Core`, `RealtimeAvatarController.Motion`, `RealtimeAvatarController.MoCap.VMC`, `RealtimeAvatarController.Avatar.Builtin`, `UniRx` |
 | `includePlatforms` | [] (全プラットフォーム) |
 | `autoReferenced` | false |
+
+> **UniRx 直接参照の根拠 (contracts.md §6.1 例外 — design フェーズ確定)**  
+> `SlotErrorPanel` が `ISlotErrorChannel.Errors` に対して `.ObserveOnMainThread()` 拡張メソッドを直接呼び出すため、`UniRx` を `Samples.UI` の `references` に直接追加することを例外的に許容する。  
+> `ObserveOnMainThread()` は `UniRx` パッケージが提供する拡張メソッドであり、`Core` 経由では型が見えても拡張メソッドの解決には直接 `using UniRx;` が必要という技術的制約による。  
+> **UniTask** の直接参照は `Samples.UI` において技術的必要が生じていないため追加しない。UniTask が必要になった場合は contracts.md §6.1 に改めて追記する。
 
 ### 9.2 `RealtimeAvatarController.Samples.UI.Editor` (Editor asmdef)
 
@@ -531,13 +607,16 @@ Packages/com.realtimeavatarcontroller/          ← UPM パッケージルート
 RealtimeAvatarController.Samples.UI.Editor
   └── RealtimeAvatarController.Samples.UI (Runtime)
         ├── RealtimeAvatarController.Core           (slot-core)
-        │     └── UniRx
+        │     ├── UniRx
+        │     └── UniTask
         ├── RealtimeAvatarController.Motion          (motion-pipeline)
         ├── RealtimeAvatarController.MoCap.VMC       (mocap-vmc)
-        └── RealtimeAvatarController.Avatar.Builtin  (avatar-provider-builtin)
+        ├── RealtimeAvatarController.Avatar.Builtin  (avatar-provider-builtin)
+        └── UniRx  ← 例外的直接参照 (.ObserveOnMainThread() 拡張メソッド使用のため)
 ```
 
-> **一方向依存の厳守**: 機能部アセンブリ (`Core` / `Motion` / `MoCap.VMC` / `Avatar.Builtin`) は `Samples.UI` を参照しない。
+> **一方向依存の厳守**: 機能部アセンブリ (`Core` / `Motion` / `MoCap.VMC` / `Avatar.Builtin`) は `Samples.UI` を参照しない。  
+> **UniRx 二重参照について**: `Samples.UI` が `UniRx` を直接参照しつつ `Core` 経由でも間接的に UniRx 型を利用するが、これは意図的な設計である。contracts.md §6.1 の例外条項に基づく。
 
 ---
 
@@ -583,8 +662,18 @@ RealtimeAvatarController.Samples.UI.Editor
 ### 10.4 設計上の注意点
 
 - UI 側から `IMoCapSource.Dispose()` を**直接呼ばない**。`IMoCapSourceRegistry.Release()` のみを使用する。
-- 同一 Descriptor の等価判定は `SourceTypeId` + `Config` の内容比較で行う (詳細は `IMoCapSourceRegistry` 設計フェーズで確定)。
 - デモシーン上の「参照カウント表示」はデバッグ専用の内部状態取得 API を用いる。本番用 API ではない。
+
+> **[SC-1] Descriptor 等価判定の依存関係 (slot-core design フェーズ確定済)**  
+> 参照共有デモシナリオ (§10.2〜10.3) の正しい動作は `MoCapSourceDescriptor` の等価判定に依存する。  
+> slot-core design.md §3.10 において `MoCapSourceDescriptor` は `IEquatable<MoCapSourceDescriptor>` を実装済みであり、等価判定ロジックは以下の通り確定している:
+>
+> - **同一 `SourceTypeId` (文字列等価)** かつ **同一 `Config` SO 参照 (`ReferenceEquals`)** → 等価 = 同一インスタンスを共有
+> - 具体的には、`SlotSettings_Shared_Slot1.asset` と `SlotSettings_Shared_Slot2.asset` が**同一の `VMCMoCapSourceConfig` アセットオブジェクトを参照**している場合に限り、`IMoCapSourceRegistry.Resolve()` が同一の `IMoCapSource` インスタンスを返す
+> - Config の「内容が同じ別 SO」では等価にならない点に注意 (参照等価のため)
+>
+> `GetHashCode()` も `SourceTypeId.GetHashCode() * 31 + RuntimeHelpers.GetHashCode(Config)` で実装されており、Dictionary のキーとして安全に使用できる。  
+> UI サンプルのデモシーン構築時は、2 つの `SlotSettings` アセットで同一の Config SO アセットを参照設定することでデモが成立する。
 
 ---
 
@@ -610,24 +699,89 @@ RealtimeAvatarController.Samples.UI.Editor
 | 参照共有シナリオ再現 | 同一 Descriptor を持つ 2 件の SlotSettings を `AddSlotAsync` した後、`IMoCapSourceRegistry` が同一インスタンスを返すことを確認 |
 | Slot 削除後のエラーチャンネル | Slot 削除後に `ISlotErrorChannel.Errors` に不要なエラーが発行されないことを確認 |
 
-### 11.3 テスト asmdef 命名
+### 11.3 テスト asmdef 命名と配置パス
 
-| asmdef 名 | 配置パス |
-|----------|---------|
-| `RealtimeAvatarController.Samples.UI.Tests.EditMode` | `Samples~/UI/Tests/EditMode/` |
-| `RealtimeAvatarController.Samples.UI.Tests.PlayMode` | `Samples~/UI/Tests/PlayMode/` |
+テスト asmdef は `Samples~` ディレクトリ外のパッケージルート直下 `Tests/` に配置する。  
+これにより UPM サンプルインポート時にユーザープロジェクトへテストコードが混入しない。
+
+| asmdef 名 | 配置パス (contracts.md §6.1 準拠) |
+|----------|--------------------------------|
+| `RealtimeAvatarController.Samples.UI.Tests.EditMode` | `Tests/EditMode/ui-sample/` |
+| `RealtimeAvatarController.Samples.UI.Tests.PlayMode` | `Tests/PlayMode/ui-sample/` |
+
+> **CC-4 解消**: contracts.md §6.1 テスト asmdef テーブルの標準配置パスと完全に整合した。旧記載 (`Samples~/UI/Tests/`) は削除済み。
+
+### 11.4 Registry モック注入方針 (CC-1)
+
+EditMode テストでは `RegistryLocator.OverrideProviderRegistry()` / `RegistryLocator.OverrideMoCapSourceRegistry()` を使用してモック Registry を注入する。  
+実際の Factory 登録は行わない (テスト依存の最小化のため)。
+
+```csharp
+[SetUp]
+public void SetUp()
+{
+    var mockProviderRegistry = new MockProviderRegistry();
+    RegistryLocator.OverrideProviderRegistry(mockProviderRegistry);
+
+    var mockMoCapRegistry = new MockMoCapSourceRegistry();
+    RegistryLocator.OverrideMoCapSourceRegistry(mockMoCapRegistry);
+}
+
+[TearDown]
+public void TearDown()
+{
+    RegistryLocator.ResetForTest();
+}
+```
 
 ---
 
-## 12. ファイル / ディレクトリ構成
+## 12. オプション要件のスコープ決定
 
-### 12.1 `Samples~/UI/` 配下の全ファイル
+### 12.1 Req 9 — UniRx MotionStream デバッグプレビュー
+
+**スコープ決定: initial 版では実装しない。**
+
+Req 9 はオプション要件であり、ラウンド 3 の確認にて initial 版スコープ外と確定した。  
+`MotionStream` のフレーム数・タイムスタンプ表示といったデバッグプレビュー UI は将来拡張として余地のみを残す。
+
+| 項目 | 判断 |
+|-----|------|
+| initial 版での実装 | **しない** |
+| コード上の考慮 | 将来の拡張に備え `SlotDetailPanelUI` に `motionPreviewArea` フィールドをコメントアウト状態で残すことを許容する (実装義務なし) |
+| 将来拡張時の方針 | `IMoCapSource.MotionStream` に `.ObserveOnMainThread().Subscribe()` で購読し、フレームカウンタ・タイムスタンプを `Text` コンポーネントへ反映する想定 |
+
+> **根拠**: `SlotErrorPanel` の `ObserveOnMainThread().Subscribe()` パターンは既に設計済み (§6.3) であり、MotionStream 購読も同じパターンで実装可能だが、初期版デモとしての優先度が低いため後回しとする。
+
+### 12.2 Req 13 — ランタイム動的生成 SlotSettings への対応
+
+**スコープ決定: initial 版では「編集 UI のみ対応」。動的生成後の保存 UI は実装しない。**
+
+Req 13 はオプション要件であり、ラウンド 4 の確認にて以下のスコープで確定した。
+
+| シナリオ | initial 版での対応 |
+|---------|:----------------:|
+| シナリオ X: `SlotSettings` を事前にアセットとして作成し Inspector で設定 | **対応する** (主要シナリオ) |
+| シナリオ Y: ランタイムで `new SlotSettings()` を生成し動的に Slot を追加 | **対応しない** |
+| ランタイム動的生成後の `SlotSettings` を ScriptableObject として保存する UI | **実装しない** (design フェーズで確定) |
+
+> **根拠**: `SlotManagerBehaviour.cs` の `initialSlots` フィールドはシナリオ X (Editor 事前設定) 固定とする。  
+> シナリオ Y (動的生成) は contracts.md §1.1/1.2 で「公式サポート」と明記されているが、デモ用 UI サンプルとしての初期実装に含める必要はなく、VTuber システム側が独自に実装する際の参考範囲と位置づける。  
+> 動的生成 API (`SlotManager.AddSlotAsync()`) は機能部 (slot-core) が提供するため、ui-sample はシナリオ Y 対応を「スコープ外」として tasks に反映しない。
+
+---
+
+## 13. ファイル / ディレクトリ構成
+
+### 13.1 `Samples~/UI/` 配下の全ファイル
 
 ```
 Samples~/UI/
 ├── Runtime/
 │   ├── RealtimeAvatarController.Samples.UI.asmdef
-│   │     references: [Core, Motion, MoCap.VMC, Avatar.Builtin, UniRx, UniTask]
+│   │     references: [Core, Motion, MoCap.VMC, Avatar.Builtin, UniRx]
+│   │     ※ UniRx は .ObserveOnMainThread() 拡張メソッド使用のため直接参照 (contracts.md §6.1 例外)
+│   │     ※ UniTask は直接参照不要 (Core 経由で間接利用)
 │   ├── SlotManagerBehaviour.cs
 │   │     役割: MonoBehaviour ラッパー。SlotManager 初期化・Dispose
 │   ├── SlotManagementPanelUI.cs
@@ -662,16 +816,11 @@ Samples~/UI/
 │   └── ErrorLogItem.prefab
 │         内容: Text (タイムスタンプ + カテゴリ + SlotId + メッセージ)
 │
-└── Tests/                               (任意)
-    ├── EditMode/
-    │   ├── RealtimeAvatarController.Samples.UI.Tests.EditMode.asmdef
-    │   └── SlotSettingsEditorTests.cs
-    └── PlayMode/
-        ├── RealtimeAvatarController.Samples.UI.Tests.PlayMode.asmdef
-        └── SlotManagementDemoTests.cs
 ```
 
-### 12.2 主要クラス一覧
+> テスト asmdef はパッケージルート直下 `Tests/EditMode/ui-sample/` / `Tests/PlayMode/ui-sample/` に配置する (§11.3 / CC-4 参照)。
+
+### 13.2 主要クラス一覧
 
 | クラス名 | 名前空間 | アセンブリ | 種別 |
 |---------|---------|----------|------|
