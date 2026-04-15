@@ -1,0 +1,44 @@
+# Brief: mocap-vmc
+
+## Spec 責務
+VMC (バーチャルモーションキャプチャ) プロトコルに対応した MoCap ソース具象実装を提供する。
+
+## 依存
+`slot-core`, `motion-pipeline` (Wave 1 完了後に起動)
+
+## スコープ
+
+### 実装する
+- `IMoCapSource` の VMC プロトコル実装 (OSC 受信)
+- 受信スレッドモデル (ワーカースレッド / メインスレッド同期)
+- Slot 単位の通信パラメータ設定 (受信ポート等)
+- Slot との紐付け / 動的差替
+- 受信したデータを `motion-pipeline` の中立表現へ変換する責務
+
+### スコープ外
+- 他 MoCap ツールへの対応 (本 Spec の抽象遵守により将来別 Spec で追加可能とする)
+- MoCap ソース抽象 `IMoCapSource` 自体の定義 (`slot-core` Spec)
+- モーション中立表現の定義 (`motion-pipeline` Spec)
+
+## 参照必須ドキュメント
+- `.kiro/specs/_shared/spec-map.md`
+- `.kiro/specs/_shared/contracts.md` (特に 2 章: MoCap ソース抽象)
+
+## 契約ドキュメントへの寄与
+なし (2.1 は slot-core、2.2 は motion-pipeline が埋める)。ただし本 Spec の具象実装要件が 2 章と矛盾しないことを確認する。
+
+## 出力物
+- `.kiro/specs/mocap-vmc/requirements.md`
+- `.kiro/specs/mocap-vmc/spec.json`
+
+## 実行手順
+1. Skill ツールで `kiro:spec-init` を呼び、feature 名 `mocap-vmc` として初期化
+2. Skill ツールで `kiro:spec-requirements` を呼び、requirements.md を生成
+3. 生成された requirements.md を本 Brief と `spec-map.md` の内容に沿って編集・確定
+
+## 備考
+- VMC の受信側 (Receiver) を必須対応とする。送信側 (Sender) は要件段階で検討可とする
+- OSC ライブラリの選定は design フェーズで確定
+
+## 言語
+Markdown 出力は日本語
