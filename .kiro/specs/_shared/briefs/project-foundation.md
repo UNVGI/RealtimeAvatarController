@@ -22,6 +22,15 @@ Unity プロジェクト基盤と UPM パッケージ基盤を整備する。
 - **Domain Reload OFF 設定への対応 (dig ラウンド 3 確定)**:
   - Unity Editor の Enter Play Mode Options (Domain Reload OFF) 有効下でも Registry が正常動作することを要件とする
   - `RegistryLocator` の `[RuntimeInitializeOnLoadMethod(SubsystemRegistration)]` による Reset 機構が必要
+  - `RegistryLocator.ResetForTest()` は EditMode / PlayMode 両テスト asmdef のセットアップ / ティアダウンから呼び出し可能であること
+- **テスト asmdef 構造 (dig ラウンド 4 確定、案 C 採用)**:
+  - 各機能 Spec (slot-core / motion-pipeline / mocap-vmc / avatar-provider-builtin) に EditMode / PlayMode 両系統のテスト asmdef を定義する (必須)
+  - ui-sample のテスト asmdef は任意
+  - 命名規約: `<RuntimeAsmdefName>.Tests.EditMode` / `<RuntimeAsmdefName>.Tests.PlayMode`
+  - 配置パス: `Tests/EditMode/<SpecName>/` / `Tests/PlayMode/<SpecName>/`
+  - `optionalUnityReferences: ["TestAssemblies"]` 必須、対応 Runtime asmdef への片方向依存のみ
+  - テスト asmdef 間の相互参照は禁止
+  - 初期版でのカバレッジ定量目標は設定しない
 - `Samples~` 機構による UI サンプルの同梱ルート
 - 最小限の CI / ビルド検証の下地 (任意)
 - 名前空間規約の確定

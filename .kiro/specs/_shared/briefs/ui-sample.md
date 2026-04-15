@@ -18,6 +18,24 @@
 - 機能部 API の新規定義 (各機能 Spec で完結している前提)
 - 機能部への UI 層依存の持ち込み (機能部は UI 非依存を厳守)
 
+## 設計上の重要事項 (dig ラウンド 4 反映)
+
+### テストアセンブリ定義 (dig ラウンド 4 確定: 任意)
+
+- ui-sample のテスト asmdef は**任意**。作成有無はプロジェクト運用判断とし、design/tasks フェーズで決定する。
+- **作成する場合の命名**:
+  - EditMode: `RealtimeAvatarController.Samples.UI.Tests.EditMode`
+  - PlayMode: `RealtimeAvatarController.Samples.UI.Tests.PlayMode`
+- EditMode 対象 (任意): Inspector ドロップダウン表示確認、Fallback UI 設定の反映確認 (EditorAssembly 参照可)
+- PlayMode 対象 (任意): デモシーン起動確認、参照共有デモシナリオの再現確認
+- カバレッジ目標は初期版では設定しない。
+
+### ランタイム動的生成 SlotSettings への対応 (dig ラウンド 4 確定: オプション)
+
+- ui-sample の主眼は Editor Inspector 上での編集体験 (シナリオ X) であり、`ScriptableObject.CreateInstance<SlotSettings>()` 経由のランタイム動的生成 (シナリオ Y) への UI 対応は**オプション**扱い。
+- contracts.md 1.1 章の確定事項として `SlotSettings` のランタイム動的生成は公式に許容済み。UI がこれを妨げないことを最低条件とする。
+- 動的生成 Slot の編集 UI 等の具体的な対応は design フェーズで実装有無を判断する。
+
 ## 設計上の重要事項 (dig ラウンド 1・2・3 反映)
 
 ### Editor Inspector 主眼方針 (dig ラウンド 3 確定)

@@ -256,3 +256,41 @@
 4. The UI shall Slot が削除されたとき、またはエラーチャンネルの購読が不要になったときに購読を適切に解除し (Dispose)、メモリリークを防ぐ。
 5. The UI shall Core 側が `Debug.LogError` を「同一 (SlotId, Category) 初回 1 フレームのみ」に抑制していることを前提として動作する。UI 側での重複排除はオプションとし、design フェーズで方針を決定する。
 6. The UI は `ISlotErrorChannel` への参照を機能部 API として受け取る。UI 層が `ISlotErrorChannel` の具象実装を直接生成することはしない。
+
+---
+
+### Requirement 12: テストアセンブリ定義 (任意)
+
+**Objective:** As a 開発者, I want ui-sample の自動テストを必要に応じて追加できること, so that Inspector ドロップダウン表示やデモシーン起動の動作を継続的に検証できる。
+
+> **テスト asmdef は任意 (dig ラウンド 4 確定)**: ui-sample のテストアセンブリ定義の作成は**任意**扱いである。テスト整備の要否はプロジェクトの運用判断に委ね、design/tasks フェーズで作成有無を決定する。カバレッジ目標は初期版では設定しない。
+
+#### Acceptance Criteria
+
+1. テストアセンブリ定義を作成する場合, the assembly definition shall 以下の命名規則に従う:
+   - EditMode テスト: `RealtimeAvatarController.Samples.UI.Tests.EditMode`
+   - PlayMode テスト: `RealtimeAvatarController.Samples.UI.Tests.PlayMode`
+2. テストアセンブリを作成する場合, EditMode テストの対象として以下を任意で含めることができる:
+   - Inspector ドロップダウン表示確認 (Registry 列挙結果がドロップダウンに正しく反映されること)
+   - Fallback 設定 UI の値反映確認 (`SlotSettings.fallbackBehavior` への双方向バインドが機能すること)
+   - 各テストは Editor アセンブリへの参照を許容する
+3. テストアセンブリを作成する場合, PlayMode テストの対象として以下を任意で含めることができる:
+   - デモシーン起動確認 (シーン読み込み後にエラーなく初期化が完了すること)
+   - 参照共有デモシナリオの再現確認 (1 VMC ソースを複数 Slot で共有するシナリオが正常に動作すること)
+4. テストアセンブリを作成しない場合でも, 本 Spec の他の要件 (Requirement 1〜11) の達成には影響しない。テストの実装有無は design フェーズで最終判断する。
+5. カバレッジ目標は初期版では設定しない。テスト追加は段階的に行う運用を許容する。
+
+---
+
+### Requirement 13: ランタイム動的生成 SlotSettings への対応 (オプション)
+
+**Objective:** As a 開発者・検証者, I want ランタイムコードで動的生成された SlotSettings を UI 上で表示・編集できること, so that `ScriptableObject.CreateInstance<SlotSettings>()` 経由で生成した Slot に対しても UI サンプルが機能することを確認できる。
+
+> **オプション扱い (dig ラウンド 4 確定)**: ui-sample の主眼は Editor Inspector 上での編集体験 (シナリオ X) であり、ランタイム動的生成 (シナリオ Y) への対応は**オプション**扱いとする。ただし contracts.md 1.1 章の確定事項として `SlotSettings` のランタイム動的生成は公式に許容されており、UI サンプルがこれを妨げないことを最低条件とする。具体的な UI 対応 (動的生成 Slot の編集 UI 等) は design フェーズで実装有無を判断する。
+
+#### Acceptance Criteria
+
+1. The UI shall `ScriptableObject.CreateInstance<SlotSettings>()` によってランタイムで動的生成された `SlotSettings` インスタンスを `SlotManager` 経由で受け取り、Inspector 上または UI 上に表示できることが望ましい。ただし初期版での実装は必須としない。
+2. The UI shall ランタイム動的生成された Slot (シナリオ Y) と、エディタ上でアセット編集した Slot (シナリオ X) とを同一の UI フローで扱えることを目標とする。両シナリオの統一的なサポートは design フェーズで設計方針を確定する。
+3. The UI shall 動的生成 Slot に対しても Requirement 1〜11 で定義した Slot 操作・設定 UI が機能することを目標とする。ただし動的生成特有の制約 (アセットファイル非存在・Undo 非対応等) が生じる場合は design フェーズで対処方針を定める。
+4. ランタイム動的生成対応の実装コストが大きい場合, design フェーズでスコープを縮小 (例: 読み取り専用表示のみ対応) することを許容する。

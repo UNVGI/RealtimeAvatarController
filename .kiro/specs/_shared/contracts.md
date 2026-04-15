@@ -33,6 +33,8 @@ Slot は VTuber アバター制御の設定単位。`SlotSettings` は Descripto
 
 > **weight フィールドの初期版方針 (dig ラウンド 2 確定)**: 初期版 (1 Slot 1 MoCap source 構成) では `weight` は常に `1.0` として扱う。`0.0` (skip) と `1.0` (full apply) の二値動作のみが初期版の有効値である。フィールド自体は将来の複数ソース混合シナリオのためのフックとして残す。`0.0 < weight < 1.0` の中間値セマンティクスは、複数ソース混合シナリオを導入する際に改めて定義する。
 
+> **SlotSettings のランタイム動的生成 (dig ラウンド 4 確定)**: `SlotSettings` は `ScriptableObject.CreateInstance<SlotSettings>()` によるランタイム動的生成を公式に許容する。SO アセットをエディタで編集する**シナリオ X** と、ランタイムコードで `CreateInstance` して各フィールドを直接セットする**シナリオ Y** の**両方**を公式サポートする。どちらの形式で生成したインスタンスも `SlotManager` に渡して Slot を生成できる。長期保存 (JSON ファイル等への永続化) は**将来要件**とし、本ラウンドでは実装・契約しない。受け口のみを確保する (1.2 章参照)。
+
 **Config 基底型による Descriptor 骨格 (C# 疑似コード)**:
 
 ```csharp
@@ -78,17 +80,20 @@ public class LipSyncSourceDescriptor
 
 ### 1.2 シリアライズ形式
 
-以下の保持形式をすべて許容する設計方針を採用する:
+以下の保持形式をすべて**公式に許容**する設計方針を採用する:
 
 | 形式 | 用途 | 備考 |
 |------|------|------|
-| Unity `ScriptableObject` | エディタプロジェクト標準 | `SlotSettings` が SO を継承する実装を推奨するが必須ではない |
-| POCO (純 C# オブジェクト) | ランタイム生成・テスト | `[Serializable]` 属性付与で Unity シリアライズ対象にできる |
-| JSON | ファイル保存・外部連携 | `JsonUtility` または Newtonsoft.Json によるエクスポート / インポート |
+| Unity `ScriptableObject` アセット編集 (シナリオ X) | エディタプロジェクト標準。アセットとして `.asset` 保存 | `SlotSettings` が SO を継承する実装を推奨するが必須ではない |
+| ランタイム動的生成 (シナリオ Y) | ランタイムコードから `ScriptableObject.CreateInstance<SlotSettings>()` で生成し、各フィールドを直接セット | Unity ライフサイクル上は SO インスタンスだがアセットファイルは作成しない |
+| POCO (純 C# オブジェクト) | ユニットテスト・軽量生成 | `[Serializable]` 属性付与で Unity シリアライズ対象にできる |
+| JSON 永続化 | ファイル保存・外部連携 | **将来要件**。初期段階では実装しない。受け口のみ確保 (下記注記参照) |
+
+> **JSON 永続化は将来要件 (dig ラウンド 4 確定)**: JSON エクスポート/インポートは本ラウンドでは**実装・契約しない**。`SlotSettings` の設計は JSON 永続化を将来追加できる構造 (`[Serializable]` POCO / `JsonUtility` / Newtonsoft.Json への拡張余地) を確保するに留める。Config アセット参照の GUID 依存問題 (ScriptableObject 参照の JSON 表現) は、JSON 永続化を導入する際の design フェーズで詳細を詰める。
 
 - **Descriptor フィールドはシリアライズの中核**: `AvatarProviderDescriptor` / `MoCapSourceDescriptor` 等は `[Serializable]` POCO として定義し、インターフェース直参照を避ける
 - **Config フィールドは ScriptableObject 基底派生型を参照**: 各 Descriptor の `Config` フィールドの型は `ProviderConfigBase` / `MoCapSourceConfigBase` 等の基底クラス (後述 1.5 章) を使用する。これにより Inspector でのドラッグ&ドロップ可能な型安全参照を実現する。`SlotSettings` 自体は POCO/SO のいずれでも可
-- **ScriptableObject は任意**: エディタとの統合性を重視する場合は SO を継承してよいが、ランタイム生成やユニットテストでは POCO のまま使用できる
+- **ScriptableObject は任意 (シナリオ X/Y 両対応)**: エディタとの統合性を重視する場合は SO を継承してよく、ランタイム動的生成 (`CreateInstance`) でも同一の SO 継承クラスを使用できる。ユニットテストでは POCO のまま使用することも可能
 - **具象型依存の分離**: `SlotSettings` 自体は具象型 (`VMCMoCapSource` 等) を知らない。型解決は Registry/Factory が担う
 
 ### 1.3 ライフサイクル
@@ -229,9 +234,11 @@ public class BuiltinAvatarProviderFactory : IAvatarProviderFactory
 
 ## 1.5 Config 基底型階層
 
-> **記入者**: `slot-core` エージェント (dig ラウンド 2 確定)
+> **記入者**: `slot-core` エージェント (dig ラウンド 2 確定 / dig ラウンド 4 更新)
 
 各 Descriptor が参照する Config オブジェクトは ScriptableObject を基底とした型階層に従う。これにより、Inspector でのドラッグ&ドロップによる型安全な参照と、将来の具象 Config 追加を型システムで担保する。
+
+> **ランタイム動的生成の許容 (dig ラウンド 4 確定)**: `ProviderConfigBase` / `MoCapSourceConfigBase` / `FacialControllerConfigBase` / `LipSyncSourceConfigBase` の各基底型派生クラスは、Unity エディタでアセットとして編集するだけでなく、**`ScriptableObject.CreateInstance<T>()` によるランタイム動的生成も公式に許容する**。ランタイムで生成した Config インスタンスには、具象 Config の公開フィールドを直接セットして設定値を与える。この設計により、SO アセット編集 (シナリオ X) とランタイム動的構築 (シナリオ Y) の両方で同一の Factory / Registry API を透過的に使用できる。
 
 ### 基底クラス一覧 (C# 疑似コード)
 
@@ -242,6 +249,7 @@ namespace RealtimeAvatarController.Core
     /// IAvatarProvider 用 Config の抽象基底クラス。
     /// 具象 Config (例: BuiltinAvatarProviderConfig) はこのクラスを継承して定義する。
     /// AvatarProviderDescriptor.Config フィールドの型として使用する。
+    /// SO アセット編集 (シナリオ X) / ScriptableObject.CreateInstance ランタイム動的生成 (シナリオ Y) の両方を許容する。
     /// </summary>
     public abstract class ProviderConfigBase : ScriptableObject { }
 
@@ -249,6 +257,7 @@ namespace RealtimeAvatarController.Core
     /// IMoCapSource 用 Config の抽象基底クラス。
     /// 具象 Config (例: VMCMoCapSourceConfig) はこのクラスを継承して定義する。
     /// MoCapSourceDescriptor.Config フィールドの型として使用する。
+    /// SO アセット編集 (シナリオ X) / ScriptableObject.CreateInstance ランタイム動的生成 (シナリオ Y) の両方を許容する。
     /// </summary>
     public abstract class MoCapSourceConfigBase : ScriptableObject { }
 
@@ -256,6 +265,7 @@ namespace RealtimeAvatarController.Core
     /// IFacialController 用 Config の抽象基底クラス。
     /// 将来の具象 Config はこのクラスを継承する。
     /// FacialControllerDescriptor.Config フィールドの型として使用する。
+    /// SO アセット編集 (シナリオ X) / ScriptableObject.CreateInstance ランタイム動的生成 (シナリオ Y) の両方を許容する。
     /// </summary>
     public abstract class FacialControllerConfigBase : ScriptableObject { }
 
@@ -263,6 +273,7 @@ namespace RealtimeAvatarController.Core
     /// ILipSyncSource 用 Config の抽象基底クラス。
     /// 将来の具象 Config はこのクラスを継承する。
     /// LipSyncSourceDescriptor.Config フィールドの型として使用する。
+    /// SO アセット編集 (シナリオ X) / ScriptableObject.CreateInstance ランタイム動的生成 (シナリオ Y) の両方を許容する。
     /// </summary>
     public abstract class LipSyncSourceConfigBase : ScriptableObject { }
 }
@@ -277,10 +288,43 @@ namespace RealtimeAvatarController.Core
 | `FacialControllerConfigBase` | `slot-core` (基底定義) / 将来担当 Spec (具象定義) | (初期段階では具象なし) |
 | `LipSyncSourceConfigBase` | `slot-core` (基底定義) / 将来担当 Spec (具象定義) | (初期段階では具象なし) |
 
+### ランタイム動的生成パターン (シナリオ Y)
+
+```csharp
+// 例: ランタイムで VMCMoCapSourceConfig を動的生成して SlotSettings を構築する
+// SlotSettings も CreateInstance で生成し、フィールドを直接セットする
+var moCapConfig = ScriptableObject.CreateInstance<VMCMoCapSourceConfig>();
+moCapConfig.port = 39539;
+moCapConfig.bindAddress = "0.0.0.0";
+
+var providerConfig = ScriptableObject.CreateInstance<BuiltinAvatarProviderConfig>();
+providerConfig.avatarPrefab = someAvatarPrefab;
+
+var slotSettings = ScriptableObject.CreateInstance<SlotSettings>();
+slotSettings.slotId = "slot-01";
+slotSettings.displayName = "Player 1";
+slotSettings.weight = 1.0f;
+slotSettings.moCapSourceDescriptor = new MoCapSourceDescriptor
+{
+    SourceTypeId = "VMC",
+    Config = moCapConfig,
+};
+slotSettings.avatarProviderDescriptor = new AvatarProviderDescriptor
+{
+    ProviderTypeId = "Builtin",
+    Config = providerConfig,
+};
+slotSettings.fallbackBehavior = FallbackBehavior.HoldLastPose;
+
+// SlotManager の AddSlot API でそのまま渡せる
+await slotManager.AddSlotAsync(slotSettings);
+```
+
 ### Factory でのキャスト方法
 
 ```csharp
 // 例: BuiltinAvatarProviderFactory での使用
+// SO アセット経由でも CreateInstance 動的生成経由でも同一 Factory コードが動作する
 public class BuiltinAvatarProviderFactory : IAvatarProviderFactory
 {
     public IAvatarProvider Create(ProviderConfigBase config)
@@ -598,10 +642,18 @@ namespace RealtimeAvatarController.Motion
     // 全骨格形式共通の基底型 (抽象クラスまたはインターフェース; design フェーズで確定)
     public abstract class MotionFrame
     {
-        // 受信タイムスタンプ (Unix 時刻相当; 単位は design フェーズで確定)
+        // 受信タイムスタンプ (dig ラウンド 4 確定: Stopwatch ベース monotonic、double 秒単位)
+        // 値: Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency で算出
+        // 基準: App 起動時 (Stopwatch 起動基準の相対値)
+        // 打刻タイミング: 受信ワーカースレッド上でフレーム構築時
+        // 注意: プロセス間比較不可 (相対値のため)
         public double Timestamp { get; }
 
-        // この フレームが表す骨格種別
+        // 将来の拡張フィールド (初期版では未実装)
+        // ログ用途で wall clock が必要な場合に追加を検討する
+        // public DateTime? WallClock { get; }
+
+        // このフレームが表す骨格種別
         public abstract SkeletonType SkeletonType { get; }
     }
 }
@@ -661,9 +713,21 @@ namespace RealtimeAvatarController.Motion
 - 購読側は `MotionFrame.SkeletonType` を確認してキャストする、またはジェネリクス (`IMoCapSource<TFrame>`) を採用する。最終シグネチャは design フェーズで確定する
 - 例示 (仮): `IObservable<MotionFrame> MotionStream { get; }` (2.1 章参照)
 
+#### タイムスタンプ仕様 (dig ラウンド 4 確定)
+
+| 項目 | 内容 |
+|------|------|
+| 型 | `double` (秒単位) |
+| 基準 | App 起動時 (Stopwatch 起動基準の相対値) |
+| 取得方法 | `Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency` |
+| 打刻タイミング | 受信ワーカースレッド上でフレーム構築時 (Unity メインスレッド API 不使用のため安全) |
+| 用途 | Slot 内フレーム順序整列 / 遅延計測 / デバッグログ |
+| プロセス間比較 | **不可** (相対値のため異なるプロセスとの比較は意味を持たない) |
+| 将来拡張 | ログ用途で wall clock が必要な場合は `WallClock: DateTime?` フィールドの追加を検討する。初期版では **未実装** とする |
+
 #### スレッド安全性の要求
 
-- **書き込み**: 受信スレッド (`IMoCapSource` 具象実装の内部スレッド等) から `MotionFrame` を書き込む
+- **書き込み**: 受信スレッド (`IMoCapSource` 具象実装の内部スレッド等) から `MotionFrame` を書き込む。`Timestamp` の打刻も受信スレッド上で行い、Unity API は使用しない
 - **読み込み**: Unity メインスレッド (`LateUpdate` 等) から最新の `MotionFrame` を読み取る
 - **方針**: 具体的なスレッド安全実装 (ダブルバッファ / `Interlocked` / `lock` / ロックレスキュー等) は design フェーズで選択する。受信スレッド側の書き込みは Unity API を呼び出さない
 
@@ -795,6 +859,38 @@ public interface ILipSyncSource : IDisposable
 - 各 Editor asmdef は対応する Runtime asmdef を `references` に追加する片方向依存のみを持つ
 - Runtime asmdef は Editor asmdef を参照しない (逆依存禁止)
 - `#if UNITY_EDITOR` による Runtime asmdef 内への UnityEditor API 配置は代替手段として許容する (各 Spec の実装判断に委ねる)
+
+#### テスト専用 asmdef (Tests.EditMode / Tests.PlayMode)
+
+> **dig ラウンド 4 確定 (案 C 採用)**
+
+各機能 Spec に EditMode / PlayMode の 2 系統のテスト asmdef を用意する。**slot-core / motion-pipeline / mocap-vmc / avatar-provider-builtin の 4 Spec は必須**。ui-sample は運用判断により任意とする。
+
+| asmdef 名 | 担当 Spec | 配置パス (パッケージルート相対) | 必須 / 任意 |
+|-----------|----------|-------------------------------|:-----------:|
+| `RealtimeAvatarController.Core.Tests.EditMode` | slot-core | `Tests/EditMode/slot-core/` | 必須 |
+| `RealtimeAvatarController.Core.Tests.PlayMode` | slot-core | `Tests/PlayMode/slot-core/` | 必須 |
+| `RealtimeAvatarController.Motion.Tests.EditMode` | motion-pipeline | `Tests/EditMode/motion-pipeline/` | 必須 |
+| `RealtimeAvatarController.Motion.Tests.PlayMode` | motion-pipeline | `Tests/PlayMode/motion-pipeline/` | 必須 |
+| `RealtimeAvatarController.MoCap.VMC.Tests.EditMode` | mocap-vmc | `Tests/EditMode/mocap-vmc/` | 必須 |
+| `RealtimeAvatarController.MoCap.VMC.Tests.PlayMode` | mocap-vmc | `Tests/PlayMode/mocap-vmc/` | 必須 |
+| `RealtimeAvatarController.Avatar.Builtin.Tests.EditMode` | avatar-provider-builtin | `Tests/EditMode/avatar-provider-builtin/` | 必須 |
+| `RealtimeAvatarController.Avatar.Builtin.Tests.PlayMode` | avatar-provider-builtin | `Tests/PlayMode/avatar-provider-builtin/` | 必須 |
+| `RealtimeAvatarController.Samples.UI.Tests.EditMode` | ui-sample | `Tests/EditMode/ui-sample/` | 任意 |
+| `RealtimeAvatarController.Samples.UI.Tests.PlayMode` | ui-sample | `Tests/PlayMode/ui-sample/` | 任意 |
+
+**テスト asmdef の命名規約**:
+- 形式: `<RuntimeAsmdefName>.Tests.EditMode` / `<RuntimeAsmdefName>.Tests.PlayMode`
+- 例: `RealtimeAvatarController.Core` の EditMode テスト → `RealtimeAvatarController.Core.Tests.EditMode`
+
+**テスト asmdef の設定ルール**:
+- `optionalUnityReferences: ["TestAssemblies"]` を必ず設定し、Unity Test Runner (NUnit) への参照を有効化する
+- `includePlatforms: []` (空配列) とする。全プラットフォームを対象とし、EditMode / PlayMode の区別は Unity Test Runner が制御する
+- 対応する Runtime asmdef **のみ**を `references` に追加する片方向依存とする
+- テスト asmdef 間の相互参照は禁止する (Runtime → Tests の逆参照も禁止)
+- `RegistryLocator.ResetForTest()` を各テストのセットアップ / ティアダウンフェーズで呼び出し、Domain Reload OFF 環境下での二重登録を防止すること
+
+> **カバレッジ目標**: 初期版では定量カバレッジ目標を設定しない。design / tasks フェーズで改めて検討する。
 
 **依存方向の制約 (Runtime)**:
 - `Samples.UI` → 機能部アセンブリ各種 (一方向のみ)

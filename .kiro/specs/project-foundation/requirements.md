@@ -82,6 +82,28 @@
 9. Each asmdef shall `rootNamespace` フィールドを `contracts.md` 6.2 章で確定した名前空間規約に従い設定する。
 10. The `RealtimeAvatarController.Core` asmdef shall `references` に UniRx (`UniRx` アセンブリ名) を追加し、UniRx が提供する `IObservable<T>` 拡張・`Subject<T>` 等を直接利用できるようにする。
 11. The asmdef files for `RealtimeAvatarController.Motion`・`RealtimeAvatarController.MoCap.VMC`・`RealtimeAvatarController.Avatar.Builtin` shall UniRx の asmdef を直接 `references` に追加せず、`RealtimeAvatarController.Core` 経由で間接的に UniRx の型を利用する。ただし各アセンブリが UniRx の拡張メソッドを直接呼び出す必要が生じた場合は design フェーズで要否を判断する。
+12. The project shall 以下の **テスト専用** asmdef ファイルを定義する (各機能 Spec の実装フェーズで作成する。**slot-core / motion-pipeline / mocap-vmc / avatar-provider-builtin の 4 Spec は必須**、ui-sample は任意):
+
+    | asmdef 名 | 担当 Spec | 配置パス (パッケージルート相対) | 備考 |
+    |-----------|----------|-------------------------------|------|
+    | `RealtimeAvatarController.Core.Tests.EditMode` | slot-core | `Tests/EditMode/slot-core/` | EditMode テスト (必須) |
+    | `RealtimeAvatarController.Core.Tests.PlayMode` | slot-core | `Tests/PlayMode/slot-core/` | PlayMode テスト (必須) |
+    | `RealtimeAvatarController.Motion.Tests.EditMode` | motion-pipeline | `Tests/EditMode/motion-pipeline/` | EditMode テスト (必須) |
+    | `RealtimeAvatarController.Motion.Tests.PlayMode` | motion-pipeline | `Tests/PlayMode/motion-pipeline/` | PlayMode テスト (必須) |
+    | `RealtimeAvatarController.MoCap.VMC.Tests.EditMode` | mocap-vmc | `Tests/EditMode/mocap-vmc/` | EditMode テスト (必須) |
+    | `RealtimeAvatarController.MoCap.VMC.Tests.PlayMode` | mocap-vmc | `Tests/PlayMode/mocap-vmc/` | PlayMode テスト (必須) |
+    | `RealtimeAvatarController.Avatar.Builtin.Tests.EditMode` | avatar-provider-builtin | `Tests/EditMode/avatar-provider-builtin/` | EditMode テスト (必須) |
+    | `RealtimeAvatarController.Avatar.Builtin.Tests.PlayMode` | avatar-provider-builtin | `Tests/PlayMode/avatar-provider-builtin/` | PlayMode テスト (必須) |
+    | `RealtimeAvatarController.Samples.UI.Tests.EditMode` | ui-sample | `Tests/EditMode/ui-sample/` | EditMode テスト (**任意**) |
+    | `RealtimeAvatarController.Samples.UI.Tests.PlayMode` | ui-sample | `Tests/PlayMode/ui-sample/` | PlayMode テスト (**任意**) |
+
+13. The test asmdef files shall 以下の設定を持つ:
+    - `optionalUnityReferences` に `TestAssemblies` を設定し、Unity Test Runner の NUnit 参照を有効化する
+    - `includePlatforms` は `[]` (空配列) とし、全プラットフォームを対象とする (EditMode / PlayMode の制御は Unity Test Runner が行う)
+    - 対応する Runtime asmdef のみを `references` に追加する片方向依存とする
+    - テスト asmdef 間の相互参照を禁止する
+14. The test asmdef name convention shall `<RuntimeAsmdefName>.Tests.EditMode` / `<RuntimeAsmdefName>.Tests.PlayMode` の形式に従う (例: `RealtimeAvatarController.Core` の EditMode テストは `RealtimeAvatarController.Core.Tests.EditMode`)。
+15. The project shall テストコードのカバレッジ定量目標を**初期版では設定しない**。カバレッジ目標の設定は design / tasks フェーズにて改めて検討する。
 
 ---
 
@@ -97,7 +119,7 @@
    - Editor 上でプレイモード開始 → 停止 → 再開を連続して実行した際に `RegistryConflictException` が発生しないこと
    - `RegistryLocator.ResetForTest()` 呼び出し後、Registry が空の状態に戻ること
    - 再起動後に Factory の自己登録が再度正常に実行されること
-4. The `RegistryLocator.ResetForTest()` shall テストコードからの直接呼び出しも許容し、Edit Mode テストおよび Play Mode テストでの Registry 差し替え・リセットに利用できる。
+4. The `RegistryLocator.ResetForTest()` shall テストコードからの直接呼び出しも許容し、EditMode テスト asmdef および PlayMode テスト asmdef の両方から呼び出して Registry 差し替え・リセットに利用できる。具体的には、各 `*.Tests.EditMode` asmdef と `*.Tests.PlayMode` asmdef のセットアップ / ティアダウンフェーズで呼び出すことで Domain Reload OFF 環境下でも二重登録が発生しないことを保証する。
 5. When Domain Reload ON の通常設定下では, the Registry shall Domain Reload 時に自動的にリセットされるため `ResetForTest()` の明示呼び出しは不要である。ただし明示呼び出しによる副作用は生じない設計とする。
 
 ---

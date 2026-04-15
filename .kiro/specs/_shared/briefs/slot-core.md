@@ -14,7 +14,11 @@ Slot 概念を中核とするデータモデル・ライフサイクル管理 AP
 ### 実装する
 - Slot データモデル (Descriptor ベース POCO: AvatarProviderDescriptor / MoCapSourceDescriptor / FacialControllerDescriptor? / LipSyncSourceDescriptor? + Weight / slotId / displayName)
 - SlotRegistry / SlotManager 相当の動的追加・削除 API
-- Slot 設定のシリアライズ可能な構造 (POCO / ScriptableObject / JSON 許容; ScriptableObject は任意)
+- **SlotSettings / Config のランタイム動的生成 API (dig ラウンド 4 追加)**:
+  - `ScriptableObject.CreateInstance<SlotSettings>()` によるランタイム生成をサポート
+  - `ProviderConfigBase` / `MoCapSourceConfigBase` / `FacialControllerConfigBase` / `LipSyncSourceConfigBase` 各派生 Config の `CreateInstance` 生成を許容
+  - SO アセット編集 (シナリオ X) / ランタイム動的構築 (シナリオ Y) の両方を受け付ける `SlotManager.AddSlotAsync(SlotSettings)` API
+- Slot 設定のシリアライズ可能な構造 (POCO / ScriptableObject / JSON 許容; ScriptableObject は任意; JSON 永続化は将来要件)
 - Slot ライフサイクル (生成・破棄; IMoCapSource の所有権は MoCapSourceRegistry に委譲)
 - ProviderRegistry / SourceRegistry (typeId → Factory 解決、利用可能候補列挙)
 - MoCapSourceRegistry (参照共有 / 参照カウントベース解放)
@@ -35,6 +39,10 @@ Slot 概念を中核とするデータモデル・ライフサイクル管理 AP
   - `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` + `[UnityEditor.InitializeOnLoadMethod]`
   - 具象 Factory 側が上記属性で `RegistryLocator` 経由で自己登録するパターンを `slot-core` が提供
   - 利用者の自前 Factory も同じ仕組みで登録可能
+- **EditMode / PlayMode テスト asmdef 両対応 (dig ラウンド 4 追加)**:
+  - EditMode: `RealtimeAvatarController.Core.Tests.EditMode` — Registry / Factory キャスト / Locator Reset / SlotManager ライフサイクル / ErrorChannel ストリームを検証
+  - PlayMode: `RealtimeAvatarController.Core.Tests.PlayMode` — 実アバター上の Slot 動的追加削除 (最小限)
+  - カバレッジ定量目標は design / tasks フェーズで再検討
 - **Config 基底型階層の定義** (dig ラウンド 2 確定):
   - `ProviderConfigBase : ScriptableObject` (アバター Provider Config の抽象基底)
   - `MoCapSourceConfigBase : ScriptableObject` (MoCap ソース Config の抽象基底)

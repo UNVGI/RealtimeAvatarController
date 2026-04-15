@@ -10,6 +10,10 @@ dig ラウンド 3 追加確定事項:
 - **属性ベース自己登録**: `BuiltinAvatarProviderFactory` は `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` でランタイム、`[UnityEditor.InitializeOnLoadMethod]` でエディタの各起動タイミングに `RegistryLocator.ProviderRegistry.Register("Builtin", new BuiltinAvatarProviderFactory())` を自己実行する。Editor 用コードは `RealtimeAvatarController.Avatar.Builtin.Editor` asmdef または `#if UNITY_EDITOR` ガードに配置する。同 typeId 競合時は例外スロー (上書き禁止)。
 - **ErrorChannel 連携**: Factory キャスト失敗・Instantiate 失敗等は `ISlotErrorChannel` に `SlotErrorCategory.InitFailure` で発行後、例外を上位 `SlotManager` に伝播する。例外捕捉と Slot 状態遷移 (`Disposed`) は `slot-core` の責務。
 
+dig ラウンド 4 追加確定事項:
+- **BuiltinAvatarProviderConfig のランタイム動的生成**: `BuiltinAvatarProviderConfig` は `ScriptableObject.CreateInstance<BuiltinAvatarProviderConfig>()` によるランタイム動的生成を公式サポートする。`avatarPrefab` 等のフィールドは `public` で直接セット可能。Factory は SO アセット経由・ランタイム動的生成のいずれの Config でも同一経路で処理できる (contracts.md 1.5 章のシナリオ X / Y 両方に対応)。
+- **テスト asmdef 2 系統**: EditMode / PlayMode 両系統のテスト asmdef を用意する。命名は `RealtimeAvatarController.Avatar.Builtin.Tests.EditMode` (キャスト / Resolve / Release / 自己登録確認) および `RealtimeAvatarController.Avatar.Builtin.Tests.PlayMode` (Prefab インスタンス化・破棄・Disposed 遷移)。初期版のカバレッジ数値目標は設定しない。
+
 ## 依存
 
 `slot-core` (Wave 1 完了後に起動)

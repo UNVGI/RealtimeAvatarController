@@ -65,6 +65,7 @@
 4. `Initialize()` および `Shutdown()` はメインスレッドからの呼び出しを前提とすること。
 5. `Subject<MotionFrame>` への `OnNext()` 呼び出しはワーカースレッドから行われるため、具象実装は UniRx の `Subject.Synchronize()` 等スレッドセーフなラッパーを使用すること (詳細は design フェーズで確定)。
 6. ワーカースレッドの未ハンドル例外は、ログ記録 (`Debug.LogError`) および `ISlotErrorChannel` への `VmcReceive` カテゴリ発行を通じてメインスレッドで検知可能な形式でキャプチャし、受信ループを安全に継続すること。`MotionStream` の `OnError()` は発行しない (要件 7-1 参照)。
+7. **`MotionFrame.timestamp` の打刻責務 (dig ラウンド 4 確定)**: 受信ワーカースレッドは、OSC パースが完了した直後・`Subject.OnNext(frame)` 発行前のタイミングで `MotionFrame.timestamp` フィールドに `Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency` で算出した値 (double 秒単位、プロセス起動基準の monotonic 相対値) を打刻すること。VMC 送信側 (バーチャルモーションキャプチャ等) が提供するタイムスタンプは使用しない (VMC v2.5 では不安定なため)。
 
 ---
 
@@ -177,3 +178,26 @@
 8. **エディタ自己登録 (dig ラウンド 3 確定)**: Editor 環境での候補列挙 (Inspector UI 等) のために、`[UnityEditor.InitializeOnLoadMethod]` 属性を持つ静的メソッドで同一の登録処理を実行すること。このメソッドは `#if UNITY_EDITOR` ガード内または `RealtimeAvatarController.MoCap.VMC.Editor` asmdef に配置し、ランタイムビルドに含めないこと。
 9. **競合時の例外伝播 (dig ラウンド 3 確定)**: 同一 `typeId="VMC"` が既に登録されている状態で `Register()` が呼ばれた場合、`IMoCapSourceRegistry` は `RegistryConflictException` 相当の例外をスローすること (上書き禁止; contracts.md 1.4 章参照)。`VMCMoCapSourceFactory` の自己登録メソッドはこの例外を握り潰さず、ログ出力で検知可能な状態を維持すること。
 10. **Domain Reload OFF 対応**: Unity の Domain Reload が無効化されている場合、`SubsystemRegistration` タイミングで `RegistryLocator.ResetForTest()` が呼ばれることにより Registry がリセットされ、再登録時の `RegistryConflictException` を回避できる (contracts.md 1.6 章参照)。`VMCMoCapSourceFactory` 側での追加対応は不要。
+11. **`VMCMoCapSourceConfig` のランタイム動的生成サポート (dig ラウンド 4 確定)**: `VMCMoCapSourceConfig` は `ScriptableObject.CreateInstance<VMCMoCapSourceConfig>()` によるランタイム動的生成を公式に許容すること。受信ポート番号・受信アドレス等の通信パラメータフィールドは `public` として直接セット可能とし、`CreateInstance` 後にコード側からフィールドへ値を代入することで設定を与えられること。
+12. **SO アセット経由とランタイム動的生成の等価性**: `VMCMoCapSourceFactory.Create()` は、エディタで `.asset` として保存された `VMCMoCapSourceConfig` (シナリオ X) と `ScriptableObject.CreateInstance<VMCMoCapSourceConfig>()` で動的生成された `VMCMoCapSourceConfig` (シナリオ Y) のいずれが渡された場合も、同一コードパスで `VmcMoCapSource` を生成できること。Factory 側でインスタンスの生成元を区別する処理は持たないこと。
+
+---
+
+### 要件 10: テスト戦略
+
+**目的:** As a 開発者, I want `mocap-vmc` の実装品質をテストで担保できること, so that 回帰バグを早期に検出し、OSC 受信ロジックの正確性を継続的に確認できる。
+
+#### 受け入れ基準
+
+1. **テスト asmdef の構成 (dig ラウンド 4 確定)**: `mocap-vmc` のテストは EditMode と PlayMode の 2 系統の asmdef を用意すること。
+   - EditMode 用 asmdef 名称: `RealtimeAvatarController.MoCap.VMC.Tests.EditMode`
+   - PlayMode 用 asmdef 名称: `RealtimeAvatarController.MoCap.VMC.Tests.PlayMode`
+2. **EditMode テストの対象範囲**: `RealtimeAvatarController.MoCap.VMC.Tests.EditMode` asmdef は以下を対象とすること。
+   - `VMCMoCapSourceConfig` のキャスト検証: `MoCapSourceConfigBase` として渡したインスタンスが `VMCMoCapSourceConfig` に正常キャストされること、および型不一致時に `ArgumentException` がスローされることを確認するテスト
+   - 属性ベース自己登録の確認: `[RuntimeInitializeOnLoadMethod]` および `[UnityEditor.InitializeOnLoadMethod]` による自己登録メカニズムが `MoCapSourceRegistry` に `typeId="VMC"` で登録されることを確認するテスト
+   - OSC パーサの単体テスト: OSC パケットの正常パース・異常入力時のエラーハンドリングを確認するテスト
+3. **PlayMode テストの対象範囲**: `RealtimeAvatarController.MoCap.VMC.Tests.PlayMode` asmdef は以下を対象とすること。
+   - ローカル OSC ソケット経由の受信テスト: テストダブル (ローカルホスト上の UDP 送信クライアント) を使ってパケットを送信し、`VmcMoCapSource` が `MotionStream` に正しく `MotionFrame` を発行することを確認するテスト
+   - テストダブルは Unity Test Framework (NUnit) の `SetUp` / `TearDown` 内でローカル UDP ソケットをバインドして送信する実装とする
+4. **カバレッジ目標の非設定**: 初期版ではコードカバレッジの数値目標を設定しない。将来のリリースサイクルで必要に応じて追加する。
+5. **テストの独立性**: 各テストは他のテストの実行順序や副作用に依存しないこと。`RegistryLocator.ResetForTest()` を使用して Registry 状態を初期化すること。

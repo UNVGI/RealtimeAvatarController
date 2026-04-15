@@ -18,6 +18,10 @@
 - **エラー通知**: Applier 内で発生した例外は `ISlotErrorChannel` に `SlotErrorCategory.ApplyFailure` カテゴリで発行する。`ISlotErrorChannel` は `slot-core` が提供し、motion-pipeline は Core 経由で間接利用する。`Debug.LogError` は `ISlotErrorChannel` 側で抑制管理されるため、motion-pipeline 側は明示的にストリームへ push するのみでよい
 - **無効フレームとエラーの分離**: `MotionCache` から読み取った null/無効フレームは通常動作扱い (スキップ・前フレーム維持) であり、`ISlotErrorChannel` への発行は行わない。「Apply 例外」(Applier 呼び出し時の実行時例外) のみ `ApplyFailure` カテゴリで発行する
 
+**dig ラウンド 4 確定事項**:
+- **MotionFrame.Timestamp 仕様**: タイムスタンプは Stopwatch ベース monotonic (`double` 秒単位、App 起動基準)。`Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency` で取得し、受信ワーカースレッド上で打刻する。プロセス間比較は不可。将来ログ用途で `WallClock: DateTime?` フィールドの追加を検討するが、初期版では未実装
+- **テスト asmdef 方針**: motion-pipeline は EditMode / PlayMode 両系統のテストアセンブリを持つ。命名は `RealtimeAvatarController.Motion.Tests.EditMode` / `RealtimeAvatarController.Motion.Tests.PlayMode`。カバレッジ目標は初期版では設定しない
+
 ## Boundary Context
 
 - **In scope**:
@@ -64,13 +68,18 @@
 
 **Objective:** As a パイプライン設計者, I want Humanoid / Generic など異なる骨格形式を統一的に扱える基底型を持てること, so that パイプライン上流・下流のコードが骨格形式に依存しない共通 API を利用できる。
 
+> **Timestamp 仕様 (dig ラウンド 4 確定)**: タイムスタンプは Stopwatch ベース monotonic (`double` 秒単位、App 起動基準)。受信ワーカースレッドで打刻する。プロセス間比較は不可。将来ログ用途で `WallClock: DateTime?` フィールドの追加を検討するが、初期版では未実装とする。
+
 #### Acceptance Criteria
 
 1. The `MotionFrame` (抽象基底型) shall `HumanoidMotionFrame` および将来の Generic フレーム型が派生できる基底型として定義される。
-2. The `MotionFrame` shall タイムスタンプ (受信時刻相当の `double` または `long`) フィールドを持つ。
-3. The `MotionFrame` shall 骨格種別を識別できるプロパティ (`SkeletonType` 列挙型等) の骨格を持つ。
-4. `IMoCapSource.MotionStream` (`IObservable<MotionFrame>`) が流すフレーム型は `MotionFrame` 基底型 (または型パラメータ) として宣言し、design フェーズで最終シグネチャを確定する。Pull 型 (`FetchLatestMotion()`) は採用しない。
-5. The `MotionFrame` は `RealtimeAvatarController.Motion` 名前空間に属する。
+2. The `MotionFrame` shall タイムスタンプフィールド `Timestamp` を `double` 型 (秒単位) で持つ。値は `Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency` で算出される Stopwatch ベース monotonic 値であり、App 起動を基準とした相対値である。プロセス間比較は不可とする。
+3. The `Timestamp` shall 受信ワーカースレッド上でフレーム構築時に打刻される。Unity メインスレッド API を使用しないため、スレッド安全に取得できる。
+4. The `MotionFrame` shall 骨格種別を識別できるプロパティ (`SkeletonType` 列挙型等) の骨格を持つ。
+5. `IMoCapSource.MotionStream` (`IObservable<MotionFrame>`) が流すフレーム型は `MotionFrame` 基底型 (または型パラメータ) として宣言し、design フェーズで最終シグネチャを確定する。Pull 型 (`FetchLatestMotion()`) は採用しない。
+6. The `MotionFrame` は `RealtimeAvatarController.Motion` 名前空間に属する。
+7. The `MotionFrame` shall `Timestamp` の用途として Slot 内フレーム順序整列・遅延計測・デバッグログを想定した設計とする。
+8. 将来ログ用途で wall clock が必要な場合に備え、`WallClock: DateTime?` フィールドの追加を設計上の余地として残す。初期版では `WallClock` は**実装しない**。
 
 ---
 
@@ -201,7 +210,7 @@
 2. The asmdef ファイルは `RealtimeAvatarController.Motion` として定義され、`Runtime/Motion/` に配置される。
 3. The `RealtimeAvatarController.Motion` アセンブリは `RealtimeAvatarController.Core` アセンブリを参照し、`Samples.UI` 等の上位アセンブリを参照しない (contracts.md 6 章参照)。
 4. The `RealtimeAvatarController.Motion` アセンブリは `RealtimeAvatarController.Core` が UniRx (`com.neuecc.unirx`) を依存として持つことを通じて、UniRx に間接依存する。`MotionCache` が `IObservable<MotionFrame>` を購読する実装において UniRx 型 (`IObservable<T>` / `IDisposable` 等) を直接使用してよい。UniRx の直接参照 (asmdef の references への `UniRx` 追加) が必要かどうかは design フェーズで確定する。
-5. When テストコードを配置する場合, the テストアセンブリは `RealtimeAvatarController.Motion.Tests` 名前空間を使用する。
+5. When テストコードを配置する場合, the テストアセンブリは `RealtimeAvatarController.Motion.Tests.EditMode` および `RealtimeAvatarController.Motion.Tests.PlayMode` の 2 系統を持つ (dig ラウンド 4 確定)。EditMode / PlayMode は別 asmdef として分割する。
 6. エディタ限定コードが存在する場合, `RealtimeAvatarController.Motion.Editor` 名前空間を使用する。
 7. `FallbackBehavior` enum および `ISlotErrorChannel` / `SlotError` / `SlotErrorCategory` は `RealtimeAvatarController.Core` 名前空間に属する型であり、本 Spec は定義しない。本 Spec はこれらを `RealtimeAvatarController.Core` アセンブリ参照経由で利用する。
 
@@ -242,3 +251,27 @@
 3. `ISlotErrorChannel` への push は同一フレームの連続例外も含めて毎回行う。`Debug.LogError` の重複抑制は `ISlotErrorChannel` 実装側が管理するため、motion-pipeline 側では抑制フィルタリングを行わない。
 4. The `HumanoidMotionApplier` は `ISlotErrorChannel` をコンストラクタまたは初期化メソッドで受け取る。インスタンス取得の具体的な方法 (Locator 経由 / DI 等) は design フェーズで確定する。
 5. When `MotionCache` から読み取ったフレームが null または無効な場合 (要件 4 AC6 参照), the パイプライン shall `ISlotErrorChannel` へのエラー発行を行わない。無効フレームのスキップは通常動作であり、エラーではない。`ApplyFailure` として発行するのは Applier 呼び出し中の実行時例外のみとする。
+
+---
+
+### Requirement 14: テスト戦略と asmdef 構成 (dig ラウンド 4 確定)
+
+**Objective:** As a 品質担当者, I want motion-pipeline のテストが EditMode / PlayMode の 2 系統に分割された専用アセンブリで管理されること, so that 純粋なロジックテストと実 Unity ランタイムを必要とするテストを適切に分離できる。
+
+> **テスト戦略 (dig ラウンド 4 確定)**: EditMode / PlayMode 両系統の asmdef を持つ。カバレッジ目標は初期版では設定しない。
+
+#### Acceptance Criteria
+
+1. The motion-pipeline Spec のテストアセンブリは以下の 2 つの asmdef として分割する。
+   - `RealtimeAvatarController.Motion.Tests.EditMode` — EditMode テスト専用 (Unity Editor TestRunner の EditMode モード)
+   - `RealtimeAvatarController.Motion.Tests.PlayMode` — PlayMode テスト専用 (Unity Editor TestRunner の PlayMode モード)
+2. The **EditMode テスト** (`RealtimeAvatarController.Motion.Tests.EditMode`) shall 以下の対象を検証する。
+   - `MotionCache` の購読ライフサイクル (購読開始・解除・旧ソースの切替)
+   - `HumanoidMotionFrame` の単位変換 (Muscle 値 / Root 位置・回転の変換ロジック)
+   - `FallbackBehavior` の分岐ロジック (各 enum 値に対応する挙動)
+   - Weight 二値判定 (`0.0` → スキップ、`1.0` → フル適用、範囲外 → クランプ)
+3. The **PlayMode テスト** (`RealtimeAvatarController.Motion.Tests.PlayMode`) shall 以下の対象を検証する。
+   - 実 Humanoid アバター (テスト用 Prefab) への `HumanoidMotionApplier` によるモーション適用
+   - `FallbackBehavior.Hide` の視覚的動作確認 (Renderer の無効化 / 復帰)
+4. The 2 つのテストアセンブリは `Tests/EditMode/` および `Tests/PlayMode/` にそれぞれ配置する (具体的なパスは design フェーズで確定)。
+5. カバレッジ目標は初期版では設定しない。テスト対象範囲の追加・変更は design / implementation フェーズで都度判断する。
