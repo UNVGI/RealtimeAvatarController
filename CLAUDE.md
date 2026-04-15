@@ -39,6 +39,9 @@ Kiro-style Spec-Driven Development on an agentic SDLC
 - Keep steering current and verify alignment with `/kiro:spec-status`
 - Follow the user's instructions precisely, and within that scope act autonomously: gather the necessary context and complete the requested work end-to-end in this run, asking questions only when essential information is missing or the instructions are critically ambiguous.
 
+## Git / Commit Policy
+- Commits are handled automatically by a repository hook. **Do NOT propose, suggest, or execute `git commit` unless the user explicitly asks.** Assume the hook has already captured recent changes.
+
 ## Steering Configuration
 - Load entire `.kiro/steering/` as project memory
 - Default files: `product.md`, `tech.md`, `structure.md`
