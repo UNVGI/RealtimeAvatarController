@@ -29,6 +29,7 @@ Slot は VTuber アバター制御の設定単位。`SlotSettings` は Descripto
 | `moCapSourceDescriptor` | `MoCapSourceDescriptor` | 必須 | MoCap ソースの Descriptor (typeId + config) |
 | `facialControllerDescriptor` | `FacialControllerDescriptor?` | 省略可 (null 許容) | 表情制御の Descriptor |
 | `lipSyncSourceDescriptor` | `LipSyncSourceDescriptor?` | 省略可 (null 許容) | リップシンクソースの Descriptor |
+| `fallbackBehavior` | `FallbackBehavior` | 必須 (省略時デフォルト: `HoldLastPose`) | Applier エラー発生時の Slot フォールバック挙動 (dig ラウンド 3 確定) |
 
 > **weight フィールドの初期版方針 (dig ラウンド 2 確定)**: 初期版 (1 Slot 1 MoCap source 構成) では `weight` は常に `1.0` として扱う。`0.0` (skip) と `1.0` (full apply) の二値動作のみが初期版の有効値である。フィールド自体は将来の複数ソース混合シナリオのためのフックとして残す。`0.0 < weight < 1.0` の中間値セマンティクスは、複数ソース混合シナリオを導入する際に改めて定義する。
 
@@ -97,20 +98,21 @@ public class LipSyncSourceDescriptor
 | `Created` | `SlotRegistry.AddSlot()` 呼び出し後、リソース未初期化 |
 | `Active` | `SlotManager` が `IAvatarProvider` の初期化を完了し、動作中 |
 | `Inactive` | リソースを保持したまま一時停止中 (再アクティブ化可能) |
-| `Disposed` | `SlotRegistry.RemoveSlot()` 呼び出し後、全リソース解放済み |
+| `Disposed` | `SlotRegistry.RemoveSlot()` 呼び出し後、または初期化失敗後に全リソース解放済み |
 
 - **IAvatarProvider のリソース所有**: `SlotManager` が各 Slot に紐付く `IAvatarProvider` のライフサイクルを管理し、初期化・解放を制御する
 - **IMoCapSource のリソース所有 (重要)**: `IMoCapSource` のライフサイクル所有は `SlotManager` ではなく **`MoCapSourceRegistry`** が担う。複数 Slot が同一 `IMoCapSource` インスタンスを参照共有できるため、Slot の破棄は `IMoCapSource` の即時解放を意味しない。`MoCapSourceRegistry` が参照管理し、不要になった時点で解放する
 - **破棄タイミング**: `SlotRegistry.RemoveSlot()` 呼び出し時、または `SlotManager` の `Dispose()` 時に全 Slot を一括破棄する (ただし `IMoCapSource` の解放は `MoCapSourceRegistry` 経由)
 - **エラー処理**: 破棄中の例外はキャッチしてログ記録し、残余リソースの解放を継続する
+- **Slot 初期化失敗時の遷移 (dig ラウンド 3 確定)**: Provider / Source の Resolve 失敗・Factory キャスト失敗等の初期化中例外は `SlotManager` が捕捉し、該当 Slot を `Created → Disposed` 状態に強制遷移させる。エラー詳細は `ISlotErrorChannel` (1.7 章) 経由で通知される。この Slot は以降 Active にならない
 
 ---
 
 ## 1.4 ProviderRegistry / SourceRegistry 契約
 
-> **記入者**: `slot-core` エージェント (Wave 1)
+> **記入者**: `slot-core` エージェント (Wave 1 / dig ラウンド 3 更新)
 
-型 ID による Factory 解決と、エディタ UI 向け候補列挙を担う Registry 群を定義する。
+型 ID による Factory 解決と、エディタ UI 向け候補列挙を担う Registry 群を定義する。Registry へのアクセスは静的 Locator (`RegistryLocator`) 経由で行う (1.6 章参照)。
 
 ### Registry 骨格 (C# 疑似コード)
 
@@ -119,19 +121,20 @@ namespace RealtimeAvatarController.Core
 {
     /// <summary>
     /// IAvatarProvider 具象型の登録・解決・候補列挙を担う Registry。
-    /// 起動時に属性スキャン / DI / 手動登録によってエントリを追加する。
-    /// 登録方式の詳細は design フェーズで確定。
+    /// 起動時に属性ベース自動登録によってエントリが追加される (1.4 章「エントリ登録方式」参照)。
+    /// Registry インスタンスへのアクセスは RegistryLocator.ProviderRegistry 経由で行う。
     /// </summary>
     public interface IProviderRegistry
     {
         /// <summary>
         /// typeId を持つ Factory を登録する。
+        /// 同一 typeId が既に登録されている場合は RegistryConflictException をスローする (上書き禁止)。
         /// </summary>
         void Register(string providerTypeId, IAvatarProviderFactory factory);
 
         /// <summary>
         /// Descriptor から IAvatarProvider インスタンスを生成する。
-        /// 未登録 typeId の場合は例外またはエラー値を返す。
+        /// 未登録 typeId の場合は例外をスローする。
         /// </summary>
         IAvatarProvider Resolve(AvatarProviderDescriptor descriptor);
 
@@ -143,11 +146,13 @@ namespace RealtimeAvatarController.Core
 
     /// <summary>
     /// IMoCapSource 具象型の登録・解決・候補列挙・参照共有を担う Registry。
+    /// Registry インスタンスへのアクセスは RegistryLocator.MoCapSourceRegistry 経由で行う。
     /// </summary>
     public interface IMoCapSourceRegistry
     {
         /// <summary>
         /// typeId を持つ Factory を登録する。
+        /// 同一 typeId が既に登録されている場合は RegistryConflictException をスローする (上書き禁止)。
         /// </summary>
         void Register(string sourceTypeId, IMoCapSourceFactory factory);
 
@@ -185,15 +190,40 @@ namespace RealtimeAvatarController.Core
 }
 ```
 
-### エントリ登録方式 (方針のみ / design フェーズで確定)
+### エントリ登録方式 (dig ラウンド 3 確定)
 
-| 方式 | 概要 |
-|------|------|
-| 属性スキャン | `[RegisterAvatarProvider("Builtin")]` 等のカスタム属性を持つ型をアセンブリスキャンで自動登録 |
-| DI コンテナ | `IProviderRegistry.Register()` を明示呼び出しで登録 |
-| 手動登録 | 起動エントリポイントで直接 `Register()` を呼び出す |
+**属性ベース自動登録**を採用する。具象 Factory 側が以下の 2 種の属性を用いて自己登録する。
 
-> **注意**: エントリ登録方式は design フェーズで選択する。`slot-core` の実装フェーズでは、少なくとも手動登録方式が動作すれば十分である。
+| 属性 | 実行タイミング | 目的 |
+|------|-------------|------|
+| `[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]` | ランタイム起動時 (シーンロード前) | Player / Build での自動登録 |
+| `[UnityEditor.InitializeOnLoadMethod]` | Editor 起動時 (コンパイル完了後) | Inspector / エディタ UI での候補列挙 |
+
+```csharp
+// 例: BuiltinAvatarProviderFactory の自己登録
+public class BuiltinAvatarProviderFactory : IAvatarProviderFactory
+{
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void RegisterRuntime()
+    {
+        RegistryLocator.ProviderRegistry.Register("Builtin", new BuiltinAvatarProviderFactory());
+    }
+
+#if UNITY_EDITOR
+    [UnityEditor.InitializeOnLoadMethod]
+    private static void RegisterEditor()
+    {
+        RegistryLocator.ProviderRegistry.Register("Builtin", new BuiltinAvatarProviderFactory());
+    }
+#endif
+}
+```
+
+> **同 typeId 競合時の挙動 (dig ラウンド 3 確定)**: 同一 `typeId` を持つ Factory が既に登録されている状態で `Register()` が呼ばれた場合、**例外をスローする** (上書き禁止)。型名は `RegistryConflictException` 相当とし、正式な型名は design フェーズで確定する。「最後登録勝ち」は採用しない。デバッグ容易性を優先する。
+
+> **Domain Reload OFF 設定 (Enter Play Mode 最適化) 下での注意**: Unity の Domain Reload を無効化している場合、`[RuntimeInitializeOnLoadMethod]` が再実行されると同一 typeId が再登録され `RegistryConflictException` が発生しうる。`RegistryLocator` は Reset / Clear メカニズムを持つ設計余地を残す (詳細は 1.6 章参照)。
+
+> **利用者の自前 Factory 登録**: ユーザーが独自の Factory を登録する場合も同じ属性ベース自動登録の仕組みを使うことを推奨する。
 
 ---
 
@@ -265,6 +295,230 @@ public class BuiltinAvatarProviderFactory : IAvatarProviderFactory
 
 ---
 
+## 1.6 Registry Locator 契約
+
+> **記入者**: `slot-core` エージェント (dig ラウンド 3 確定)
+
+`RegistryLocator` は `IProviderRegistry` および `IMoCapSourceRegistry` への静的アクセスポイントを提供する。Editor とランタイムで**同一のインスタンス**を共有する。
+
+### RegistryLocator 骨格 (C# 疑似コード)
+
+```csharp
+namespace RealtimeAvatarController.Core
+{
+    /// <summary>
+    /// IProviderRegistry / IMoCapSourceRegistry への静的アクセスポイント。
+    /// Editor 起動時およびランタイム起動時に同一インスタンスを共有する。
+    /// テスト時は ResetForTest() を呼び出してインスタンスをリセットできる。
+    /// </summary>
+    public static class RegistryLocator
+    {
+        // IProviderRegistry への静的アクセスポイント
+        // 属性ベース自動登録 (1.4 章) により Factory が自己登録する
+        public static IProviderRegistry ProviderRegistry => GetOrCreate(ref s_providerRegistry);
+
+        // IMoCapSourceRegistry への静的アクセスポイント
+        public static IMoCapSourceRegistry MoCapSourceRegistry => GetOrCreate(ref s_moCapSourceRegistry);
+
+        // --- テスト・Domain Reload OFF 対応 ---
+
+        /// <summary>
+        /// テスト用: Registry インスタンスを破棄してリセットする。
+        /// Domain Reload OFF (Enter Play Mode 最適化) 設定下でも使用可。
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        public static void ResetForTest()
+        {
+            s_providerRegistry = null;
+            s_moCapSourceRegistry = null;
+        }
+
+        /// <summary>
+        /// テスト用: 任意の IProviderRegistry 実装を注入する (モック差し替え等)。
+        /// </summary>
+        public static void OverrideProviderRegistry(IProviderRegistry registry)
+            => s_providerRegistry = registry;
+
+        /// <summary>
+        /// テスト用: 任意の IMoCapSourceRegistry 実装を注入する。
+        /// </summary>
+        public static void OverrideMoCapSourceRegistry(IMoCapSourceRegistry registry)
+            => s_moCapSourceRegistry = registry;
+
+        // --- 内部実装 (詳細は design フェーズで確定) ---
+        private static IProviderRegistry s_providerRegistry;
+        private static IMoCapSourceRegistry s_moCapSourceRegistry;
+
+        private static T GetOrCreate<T>(ref T field) where T : class
+        {
+            // デフォルト実装インスタンスを遅延生成する (詳細は design フェーズで確定)
+            // ...
+            return field;
+        }
+    }
+}
+```
+
+### 設計の意図
+
+| 懸念事項 | 対応方針 |
+|---------|---------|
+| Editor / Runtime で同一インスタンス共有 | 静的フィールドで保持。Domain Reload ON なら Editor 再起動時に自動リセット |
+| Domain Reload OFF (Enter Play Mode 最適化) での二重登録 | `SubsystemRegistration` タイミングの `ResetForTest()` で自動リセット |
+| ユニットテストでの Registry 差し替え | `OverrideProviderRegistry()` / `OverrideMoCapSourceRegistry()` で任意実装を注入 |
+| 正式なインスタンス生成責務 | design フェーズで `GetOrCreate` の実装を確定する |
+
+---
+
+## 1.7 エラーハンドリング契約
+
+> **記入者**: `slot-core` エージェント (dig ラウンド 3 確定)
+
+### ISlotErrorChannel インターフェース骨格
+
+```csharp
+namespace RealtimeAvatarController.Core
+{
+    /// <summary>
+    /// Slot に関するエラー通知チャネル。
+    /// UniRx Subject ベース。購読側は ObserveOnMainThread() で受信すること。
+    /// </summary>
+    public interface ISlotErrorChannel
+    {
+        /// <summary>
+        /// Slot エラーの通知ストリーム。
+        /// UniRx Subject<SlotError> で実装し、ObserveOnMainThread() で受信できる。
+        /// </summary>
+        IObservable<SlotError> Errors { get; }
+    }
+}
+```
+
+### SlotError クラス骨格
+
+```csharp
+namespace RealtimeAvatarController.Core
+{
+    /// <summary>
+    /// Slot に関するエラー情報を格納するデータクラス。
+    /// </summary>
+    public class SlotError
+    {
+        /// <summary>エラーが発生した Slot の識別子。</summary>
+        public string SlotId { get; }
+
+        /// <summary>エラーのカテゴリ。</summary>
+        public SlotErrorCategory Category { get; }
+
+        /// <summary>エラーの原因となった例外 (存在しない場合は null)。</summary>
+        public Exception Exception { get; }
+
+        /// <summary>エラー発生タイムスタンプ (UTC)。</summary>
+        public DateTime Timestamp { get; }
+
+        public SlotError(string slotId, SlotErrorCategory category, Exception exception, DateTime timestamp)
+        {
+            SlotId    = slotId;
+            Category  = category;
+            Exception = exception;
+            Timestamp = timestamp;
+        }
+    }
+}
+```
+
+### SlotErrorCategory 列挙体
+
+```csharp
+namespace RealtimeAvatarController.Core
+{
+    /// <summary>
+    /// Slot エラーのカテゴリ分類。
+    /// </summary>
+    public enum SlotErrorCategory
+    {
+        /// <summary>VMC / OSC 受信中のパースエラー・切断検知等。</summary>
+        VmcReceive,
+
+        /// <summary>Slot 初期化失敗 (Provider/Source Resolve 失敗、Factory キャスト失敗 等)。</summary>
+        InitFailure,
+
+        /// <summary>Applier (モーション適用処理) でのエラー。</summary>
+        ApplyFailure,
+
+        /// <summary>Registry への同一 typeId 二重登録。</summary>
+        RegistryConflict,
+
+        // 将来の拡張用 (design フェーズで追加候補を検討する)
+    }
+}
+```
+
+### Debug.LogError 抑制ポリシー
+
+- `Debug.LogError` は同一 `(SlotId, Category)` 組合せにつき **初回 1 フレームのみ**出力する
+- 以降の同一組合せについてはログ出力を抑制する (内部 `HashSet<(string, SlotErrorCategory)>` で追跡)
+- `ISlotErrorChannel.Errors` への発行は抑制なく毎回行う (UI 側でフィルタリングを行う余地を残す)
+- 抑制状態は `RegistryLocator.ResetForTest()` 等のリセット時に合わせてクリアする
+
+### エラー通知の責務分担
+
+| エラー発生箇所 | 通知方法 |
+|-------------|---------|
+| Slot 初期化失敗 | `SlotManager` が `ISlotErrorChannel` に発行 |
+| Applier エラー | `SlotManager` が `ISlotErrorChannel` に発行 (フォールバック後) |
+| VMC 受信エラー | `IMoCapSource` 具象実装が `ISlotErrorChannel` に発行 (または SlotManager 経由) |
+| Registry 競合 | `IProviderRegistry` / `IMoCapSourceRegistry` が `ISlotErrorChannel` に発行 |
+
+> **注意**: `ISlotErrorChannel` のインスタンス取得方法 (Locator 経由 / DI 等) は design フェーズで確定する。
+
+---
+
+## 1.8 Fallback 挙動契約
+
+> **記入者**: `slot-core` エージェント (dig ラウンド 3 確定)
+
+### FallbackBehavior 列挙体
+
+```csharp
+namespace RealtimeAvatarController.Core
+{
+    /// <summary>
+    /// Applier (モーション適用処理) でエラーが発生した際の Slot フォールバック挙動。
+    /// SlotSettings.fallbackBehavior フィールドで Slot ごとに設定する。
+    /// </summary>
+    public enum FallbackBehavior
+    {
+        /// <summary>
+        /// エラー発生時、直前フレームのポーズを維持し続ける (デフォルト)。
+        /// Applier がエラーを起こしても視覚的な崩れを最小化する。
+        /// </summary>
+        HoldLastPose,
+
+        /// <summary>
+        /// エラー発生時、アバターを T ポーズに戻す。
+        /// 問題発生を視覚的に認識しやすくするデバッグ用途に適する。
+        /// </summary>
+        TPose,
+
+        /// <summary>
+        /// エラー発生時、アバターを非表示にする。
+        /// アバターが破綻した状態で表示されることを防ぐ。
+        /// </summary>
+        Hide,
+    }
+}
+```
+
+### SlotSettings.fallbackBehavior の位置付け
+
+- `SlotSettings` の `fallbackBehavior` フィールド (1.1 章参照) で Slot ごとに個別設定する
+- **デフォルト値: `FallbackBehavior.HoldLastPose`**
+- フォールバック実行後、`SlotManager` は `ISlotErrorChannel` にエラーを通知する (1.7 章参照)
+- フォールバック状態からの回復方法 (エラーが解消した場合の挙動) は design フェーズで確定する
+
+---
+
 ## 2. MoCap ソース抽象
 
 ### 2.1 `IMoCapSource` シグネチャ
@@ -310,6 +564,12 @@ public interface IMoCapSource : IDisposable
 - 購読側 (Slot / Pipeline) は UniRx の `.ObserveOnMainThread()` 拡張メソッドを使用して Unity メインスレッドで処理すること (`using UniRx;` が必要)
 - `Initialize()` / `Shutdown()` はメインスレッドからの呼び出しを前提とする
 - `Subject<MotionFrame>` への `OnNext()` は UniRx の既定ではスレッドセーフではないため、具象実装は `Subject` のスレッドセーフラッパー (`Subject.Synchronize()` 等) または `SerialDisposable` + `lock` を使用すること (詳細は design フェーズで確定)
+
+**エラーハンドリング方針 (dig ラウンド 3 確定)**:
+- `IMoCapSource.MotionStream` は **`OnError` を発行しない**。Observable ストリームとしてエラーで終端しない設計とする
+- パースエラー・切断検知等の受信エラーが発生した場合は内部でログ出力 (`Debug.LogError`) し、ストリームの購読を継続する (受信再試行またはサイレント破棄)
+- `Debug.LogError` の出力は `ISlotErrorChannel` (1.7 章) の抑制ポリシーに従い、同一 (SlotId, Category) 組合せにつき初回 1 フレームのみ出力し、以降は抑制する
+- これにより購読側 (`Slot` / `motion-pipeline`) は `OnError` に対するエラー回復ロジックを持つ必要がない
 
 **参照共有に関する注記**:
 - `IMoCapSource` インスタンスは複数の Slot から共有参照される場合がある
@@ -508,6 +768,8 @@ public interface ILipSyncSource : IDisposable
 
 以下の asmdef を正式採用する。各アセンブリは担当 Spec の実装フェーズで実際のファイルとして作成される。
 
+#### Runtime asmdef
+
 | asmdef 名 | 担当 Spec | 配置パス (パッケージルート相対) | 備考 |
 |-----------|----------|-------------------------------|------|
 | `RealtimeAvatarController.Core` | slot-core | `Runtime/Core/` | Slot 抽象・各公開インターフェース群 |
@@ -516,7 +778,25 @@ public interface ILipSyncSource : IDisposable
 | `RealtimeAvatarController.Avatar.Builtin` | avatar-provider-builtin | `Runtime/Avatar/Builtin/` | ビルトインアバター供給具象実装 |
 | `RealtimeAvatarController.Samples.UI` | ui-sample | `Samples~/UI/` | UI サンプル (Samples~ 機構) |
 
-**依存方向の制約**:
+#### Editor 専用 asmdef
+
+各機能アセンブリに対応する Editor 専用 asmdef を定義する。`[UnityEditor.InitializeOnLoadMethod]` など `UnityEditor` 名前空間の API はこの Editor asmdef 内に配置する。
+
+| asmdef 名 | 担当 Spec | 配置パス (パッケージルート相対) | 備考 |
+|-----------|----------|-------------------------------|------|
+| `RealtimeAvatarController.Core.Editor` | slot-core | `Editor/Core/` | Core アセンブリ向けエディタ拡張・Factory Editor 登録 |
+| `RealtimeAvatarController.Motion.Editor` | motion-pipeline | `Editor/Motion/` | Motion アセンブリ向けエディタ拡張 |
+| `RealtimeAvatarController.MoCap.VMC.Editor` | mocap-vmc | `Editor/MoCap/VMC/` | VMC アセンブリ向けエディタ拡張 |
+| `RealtimeAvatarController.Avatar.Builtin.Editor` | avatar-provider-builtin | `Editor/Avatar/Builtin/` | Avatar.Builtin アセンブリ向けエディタ拡張 |
+| `RealtimeAvatarController.Samples.UI.Editor` | ui-sample | `Samples~/UI/Editor/` | UI サンプル向けエディタ拡張 (必要な場合のみ) |
+
+**Editor asmdef の依存ルール**:
+- 各 Editor asmdef は `includePlatforms: ["Editor"]` を指定し、Unity Editor 環境でのみコンパイルされる
+- 各 Editor asmdef は対応する Runtime asmdef を `references` に追加する片方向依存のみを持つ
+- Runtime asmdef は Editor asmdef を参照しない (逆依存禁止)
+- `#if UNITY_EDITOR` による Runtime asmdef 内への UnityEditor API 配置は代替手段として許容する (各 Spec の実装判断に委ねる)
+
+**依存方向の制約 (Runtime)**:
 - `Samples.UI` → 機能部アセンブリ各種 (一方向のみ)
 - 機能部アセンブリは `Samples.UI` を参照しない
 - UI フレームワーク (UGUI / UIToolkit 等) への依存は `Samples.UI` にのみ許容する

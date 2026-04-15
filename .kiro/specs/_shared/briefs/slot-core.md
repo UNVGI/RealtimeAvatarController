@@ -18,6 +18,23 @@ Slot 概念を中核とするデータモデル・ライフサイクル管理 AP
 - Slot ライフサイクル (生成・破棄; IMoCapSource の所有権は MoCapSourceRegistry に委譲)
 - ProviderRegistry / SourceRegistry (typeId → Factory 解決、利用可能候補列挙)
 - MoCapSourceRegistry (参照共有 / 参照カウントベース解放)
+- **RegistryLocator** (dig ラウンド 3 確定):
+  - `IProviderRegistry` / `IMoCapSourceRegistry` への静的アクセスポイント
+  - Editor / Runtime 共有の同一インスタンスを提供
+  - テスト用 `ResetForTest()` / `Override*()` API
+  - Domain Reload OFF 対応の `SubsystemRegistration` タイミングでの自動リセット
+- **ISlotErrorChannel / SlotError / SlotErrorCategory** (dig ラウンド 3 確定):
+  - UniRx ベースの Slot エラー通知チャネル
+  - `SlotError` クラス: `SlotId` / `Category` / `Exception` / `Timestamp`
+  - `SlotErrorCategory` 列挙体: `VmcReceive` / `InitFailure` / `ApplyFailure` / `RegistryConflict`
+  - Debug.LogError 抑制ポリシー (同一 (SlotId, Category) 初回 1F のみ、HashSet で追跡)
+- **FallbackBehavior 列挙体** (dig ラウンド 3 確定):
+  - `HoldLastPose` (デフォルト) / `TPose` / `Hide`
+  - `SlotSettings.fallbackBehavior` フィールドに使用
+- **属性ベース自動登録機構** (dig ラウンド 3 確定):
+  - `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` + `[UnityEditor.InitializeOnLoadMethod]`
+  - 具象 Factory 側が上記属性で `RegistryLocator` 経由で自己登録するパターンを `slot-core` が提供
+  - 利用者の自前 Factory も同じ仕組みで登録可能
 - **Config 基底型階層の定義** (dig ラウンド 2 確定):
   - `ProviderConfigBase : ScriptableObject` (アバター Provider Config の抽象基底)
   - `MoCapSourceConfigBase : ScriptableObject` (MoCap ソース Config の抽象基底)
@@ -26,7 +43,7 @@ Slot 概念を中核とするデータモデル・ライフサイクル管理 AP
   - 具象 Config は各担当 Spec が基底クラスを継承して定義する
   - Factory の `Create` 引数型は各基底クラス型; 具象実装側でキャストして取得
 - 以下の抽象インターフェースの定義 (シグネチャ確定は design フェーズ):
-  - `IMoCapSource` **Push 型 (UniRx `IObservable<MotionFrame>`)**: `FetchLatestMotion()` は定義しない
+  - `IMoCapSource` **Push 型 (UniRx `IObservable<MotionFrame>`)**: `FetchLatestMotion()` は定義しない。`MotionStream` は `OnError` を発行しない
   - `IAvatarProvider`
   - `IFacialController` (受け口のみ)
   - `ILipSyncSource` (受け口のみ)

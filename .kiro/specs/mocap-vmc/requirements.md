@@ -64,7 +64,7 @@
 3. 購読側 (Slot / Pipeline) は `.ObserveOnMainThread()` を用いて Unity メインスレッドでフレームを処理すること (contracts.md 2.1 章のスレッド安全性要求に準拠)。
 4. `Initialize()` および `Shutdown()` はメインスレッドからの呼び出しを前提とすること。
 5. `Subject<MotionFrame>` への `OnNext()` 呼び出しはワーカースレッドから行われるため、具象実装は UniRx の `Subject.Synchronize()` 等スレッドセーフなラッパーを使用すること (詳細は design フェーズで確定)。
-6. ワーカースレッドの未ハンドル例外は、`MotionStream` の `OnError()` 通知またはログ記録を通じてメインスレッドで検知可能な形式でキャプチャし、受信ループを安全に停止すること。
+6. ワーカースレッドの未ハンドル例外は、ログ記録 (`Debug.LogError`) および `ISlotErrorChannel` への `VmcReceive` カテゴリ発行を通じてメインスレッドで検知可能な形式でキャプチャし、受信ループを安全に継続すること。`MotionStream` の `OnError()` は発行しない (要件 7-1 参照)。
 
 ---
 
@@ -126,15 +126,23 @@
 
 ### 要件 7: エラー処理と診断
 
-**目的:** As a 開発者, I want VMC ソースの異常状態を検知・記録できること, so that トラブルシューティングと運用監視が可能になる。
+**目的:** As a 開発者, I want VMC ソースの異常状態を検知・記録し、エラーチャネル経由で通知されること, so that `MotionStream` の購読者側がエラー回復ロジックを持たずにトラブルシューティングと運用監視が可能になる。
 
 #### 受け入れ基準
 
-1. OSC ソケットのバインド失敗 (ポート競合等) は `Initialize()` 時に検知し、呼び出し元に例外またはエラー結果として通知すること。ソケットバインドエラーは `MotionStream` の `OnError()` を通じて購読者にも伝播させること。
-2. OSC パケットのパース失敗は例外をスローせず、当該パケットをスキップしてログ記録すること。パースエラーは `MotionStream` の `OnError()` ではなくログのみで処理し、ストリームを継続すること。
-3. ワーカースレッドの異常終了は Unity `Debug.LogError` またはそれに準じるログ機構で記録し、`MotionStream` の `OnError()` を通じて全購読者へ通知したうえで、`VmcMoCapSource` を `Inactive` 相当の状態に遷移させること。
-4. **参照共有時のエラー伝播**: `MotionStream` に `OnError()` が発行された場合、当該ストリームを購読している全 Slot (全購読者) へエラーが伝播する。各 Slot は購読時に `OnError` ハンドラを登録し、自身のパイプラインを安全に停止する責務を持つこと。
-5. `VmcMoCapSource` は受信パケット数・パースエラー数等の診断カウンタをプロパティとして公開できる拡張余地を持つこと (初期実装では省略可)。
+1. **`MotionStream.OnError` は発行しない (dig ラウンド 3 確定)**: `IMoCapSource.MotionStream` は `OnError()` を一切発行しない。いかなる受信エラーが発生してもストリームはエラーで終端せず、次の有効パケットを待ち続けること。購読側は `OnError` ハンドラを実装する必要がない。
+2. **OSC パースエラー時の処理**: OSC パケットのパース失敗が発生した場合、次のすべてを実行すること。
+   - 当該パケットをスキップしてストリームを継続する (例外のスロー・`OnError` 発行は行わない)
+   - `Debug.LogError` で内部ログ出力する (ただし `ISlotErrorChannel` の抑制ポリシー (contracts.md 1.7 章) に準拠し、同一 `(SlotId, SlotErrorCategory.VmcReceive)` 組合せにつき初回 1 フレームのみ出力し、以降は抑制する。抑制ロジックは slot-core / Core 側が担う)
+   - `ISlotErrorChannel` に `SlotErrorCategory.VmcReceive` カテゴリで `SlotError` を発行する
+3. **ネットワーク切断検知時の処理**: ネットワーク切断を検知した場合、次のすべてを実行すること。
+   - ストリームを継続し、次の有効パケット受信を待ち続ける (再接続・タイムアウト処理は初期段階では実装しない; design フェーズで検討)
+   - `Debug.LogError` で内部ログ出力する (OSC パースエラーと同一の抑制ポリシーに従う)
+   - `ISlotErrorChannel` に `SlotErrorCategory.VmcReceive` カテゴリで `SlotError` を発行する
+4. **ポート競合 (OS レベル) / ソケットバインド失敗**: OSC ソケットのバインドに失敗した場合、`Initialize()` 時に例外をスローして呼び出し元に伝播すること。この場合 `ISlotErrorChannel` への発行は `SlotManager` が捕捉して `SlotErrorCategory.InitFailure` カテゴリで行う (contracts.md 1.3 章参照)。既存インスタンスのバインドは破壊しないこと。
+5. **エラー通知の責務分担**: `VmcMoCapSource` は `ISlotErrorChannel` に純粋に `SlotError` を発行するだけとする。`Debug.LogError` の抑制ロジック (同一 (SlotId, Category) の 1F 制限) は slot-core / Core 側の `ISlotErrorChannel` 実装が担い、`VmcMoCapSource` 側に抑制制御を持たないこと。
+6. **タイムアウト処理**: 受信タイムアウト処理は初期段階では実装しない。design フェーズで再検討の余地を残す。
+7. `VmcMoCapSource` は受信パケット数・パースエラー数等の診断カウンタをプロパティとして公開できる拡張余地を持つこと (初期実装では省略可)。
 
 ---
 
@@ -148,7 +156,7 @@
 2. 名前空間は `RealtimeAvatarController.MoCap.VMC` (またはサブ名前空間) を使用すること。
 3. 本アセンブリは `RealtimeAvatarController.Core` (slot-core) および `RealtimeAvatarController.Motion` (motion-pipeline) への参照を持ち、逆方向の参照を持たないこと。
 4. UniRx (`UniRx`) への依存は `RealtimeAvatarController.Core` を経由して間接的に解決すること。本アセンブリが直接 UniRx パッケージを参照する場合も、UniRx API の使用は `MotionStream` 公開に必要な最小限に留めること。
-5. `VmcMoCapSource` の Factory (`IMoCapSourceFactory` 実装) は `MoCapSourceRegistry` へ `typeId="VMC"` で登録されること。登録方式 (属性スキャン / DI / 手動登録) は design フェーズで確定するが、少なくとも手動登録 (`IMoCapSourceRegistry.Register("VMC", factory)`) で動作すること。
+5. `VMCMoCapSourceFactory` は **属性ベース自己登録** (contracts.md 1.4 章) を用いて `RegistryLocator.MoCapSourceRegistry` へ `typeId="VMC"` で自動登録されること。詳細は要件 9 の受け入れ基準 7〜10 を参照。
 6. OSC ライブラリの選定は design フェーズで確定するが、サードパーティライブラリはパッケージ参照として管理し、本アセンブリのソースツリーに直接含めないこと。
 
 ---
@@ -165,3 +173,7 @@
 4. **キャスト失敗時のエラーハンドリング**: キャスト結果が `null` の場合 (型不一致)、`VMCMoCapSourceFactory.Create()` は `ArgumentException` (またはそれに準じる例外) をスローし、受け取った型名を例外メッセージに含めること。例: `$"VMCMoCapSourceConfig が必要ですが {config?.GetType().Name} が渡されました"` 相当のメッセージ。
 5. `VMCMoCapSourceFactory` は `MoCapSourceRegistry` に `typeId="VMC"` で登録される唯一の Factory エントリとなること (要件 8 の受け入れ基準 5 と整合)。
 6. `VMCMoCapSourceConfig` は Unity Inspector 上で `MoCapSourceDescriptor.Config` フィールド (型: `MoCapSourceConfigBase`) への参照アセットとして設定・保存できること。これにより Descriptor パターン (`contracts.md` 1.1 章) との統合が実現する。
+7. **ランタイム自己登録 (dig ラウンド 3 確定)**: `VMCMoCapSourceFactory` は `[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]` 属性を持つ静的メソッドで `RegistryLocator.MoCapSourceRegistry.Register("VMC", new VMCMoCapSourceFactory())` を呼び出し、Player ビルドおよびランタイム起動時 (シーンロード前) に自己登録すること。
+8. **エディタ自己登録 (dig ラウンド 3 確定)**: Editor 環境での候補列挙 (Inspector UI 等) のために、`[UnityEditor.InitializeOnLoadMethod]` 属性を持つ静的メソッドで同一の登録処理を実行すること。このメソッドは `#if UNITY_EDITOR` ガード内または `RealtimeAvatarController.MoCap.VMC.Editor` asmdef に配置し、ランタイムビルドに含めないこと。
+9. **競合時の例外伝播 (dig ラウンド 3 確定)**: 同一 `typeId="VMC"` が既に登録されている状態で `Register()` が呼ばれた場合、`IMoCapSourceRegistry` は `RegistryConflictException` 相当の例外をスローすること (上書き禁止; contracts.md 1.4 章参照)。`VMCMoCapSourceFactory` の自己登録メソッドはこの例外を握り潰さず、ログ出力で検知可能な状態を維持すること。
+10. **Domain Reload OFF 対応**: Unity の Domain Reload が無効化されている場合、`SubsystemRegistration` タイミングで `RegistryLocator.ResetForTest()` が呼ばれることにより Registry がリセットされ、再登録時の `RegistryConflictException` を回避できる (contracts.md 1.6 章参照)。`VMCMoCapSourceFactory` 側での追加対応は不要。

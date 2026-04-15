@@ -2,11 +2,19 @@
 
 ## Introduction
 
-本ドキュメントは `ui-sample` Spec の要件を定義する。`ui-sample` は Realtime Avatar Controller の機能部 API を実際に呼び出すサンプル UI を提供し、UPM の `Samples~` 機構を通じて配布する。全 5 Spec (`project-foundation` / `slot-core` / `motion-pipeline` / `mocap-vmc` / `avatar-provider-builtin`) が定義する公開 API を消費側として利用し、Slot 追加・削除・設定変更・アバター選択・MoCap ソース設定・Weight 操作を UI 上から実行できるデモシーンを構成する。
+本ドキュメントは `ui-sample` Spec の要件を定義する。`ui-sample` は Realtime Avatar Controller の機能部 API を実際に呼び出すサンプル UI を提供し、UPM の `Samples~` 機構を通じて配布する。全 5 Spec (`project-foundation` / `slot-core` / `motion-pipeline` / `mocap-vmc` / `avatar-provider-builtin`) が定義する公開 API を消費側として利用し、Slot 追加・削除・設定変更・アバター選択・MoCap ソース設定・Weight 操作・Fallback 設定・エラー表示を UI 上から実行・確認できるデモシーンを構成する。
 
 本サンプルは**検証デモ**の位置付けであり、運用における本命の組込み先は別 VTuber システムを想定している。
 
-アバターおよび MoCap ソースの候補は、ハードコードではなく `IProviderRegistry.GetRegisteredTypeIds()` / `IMoCapSourceRegistry.GetRegisteredTypeIds()` を介した**動的列挙**によって取得する。Slot の設定データは Descriptor ベース (`AvatarProviderDescriptor` / `MoCapSourceDescriptor`) を使用する。
+### Editor Inspector 主眼方針 (dig ラウンド 3 確定)
+
+**本 UI サンプルが主要に提供するのは Unity Editor Inspector 上での編集体験である。** `SlotSettings` の各フィールド (Provider typeId / MoCap ソース typeId / Fallback 挙動等) は Editor の Inspector パネルから直接編集できる形で提供する。
+
+- **スタンドアロンビルドでの GUI 提供は本サンプルのスコープ外**。ビルドされた Player 向けの実行時 GUI を本サンプルは提供しない。スタンドアロン運用が必要な VTuber システム側は本サンプルを参考に独自の実行時 GUI を構築する想定である。
+- Editor 起動時に `[InitializeOnLoadMethod]` で各 Factory が `RegistryLocator` に自動登録されることを前提とし、Inspector の typeId ドロップダウンは登録済みの候補を動的に列挙して表示する。
+- Editor / Runtime で同一 Registry (`RegistryLocator.ProviderRegistry` / `RegistryLocator.MoCapSourceRegistry`) を参照する。
+
+アバターおよび MoCap ソースの候補は、ハードコードではなく `RegistryLocator.ProviderRegistry.GetRegisteredTypeIds()` / `RegistryLocator.MoCapSourceRegistry.GetRegisteredTypeIds()` を介した**動的列挙**によって取得する。Slot の設定データは Descriptor ベース (`AvatarProviderDescriptor` / `MoCapSourceDescriptor`) を使用する。
 
 ### ライブラリ採用方針 (dig ラウンド 2 確定)
 
@@ -30,14 +38,18 @@
 ## Boundary Context
 
 - **In scope**:
-  - Slot の追加・削除・設定を操作する UI
+  - **Editor Inspector 上**での Slot 追加・削除・設定操作 UI (主要提供範囲)
+  - 各 Slot の `providerTypeId` / `sourceTypeId` ドロップダウン (Registry 経由の動的列挙)
   - 各 Slot のアバター選択・MoCap ソース設定・Weight 操作
-  - UI 経由での挙動確認用デモシーン (参照共有シナリオを含む)
+  - `SlotSettings.fallbackBehavior` の enum ドロップダウン (Fallback 設定 UI)
+  - `ISlotErrorChannel.Errors` を購読したエラー表示 UI
+  - UI 経由での挙動確認用デモシーン (参照共有・エラーシミュレーション・Fallback 視覚確認シナリオを含む)
   - UPM `Samples~` ディレクトリへの配置と配布機構
   - サンプル専用アセンブリ定義 (`RealtimeAvatarController.Samples.UI`)
 - **Out of scope**:
   - 機能部 API の新規定義 (各機能 Spec で完結している前提)
   - 機能部アセンブリへの UI フレームワーク依存の持ち込み
+  - **スタンドアロンビルド (Player) 向けの実行時 GUI** (本サンプルのスコープ外。VTuber システム側が独自実装する)
   - 運用向けの本番 UI 実装
   - 表情制御・リップシンクの UI (初期段階では具象実装が存在しないため対象外)
   - Addressable アバター Provider の UI (初期段階では対象外)
@@ -67,38 +79,42 @@
 
 ---
 
-### Requirement 2: アバター選択 UI
+### Requirement 2: アバター選択 UI (Editor Inspector)
 
-**Objective:** As a 開発者・検証者, I want 各 Slot に対してアバターを選択・切り替えできること, so that `IAvatarProvider` を通じたアバター供給フローが正しく機能することを確認できる。
+**Objective:** As a 開発者・検証者, I want Editor Inspector 上で各 Slot に対してアバターを選択・切り替えできること, so that `IAvatarProvider` を通じたアバター供給フローが正しく機能することを確認できる。
+
+> **Editor Inspector 主眼 (dig ラウンド 3 確定)**: 本要件が対象とする UI は主に Unity Editor の Inspector パネルを指す。Editor 起動時に `[InitializeOnLoadMethod]` で各 Factory が `RegistryLocator.ProviderRegistry` に自動登録されることを前提とし、Inspector の `providerTypeId` ドロップダウンは登録済みの Provider 種別を動的に列挙して表示する。
 
 #### Acceptance Criteria
 
-1. The UI shall `IProviderRegistry.GetRegisteredTypeIds()` を呼び出して取得した Provider 種別一覧を動的に列挙し、ドロップダウンまたはリストとして表示する。選択肢はハードコードしない。
+1. The UI shall `RegistryLocator.ProviderRegistry.GetRegisteredTypeIds()` を呼び出して取得した Provider 種別一覧を動的に列挙し、Inspector 上のドロップダウンとして表示する。選択肢はハードコードしない。Editor 起動時に Factory の自動登録が完了していることを前提とする。
 2. When アバター Provider 種別が選択された場合, the UI shall 選択した `providerTypeId` を持つ `AvatarProviderDescriptor` を構築し、`SlotSettings.avatarProviderDescriptor` に反映する。
 3. When `AvatarProviderDescriptor` が確定した場合, the UI shall `IAvatarProvider.RequestAvatar()` (同期版) を呼び出し、デモシーン内にアバターをインスタンス化する。
 4. When 別のアバターに切り替えた場合, the UI shall 旧アバターに対して `IAvatarProvider.ReleaseAvatar()` を呼び出してから新しいアバターを要求する。
 5. The UI shall 現在 Slot に割り当てられているアバターの名称・Provider 種別 (`AvatarProviderDescriptor.ProviderTypeId`) を表示する。
 6. When Slot が削除された場合, the UI shall 紐付けられたアバターを自動的に解放する処理を呼び出す。
-7. The UI は `IProviderRegistry` への参照を機能部 API として受け取る。UI 層が `IProviderRegistry` の具象実装を直接生成することはしない。
+7. The UI は `RegistryLocator.ProviderRegistry` への参照を機能部 API として受け取る。UI 層が `IProviderRegistry` の具象実装を直接生成することはしない。
 8. The UI shall `AvatarProviderDescriptor.Config` フィールドに対して、`ProviderConfigBase` 派生 ScriptableObject アセットをドラッグ&ドロップで参照設定できる欄を提供する。Inspector 上の表示型は基底型 (`ProviderConfigBase`) を使用し、利用者は具象 SO アセット (例: `BuiltinAvatarProviderConfig`) を参照として渡す。選択肢のハードコードは禁止とし、Registry の typeId 選択 UI と組み合わせて使用する。
 
 ---
 
-### Requirement 3: MoCap ソース設定 UI
+### Requirement 3: MoCap ソース設定 UI (Editor Inspector)
 
-**Objective:** As a 開発者・検証者, I want 各 Slot に対して MoCap ソースを設定・切り替えできること, so that `IMoCapSource` の VMC 実装が正しくモーションデータを受信できることを確認できる。
+**Objective:** As a 開発者・検証者, I want Editor Inspector 上で各 Slot に対して MoCap ソースを設定・切り替えできること, so that `IMoCapSource` の VMC 実装が正しくモーションデータを受信できることを確認できる。
+
+> **Editor Inspector 主眼 (dig ラウンド 3 確定)**: 本要件が対象とする UI は主に Unity Editor の Inspector パネルを指す。Editor 起動時に `[InitializeOnLoadMethod]` で各 Factory が `RegistryLocator.MoCapSourceRegistry` に自動登録されることを前提とし、Inspector の `sourceTypeId` ドロップダウンは登録済みの MoCap ソース種別を動的に列挙して表示する。
 
 #### Acceptance Criteria
 
-1. The UI shall `IMoCapSourceRegistry.GetRegisteredTypeIds()` を呼び出して取得した MoCap ソース種別一覧を動的に列挙し、ドロップダウンまたはリストとして表示する。選択肢はハードコードしない。
+1. The UI shall `RegistryLocator.MoCapSourceRegistry.GetRegisteredTypeIds()` を呼び出して取得した MoCap ソース種別一覧を動的に列挙し、Inspector 上のドロップダウンとして表示する。選択肢はハードコードしない。Editor 起動時に Factory の自動登録が完了していることを前提とする。
 2. When MoCap ソース種別が選択された場合, the UI shall 選択した `sourceTypeId` を持つ `MoCapSourceDescriptor` を構築し、`SlotSettings.moCapSourceDescriptor` に反映する。
 3. The UI shall 選択した MoCap ソース種別に応じた接続パラメータ (VMC の場合は受信ポート番号等) を入力できるフィールドを提供し、入力値を `MoCapSourceDescriptor.Config` に反映する。
-4. When `MoCapSourceDescriptor` が確定した場合, the UI shall `IMoCapSourceRegistry.Resolve()` を通じてソースを取得・初期化する。
+4. When `MoCapSourceDescriptor` が確定した場合, the UI shall `RegistryLocator.MoCapSourceRegistry.Resolve()` を通じてソースを取得・初期化する。
 5. The UI shall 複数 Slot に対して同一の `sourceTypeId` と同一の接続パラメータを持つ `MoCapSourceDescriptor` を設定できる。これにより `IMoCapSourceRegistry` が同一インスタンスの参照共有を行うことを UI 側で妨げない。
 6. The UI shall 現在 Slot に割り当てられている MoCap ソースの種別 (`MoCapSourceDescriptor.SourceTypeId`) と接続状態を表示する。
-7. When MoCap ソースが切り替えられた場合, the UI shall `IMoCapSourceRegistry.Release()` を通じて旧ソースの参照を解放してから新しい Descriptor を設定する。Slot 側から直接 `IMoCapSource.Dispose()` を呼び出さない。
+7. When MoCap ソースが切り替えられた場合, the UI shall `RegistryLocator.MoCapSourceRegistry.Release()` を通じて旧ソースの参照を解放してから新しい Descriptor を設定する。Slot 側から直接 `IMoCapSource.Dispose()` を呼び出さない。
 8. The UI shall 未割り当て状態 (ソースなし) を選択できる操作を提供する。
-9. The UI は `IMoCapSourceRegistry` への参照を機能部 API として受け取る。UI 層が `IMoCapSourceRegistry` の具象実装を直接生成することはしない。
+9. The UI は `RegistryLocator.MoCapSourceRegistry` への参照を機能部 API として受け取る。UI 層が `IMoCapSourceRegistry` の具象実装を直接生成することはしない。
 10. The UI shall `MoCapSourceDescriptor.Config` フィールドに対して、`MoCapSourceConfigBase` 派生 ScriptableObject アセットをドラッグ&ドロップで参照設定できる欄を提供する。Inspector 上の表示型は基底型 (`MoCapSourceConfigBase`) を使用し、利用者は具象 SO アセット (例: `VMCMoCapSourceConfig`) を参照として渡す。選択肢のハードコードは禁止とし、Registry の typeId 選択 UI と組み合わせて使用する。
 
 ---
@@ -120,16 +136,20 @@
 
 ### Requirement 5: 挙動確認用デモシーン
 
-**Objective:** As a 開発者・検証者, I want UI の操作結果がシーン内のアバターに即座に反映されることを確認できること, so that 機能部 API の統合動作・参照共有動作を視覚的にデモンストレーションできる。
+**Objective:** As a 開発者・検証者, I want UI の操作結果がシーン内のアバターに即座に反映されることを確認できること, so that 機能部 API の統合動作・参照共有動作・エラー発生時の Fallback 挙動を視覚的にデモンストレーションできる。
 
 #### Acceptance Criteria
 
 1. The demo scene shall `Samples~` ディレクトリ内に配置され、UPM パッケージのサンプルとしてインポート可能である。
-2. The demo scene shall Slot 操作 UI・アバター選択 UI・MoCap ソース設定 UI・Weight 操作 UI の全コンポーネントを一画面に配置する。
+2. The demo scene shall Slot 操作 UI・アバター選択 UI・MoCap ソース設定 UI・Weight 操作 UI・Fallback 設定 UI・エラー表示 UI の全コンポーネントを一画面に配置する。
 3. When Slot を追加してアバターと MoCap ソースを設定した場合, the demo scene shall シーン内の指定エリアにアバターが表示され、MoCap データを受信するとアバターが動作を開始する。
 4. The demo scene shall 複数 Slot を同時に稼働させ、Weight を変化させたときのモーション合成結果を視覚的に確認できる。
 5. The demo scene shall **1 つの VMC MoCap ソース (同一 `sourceTypeId` + 同一 port 設定) を複数の Slot が参照共有するシナリオ**を含む。このシナリオにより、`IMoCapSourceRegistry` の参照共有機能が正しく動作すること (同一インスタンスが再利用されること) を視覚的に確認できる。
 6. The demo scene shall エラー状態 (MoCap 未接続・アバター未割当等) を UI 上に可視化する。
+7. The demo scene shall **エラー発生シミュレーションシナリオ**を含む。具体的には以下のシナリオを実行・確認できること:
+   - VMC 切断シミュレーション: 接続済み VMC ソースを意図的に切断し、エラーチャンネルにエラーが通知されること
+   - 初期化失敗シミュレーション: 無効な Config を持つ Descriptor を設定して Slot の初期化を失敗させ、`Created → Disposed` 状態遷移とエラー通知を確認できること
+8. The demo scene shall **Fallback 挙動の視覚確認シナリオ**を含む。各 `FallbackBehavior` の選択肢 (`HoldLastPose` / `TPose` / `Hide`) をシーン内で切り替え、エラー発生時のアバターの挙動が設定どおりに変化することを視覚的に確認できること。
 
 ---
 
@@ -202,3 +222,37 @@
 2. The UI shall `MotionStream` の購読時に UniRx の `.ObserveOnMainThread()` 拡張メソッドを使用して Unity メインスレッド上でデータを受け取る (`using UniRx;` が必要)。
 3. The UI shall Slot の削除・MoCap ソースの切り替え時に購読を適切に解除し (Dispose)、メモリリークを防ぐ。
 4. UniRx (`com.neuecc.unirx`) は UI 層の**必須依存ではなく**、`MotionStream` 購読機能を使用するコンポーネントにのみ条件付きで依存する設計を推奨する。`IMoCapSource` インスタンスが UI に渡されない場合、UniRx なしでも UI のコア機能が動作すること。
+
+---
+
+### Requirement 10: Fallback 設定 UI
+
+**Objective:** As a 開発者・検証者, I want Editor Inspector 上で各 Slot の Fallback 挙動を設定できること, so that Applier エラー発生時のアバターの振る舞いを事前に指定し、デモシーンで視覚的に確認できる。
+
+> **Fallback 設定 UI (dig ラウンド 3 確定)**: `SlotSettings.fallbackBehavior` フィールド (型: `FallbackBehavior` enum) を Inspector UI の enum ドロップダウンとして提供する。デフォルト値は `HoldLastPose`。
+
+#### Acceptance Criteria
+
+1. The UI shall `SlotSettings.fallbackBehavior` フィールドを編集するための enum ドロップダウンを Inspector 上に提供する。
+2. The ドロップダウン shall 以下の選択肢を表示する: `HoldLastPose`（最後のポーズを保持）、`TPose`（T ポーズに戻す）、`Hide`（アバターを非表示にする）。
+3. The ドロップダウン shall Slot 新規作成時のデフォルト選択値を `HoldLastPose` とする。
+4. When ドロップダウンで選択肢を変更した場合, the UI shall 選択した enum 値を即座に `SlotSettings.fallbackBehavior` に反映する。
+5. The UI shall 現在の `fallbackBehavior` 設定値をドロップダウンに正しく表示する (設定の読み取り・書き込みが双方向で機能すること)。
+6. The UI は Fallback 設定 UI を他の `SlotSettings` 編集 UI (typeId ドロップダウン・Weight スイッチ等) と同一の設定パネル内に配置する。
+
+---
+
+### Requirement 11: エラー表示 UI
+
+**Objective:** As a 開発者・検証者, I want 各 Slot で発生したエラーを UI 上でリアルタイムに確認できること, so that Slot の初期化失敗・MoCap 切断等の問題を素早く把握し、デバッグを効率化できる。
+
+> **エラー表示 UI (dig ラウンド 3 確定)**: `ISlotErrorChannel.Errors` (UniRx `IObservable<SlotError>`) を `.ObserveOnMainThread().Subscribe()` で購読し、発生したエラーを UI に表示する。Core 側 (`SlotManager`) では同一 `(SlotId, Category)` について初回 1 フレームのみ `Debug.LogError` を出力する抑制処理が入っているが、UI 側は独自フィルタリング (カテゴリ別の表示順位・最新 N 件のリング表示・トースト通知等) を要件として許容する。
+
+#### Acceptance Criteria
+
+1. The UI shall `ISlotErrorChannel.Errors` (UniRx `IObservable<SlotError>`) を購読し、発生したエラーをリアルタイムに UI 上に表示する。購読には UniRx の `.ObserveOnMainThread().Subscribe()` を使用し、Unity メインスレッド上でエラーを受け取る。
+2. The UI shall 少なくとも以下のエラー情報を表示する: エラーが発生した SlotId、エラーカテゴリ (Category)、エラーメッセージ。
+3. The UI shall 表示するエラーの絞り込み・整理として独自フィルタリング処理を実装してよい。具体的な表示方式 (カテゴリ別ソート・最新 N 件のリング表示・トースト通知等) は design フェーズで確定する。
+4. The UI shall Slot が削除されたとき、またはエラーチャンネルの購読が不要になったときに購読を適切に解除し (Dispose)、メモリリークを防ぐ。
+5. The UI shall Core 側が `Debug.LogError` を「同一 (SlotId, Category) 初回 1 フレームのみ」に抑制していることを前提として動作する。UI 側での重複排除はオプションとし、design フェーズで方針を決定する。
+6. The UI は `ISlotErrorChannel` への参照を機能部 API として受け取る。UI 層が `ISlotErrorChannel` の具象実装を直接生成することはしない。

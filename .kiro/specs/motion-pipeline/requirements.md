@@ -13,6 +13,11 @@
 - **UniRx 採用**: リアクティブライブラリは UniRx (`com.neuecc.unirx`) を採用する。R3 は採用しない。UniRx の `Subject<T>` は `System.IObservable<T>` を実装するため、`IObservable<MotionFrame>` の型シグネチャは変更しない。`ObserveOnMainThread()` 等の Unity スレッド連携拡張メソッドは UniRx が提供する (`using UniRx;` が必要)
 - **Weight 二値方針**: 初期版の有効な Weight 値は `{0.0 (skip), 1.0 (full apply)}` の二値のみ。`SlotSettings.weight` フィールド自体は将来の複数ソース混合シナリオのためのフックとして残す。`0.0 < weight < 1.0` の中間値セマンティクスは、複数ソース混合シナリオを導入する際に改めて定義する
 
+**dig ラウンド 3 確定事項**:
+- **Fallback 挙動**: Applier でエラーが発生した場合、`SlotSettings.fallbackBehavior` (`FallbackBehavior` enum) を参照して挙動を分岐する。`FallbackBehavior` enum の定義は `slot-core` Spec が担い (`RealtimeAvatarController.Core` 名前空間)、`motion-pipeline` は Core 経由で参照する
+- **エラー通知**: Applier 内で発生した例外は `ISlotErrorChannel` に `SlotErrorCategory.ApplyFailure` カテゴリで発行する。`ISlotErrorChannel` は `slot-core` が提供し、motion-pipeline は Core 経由で間接利用する。`Debug.LogError` は `ISlotErrorChannel` 側で抑制管理されるため、motion-pipeline 側は明示的にストリームへ push するのみでよい
+- **無効フレームとエラーの分離**: `MotionCache` から読み取った null/無効フレームは通常動作扱い (スキップ・前フレーム維持) であり、`ISlotErrorChannel` への発行は行わない。「Apply 例外」(Applier 呼び出し時の実行時例外) のみ `ApplyFailure` カテゴリで発行する
+
 ## Boundary Context
 
 - **In scope**:
@@ -95,7 +100,7 @@
    - **方式 A**: 購読時に `.ObserveOnMainThread()` を適用し、フレーム受信からキャッシュ書き込みまでをメインスレッドで完結させる
    - **方式 B**: 受信スレッドでスレッドセーフなプリミティブを使ってキャッシュへ書き込み、メインスレッドの `LateUpdate` タイミングで読み出す (ダブルバッファ / `Interlocked` 等)
 5. When Slot が破棄される場合, the `MotionCache` shall 購読の解除 (`IDisposable.Dispose()`) のみを行う。`IMoCapSource` 自体の `Dispose()` は `MoCapSourceRegistry` が参照カウントをもとに制御するため、`MotionCache` や motion-pipeline 側から `IMoCapSource.Dispose()` を直接呼び出してはならない。
-6. When `MotionCache` から読み取ったフレームが null または無効な場合, the パイプライン shall アバターへの適用をスキップし、前フレームのポーズを維持する。
+6. When `MotionCache` から読み取ったフレームが null または無効な場合, the パイプライン shall アバターへの適用をスキップし、前フレームのポーズを維持する。この動作は**通常動作扱い**であり、`ISlotErrorChannel` へのエラー発行は行わない。`ISlotErrorChannel` への発行対象は Applier 呼び出し時の実行時例外 (要件 13 参照) のみとする。
 7. The `MotionCache` は `RealtimeAvatarController.Motion` 名前空間に属し、スレッドモデルの具体的な実装方式は design フェーズで確定する。
 
 ---
@@ -128,6 +133,7 @@
 3. When 対象 GameObject が Humanoid アバターでない場合, the `HumanoidMotionApplier` shall 初期化時に例外またはエラーを返し、適用処理を開始しない。
 4. The `HumanoidMotionApplier` shall `IDisposable` を実装し、`HumanPoseHandler` 等の内部リソースを確実に解放する。
 5. The `HumanoidMotionApplier` は `RealtimeAvatarController.Motion` 名前空間に属する。
+6. When `HumanoidMotionApplier` のモーション適用処理 (`Apply()` 相当) で実行時例外が発生した場合, the `HumanoidMotionApplier` shall `SlotSettings.fallbackBehavior` を参照してフォールバック処理を実行し、発生した例外を `ISlotErrorChannel` に `SlotErrorCategory.ApplyFailure` カテゴリで発行する (要件 12・13 参照)。
 
 ---
 
@@ -197,3 +203,42 @@
 4. The `RealtimeAvatarController.Motion` アセンブリは `RealtimeAvatarController.Core` が UniRx (`com.neuecc.unirx`) を依存として持つことを通じて、UniRx に間接依存する。`MotionCache` が `IObservable<MotionFrame>` を購読する実装において UniRx 型 (`IObservable<T>` / `IDisposable` 等) を直接使用してよい。UniRx の直接参照 (asmdef の references への `UniRx` 追加) が必要かどうかは design フェーズで確定する。
 5. When テストコードを配置する場合, the テストアセンブリは `RealtimeAvatarController.Motion.Tests` 名前空間を使用する。
 6. エディタ限定コードが存在する場合, `RealtimeAvatarController.Motion.Editor` 名前空間を使用する。
+7. `FallbackBehavior` enum および `ISlotErrorChannel` / `SlotError` / `SlotErrorCategory` は `RealtimeAvatarController.Core` 名前空間に属する型であり、本 Spec は定義しない。本 Spec はこれらを `RealtimeAvatarController.Core` アセンブリ参照経由で利用する。
+
+---
+
+### Requirement 12: Applier エラー時の Fallback 挙動 (dig ラウンド 3 確定)
+
+**Objective:** As a ランタイム統合者, I want Applier でエラーが発生した際にアバターの表示状態を安全に保てること, so that 予期しない例外によってアバターが破綻した姿勢で固まることを防げる。
+
+> **前提**: `FallbackBehavior` enum の定義は `slot-core` Spec (`RealtimeAvatarController.Core` 名前空間) が担う。motion-pipeline は参照のみ行う (定義責務なし)。
+
+#### Acceptance Criteria
+
+1. The `HumanoidMotionApplier` shall モーション適用処理 (`Apply()` 相当) で実行時例外が発生した場合、該当 Slot の `SlotSettings.fallbackBehavior` の値を参照して、以下のとおりフォールバック処理を実行する。
+2. When `fallbackBehavior` が `FallbackBehavior.HoldLastPose` の場合, the `HumanoidMotionApplier` shall Applier 内部に保持している直前フレームのポーズ状態をそのまま維持し続ける。アバターの `HumanPoseHandler` への再書き込みは行わず、視覚的な変化が生じないようにする。これがデフォルト挙動である。
+3. When `fallbackBehavior` が `FallbackBehavior.TPose` の場合, the `HumanoidMotionApplier` shall `HumanPoseHandler` を通じてアバターを T ポーズ (全 Muscle 値 0、Root 位置・回転を初期値) にリセットする。T ポーズはデバッグ用途向けであり、問題発生を視覚的に認識しやすくする。
+4. When `fallbackBehavior` が `FallbackBehavior.Hide` の場合, the `HumanoidMotionApplier` shall アバター GameObject に付属するすべての `Renderer` コンポーネントを無効化 (`enabled = false`) して描画を停止する。このとき GameObject 自体は破棄せず生存させる。
+5. When `FallbackBehavior.Hide` 適用後にモーション適用が正常に再開された場合 (次フレームの `Apply()` が例外なく完了した場合), the `HumanoidMotionApplier` shall 無効化した `Renderer` コンポーネントを再度有効化 (`enabled = true`) してアバターの描画を復帰させる。
+6. The フォールバック処理はメインスレッドで実行されることを前提とし、Unity API (`HumanPoseHandler`、`Renderer.enabled` 等) を安全に呼び出せる。
+7. The フォールバック処理の実行後、`HumanoidMotionApplier` shall エラー通知を `ISlotErrorChannel` に発行する (要件 13 参照)。
+
+---
+
+### Requirement 13: Applier エラー通知 (dig ラウンド 3 確定)
+
+**Objective:** As a ランタイム統合者, I want Applier 内で発生した例外が一元的なエラーチャネルに通知されること, so that UI 層や監視システムがエラーを購読して適切な対応を行える。
+
+> **前提**: `ISlotErrorChannel` / `SlotError` / `SlotErrorCategory` の定義は `slot-core` Spec (`RealtimeAvatarController.Core` 名前空間) が担う。motion-pipeline は参照のみ行う。`Debug.LogError` の抑制管理は `ISlotErrorChannel` 側が担うため、motion-pipeline は明示的に push するだけでよい。
+
+#### Acceptance Criteria
+
+1. When `HumanoidMotionApplier` のモーション適用処理で実行時例外が発生した場合, the `HumanoidMotionApplier` shall 該当 Slot の `ISlotErrorChannel` に対し、以下の内容を持つ `SlotError` を発行する。
+   - `SlotId`: 該当 Slot の識別子
+   - `Category`: `SlotErrorCategory.ApplyFailure`
+   - `Exception`: 発生した例外オブジェクト
+   - `Timestamp`: エラー発生時刻 (UTC)
+2. The エラー発行は、フォールバック処理 (要件 12) の実行**後**に行う。フォールバックが先に完了することを保証する。
+3. `ISlotErrorChannel` への push は同一フレームの連続例外も含めて毎回行う。`Debug.LogError` の重複抑制は `ISlotErrorChannel` 実装側が管理するため、motion-pipeline 側では抑制フィルタリングを行わない。
+4. The `HumanoidMotionApplier` は `ISlotErrorChannel` をコンストラクタまたは初期化メソッドで受け取る。インスタンス取得の具体的な方法 (Locator 経由 / DI 等) は design フェーズで確定する。
+5. When `MotionCache` から読み取ったフレームが null または無効な場合 (要件 4 AC6 参照), the パイプライン shall `ISlotErrorChannel` へのエラー発行を行わない。無効フレームのスキップは通常動作であり、エラーではない。`ApplyFailure` として発行するのは Applier 呼び出し中の実行時例外のみとする。

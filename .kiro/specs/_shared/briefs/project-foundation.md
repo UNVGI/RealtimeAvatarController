@@ -15,6 +15,13 @@ Unity プロジェクト基盤と UPM パッケージ基盤を整備する。
 - アセンブリ定義ファイル (asmdef) の分割: 機能部 / UI サンプル
   - `RealtimeAvatarController.Core` asmdef に UniRx (`UniRx`) の参照を追加
   - 他の機能部 asmdef は Core 経由で UniRx を間接利用 (直接参照禁止)
+  - **Editor 専用 asmdef の追加 (dig ラウンド 3 確定)**:
+    - `RealtimeAvatarController.Core.Editor`・`RealtimeAvatarController.Motion.Editor`・`RealtimeAvatarController.MoCap.VMC.Editor`・`RealtimeAvatarController.Avatar.Builtin.Editor` の各 Editor asmdef を各機能アセンブリに対応して定義する
+    - 各 Editor asmdef は `includePlatforms: ["Editor"]` 指定、対応 Runtime asmdef への片方向依存のみ
+    - `[UnityEditor.InitializeOnLoadMethod]` 等の UnityEditor API を Editor asmdef 内に配置できる
+- **Domain Reload OFF 設定への対応 (dig ラウンド 3 確定)**:
+  - Unity Editor の Enter Play Mode Options (Domain Reload OFF) 有効下でも Registry が正常動作することを要件とする
+  - `RegistryLocator` の `[RuntimeInitializeOnLoadMethod(SubsystemRegistration)]` による Reset 機構が必要
 - `Samples~` 機構による UI サンプルの同梱ルート
 - 最小限の CI / ビルド検証の下地 (任意)
 - 名前空間規約の確定

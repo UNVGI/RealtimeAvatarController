@@ -18,6 +18,32 @@
 - 機能部 API の新規定義 (各機能 Spec で完結している前提)
 - 機能部への UI 層依存の持ち込み (機能部は UI 非依存を厳守)
 
+## 設計上の重要事項 (dig ラウンド 1・2・3 反映)
+
+### Editor Inspector 主眼方針 (dig ラウンド 3 確定)
+
+- **本 UI サンプルが主要に提供するのは Unity Editor Inspector 上での編集体験である。**
+- スタンドアロンビルド (Player) 向けの実行時 GUI 提供は本サンプルのスコープ外。VTuber システム側が独自に実装する。
+- Editor 起動時に `[InitializeOnLoadMethod]` で Factory が `RegistryLocator` に自動登録されることを前提とし、Inspector の `providerTypeId` / `sourceTypeId` ドロップダウンは `RegistryLocator.ProviderRegistry.GetRegisteredTypeIds()` / `RegistryLocator.MoCapSourceRegistry.GetRegisteredTypeIds()` から動的列挙する。
+- Editor / Runtime で同一 Registry を参照共有する。
+
+### Fallback 設定 UI (dig ラウンド 3 確定)
+
+- `SlotSettings.fallbackBehavior` (型: `FallbackBehavior` enum) を Inspector UI の enum ドロップダウンとして提供する。
+- 選択肢: `HoldLastPose`（最後のポーズを保持）/ `TPose`（T ポーズに戻す）/ `Hide`（アバターを非表示にする）
+- デフォルト値は `HoldLastPose`。
+
+### エラー表示 UI (dig ラウンド 3 確定)
+
+- `ISlotErrorChannel.Errors` (UniRx `IObservable<SlotError>`) を `.ObserveOnMainThread().Subscribe()` で購読し、エラーを UI に表示する。
+- Core 側 (`SlotManager`) では同一 `(SlotId, Category)` につき初回 1 フレームのみ `Debug.LogError` を抑制済み。
+- UI 側での独自フィルタリング (カテゴリ別・最新 N 件リング・トースト通知等) を要件として許容する。具体的な表示方式は design フェーズで確定。
+
+### デモシーン拡張 (dig ラウンド 3 確定)
+
+- エラー発生シミュレーションシナリオを追加: VMC 切断シミュレーション・初期化失敗シミュレーション。
+- Fallback 挙動の視覚確認シナリオを追加: `HoldLastPose` / `TPose` / `Hide` の各選択肢をシーン内で切り替え、エラー発生時の動作を視覚確認できる。
+
 ## 設計上の重要事項 (dig ラウンド 1・2 反映)
 
 ### ライブラリ採用 (dig ラウンド 2 確定)

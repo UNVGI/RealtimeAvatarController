@@ -61,18 +61,44 @@
 
 #### Acceptance Criteria
 
-1. The project shall 以下の asmdef ファイルを定義する:
+1. The project shall 以下の **Runtime** asmdef ファイルを定義する:
    - `RealtimeAvatarController.Core` — Slot 抽象・各公開インターフェース群 (slot-core 担当)
    - `RealtimeAvatarController.Motion` — モーション中立表現・パイプライン (motion-pipeline 担当)
    - `RealtimeAvatarController.MoCap.VMC` — VMC OSC 受信具象実装 (mocap-vmc 担当)
    - `RealtimeAvatarController.Avatar.Builtin` — ビルトインアバター供給具象実装 (avatar-provider-builtin 担当)
    - `RealtimeAvatarController.Samples.UI` — UI サンプル (ui-sample 担当、`Samples~` 以下に配置)
-2. The `RealtimeAvatarController.Samples.UI` asmdef shall 機能部アセンブリ (`RealtimeAvatarController.Core` 等) を参照できるが、機能部アセンブリは `RealtimeAvatarController.Samples.UI` を参照しない (一方向依存)。
-3. The asmdef files shall `Packages/` または `Assets/` 内の適切な配置パスに対応した名前空間のディレクトリに配置される。
-4. When 機能部アセンブリのみを対象としたビルドを実行した場合, the build shall UI フレームワーク (UGUI / UIToolkit 等) への依存なくコンパイルが成功する。
-5. Each asmdef shall `rootNamespace` フィールドを `contracts.md` 6.2 章で確定した名前空間規約に従い設定する。
-6. The `RealtimeAvatarController.Core` asmdef shall `references` に UniRx (`UniRx` アセンブリ名) を追加し、UniRx が提供する `IObservable<T>` 拡張・`Subject<T>` 等を直接利用できるようにする。
-7. The asmdef files for `RealtimeAvatarController.Motion`・`RealtimeAvatarController.MoCap.VMC`・`RealtimeAvatarController.Avatar.Builtin` shall UniRx の asmdef を直接 `references` に追加せず、`RealtimeAvatarController.Core` 経由で間接的に UniRx の型を利用する。ただし各アセンブリが UniRx の拡張メソッドを直接呼び出す必要が生じた場合は design フェーズで要否を判断する。
+2. The project shall 以下の **Editor 専用** asmdef ファイルを定義する (各機能 Spec の実装フェーズで作成する):
+   - `RealtimeAvatarController.Core.Editor` — Core アセンブリ向けエディタ拡張 (slot-core 担当)
+   - `RealtimeAvatarController.Motion.Editor` — Motion アセンブリ向けエディタ拡張 (motion-pipeline 担当)
+   - `RealtimeAvatarController.MoCap.VMC.Editor` — VMC アセンブリ向けエディタ拡張 (mocap-vmc 担当)
+   - `RealtimeAvatarController.Avatar.Builtin.Editor` — Avatar.Builtin アセンブリ向けエディタ拡張 (avatar-provider-builtin 担当)
+   - `RealtimeAvatarController.Samples.UI.Editor` — UI サンプル向けエディタ拡張 (ui-sample 担当、必要な場合)
+3. The Editor asmdef files shall `includePlatforms` に `Editor` のみを指定し、対応する Runtime asmdef を `references` に追加する片方向依存とする。Runtime asmdef は Editor asmdef を参照しない。
+4. The Editor asmdef files shall `[UnityEditor.InitializeOnLoadMethod]` など `UnityEditor` 名前空間の API の使用を許容する。これにより Factory 自己登録の Editor 起動時フックを Editor asmdef 内に配置できる。
+5. When Runtime asmdef 内に `UnityEditor` API を配置する必要がある場合, the project shall `#if UNITY_EDITOR` による条件コンパイルを代替手段として許容する (各 Spec の判断に委ねる)。
+6. The `RealtimeAvatarController.Samples.UI` asmdef shall 機能部アセンブリ (`RealtimeAvatarController.Core` 等) を参照できるが、機能部アセンブリは `RealtimeAvatarController.Samples.UI` を参照しない (一方向依存)。
+7. The asmdef files shall `Packages/` または `Assets/` 内の適切な配置パスに対応した名前空間のディレクトリに配置される。
+8. When 機能部アセンブリのみを対象としたビルドを実行した場合, the build shall UI フレームワーク (UGUI / UIToolkit 等) への依存なくコンパイルが成功する。
+9. Each asmdef shall `rootNamespace` フィールドを `contracts.md` 6.2 章で確定した名前空間規約に従い設定する。
+10. The `RealtimeAvatarController.Core` asmdef shall `references` に UniRx (`UniRx` アセンブリ名) を追加し、UniRx が提供する `IObservable<T>` 拡張・`Subject<T>` 等を直接利用できるようにする。
+11. The asmdef files for `RealtimeAvatarController.Motion`・`RealtimeAvatarController.MoCap.VMC`・`RealtimeAvatarController.Avatar.Builtin` shall UniRx の asmdef を直接 `references` に追加せず、`RealtimeAvatarController.Core` 経由で間接的に UniRx の型を利用する。ただし各アセンブリが UniRx の拡張メソッドを直接呼び出す必要が生じた場合は design フェーズで要否を判断する。
+
+---
+
+### Requirement 10: Domain Reload OFF 設定への対応
+
+**Objective:** As a 開発者, I want Unity Editor の Enter Play Mode Options (Domain Reload OFF) を有効化した状態でも本システムが正常に動作すること, so that Play Mode 遷移の高速化を享受しながら Registry や Factory の初期化が破綻しない。
+
+#### Acceptance Criteria
+
+1. The project shall Unity Editor の Enter Play Mode Options で Domain Reload を無効化した状態 (Enter Play Mode 最適化) においても、Registry の初期化・Factory 自己登録が正常に機能することを要件とする。
+2. The `RegistryLocator` shall `[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]` を付与した `ResetForTest()` メソッド (または同等の Reset 機構) を持ち、Domain Reload OFF 環境でのプレイモード再起動時に Registry を自動リセットする。これにより Factory の `[RuntimeInitializeOnLoadMethod]` 再実行時に同一 typeId の二重登録が発生することを防ぐ。
+3. The project shall Domain Reload OFF 設定下での以下の動作を確認するテストを推奨する:
+   - Editor 上でプレイモード開始 → 停止 → 再開を連続して実行した際に `RegistryConflictException` が発生しないこと
+   - `RegistryLocator.ResetForTest()` 呼び出し後、Registry が空の状態に戻ること
+   - 再起動後に Factory の自己登録が再度正常に実行されること
+4. The `RegistryLocator.ResetForTest()` shall テストコードからの直接呼び出しも許容し、Edit Mode テストおよび Play Mode テストでの Registry 差し替え・リセットに利用できる。
+5. When Domain Reload ON の通常設定下では, the Registry shall Domain Reload 時に自動的にリセットされるため `ResetForTest()` の明示呼び出しは不要である。ただし明示呼び出しによる副作用は生じない設計とする。
 
 ---
 

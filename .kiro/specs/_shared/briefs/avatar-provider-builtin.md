@@ -6,6 +6,10 @@
 
 Wave A 確定方針として、Descriptor / Registry / Factory モデルを採用する。`AvatarProviderDescriptor` に基づいて `IProviderRegistry` が `BuiltinAvatarProviderFactory` を解決し、`BuiltinAvatarProvider` を生成する。
 
+dig ラウンド 3 追加確定事項:
+- **属性ベース自己登録**: `BuiltinAvatarProviderFactory` は `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` でランタイム、`[UnityEditor.InitializeOnLoadMethod]` でエディタの各起動タイミングに `RegistryLocator.ProviderRegistry.Register("Builtin", new BuiltinAvatarProviderFactory())` を自己実行する。Editor 用コードは `RealtimeAvatarController.Avatar.Builtin.Editor` asmdef または `#if UNITY_EDITOR` ガードに配置する。同 typeId 競合時は例外スロー (上書き禁止)。
+- **ErrorChannel 連携**: Factory キャスト失敗・Instantiate 失敗等は `ISlotErrorChannel` に `SlotErrorCategory.InitFailure` で発行後、例外を上位 `SlotManager` に伝播する。例外捕捉と Slot 状態遷移 (`Disposed`) は `slot-core` の責務。
+
 ## 依存
 
 `slot-core` (Wave 1 完了後に起動)
