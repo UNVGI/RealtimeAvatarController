@@ -88,11 +88,94 @@ public interface IMoCapSource : IDisposable
 
 ### 2.2 モーションデータ中立表現
 
-<!-- TODO: motion-pipeline agent (Wave 2) - slot-core と合意の上で型を定義 -->
+> **記入者**: `motion-pipeline` エージェント (Wave 2)。`slot-core` の 2.1 章と整合したうえで型骨格を確定。
 
-想定される内容:
-- Humanoid 向け: HumanPose 相当 (Muscle 値 + Root)
-- Generic 向け: Transform 配列 (Wave 2 では抽象のみ)
+#### 基底型: `MotionFrame`
+
+全骨格形式 (Humanoid / Generic 等) の共通基底型。`IMoCapSource.FetchLatestMotion()` の戻り値型として採用する。
+
+```csharp
+// 骨格 (C# 疑似コード / 型名は仮。最終シグネチャは design フェーズで確定)
+namespace RealtimeAvatarController.Motion
+{
+    // 骨格種別識別子
+    public enum SkeletonType
+    {
+        Humanoid,
+        Generic,
+    }
+
+    // 全骨格形式共通の基底型 (抽象クラスまたはインターフェース; design フェーズで確定)
+    public abstract class MotionFrame
+    {
+        // 受信タイムスタンプ (Unix 時刻相当; 単位は design フェーズで確定)
+        public double Timestamp { get; }
+
+        // この フレームが表す骨格種別
+        public abstract SkeletonType SkeletonType { get; }
+    }
+}
+```
+
+#### Humanoid 向け中立表現: `HumanoidMotionFrame`
+
+Unity `HumanPose` 相当の構造を持つ具象型。Muscle 値配列と Root の位置・回転を保持する。
+
+```csharp
+namespace RealtimeAvatarController.Motion
+{
+    // Humanoid 骨格向けモーションフレーム (C# 疑似コード)
+    public sealed class HumanoidMotionFrame : MotionFrame
+    {
+        public override SkeletonType SkeletonType => SkeletonType.Humanoid;
+
+        // Unity HumanPose.muscles 相当 (要素数は HumanTrait.MuscleCount に準拠)
+        public float[] Muscles { get; }
+
+        // ルート位置 (ワールド空間またはローカル空間; design フェーズで確定)
+        public Vector3 RootPosition { get; }
+
+        // ルート回転
+        public Quaternion RootRotation { get; }
+    }
+}
+```
+
+**補足**:
+- `Muscles.Length == 0` は「データなし / 初期化前」を示す無効フレームとして扱う
+- イミュータブル設計 (コンストラクタで全値を受け取り、以降は読み取り専用) を推奨する
+
+#### Generic 向け中立表現 (初期段階: 抽象のみ)
+
+初期段階では具象型は定義しない。将来の Generic 具象実装のためにプレースホルダーとして以下の方針のみを合意する。
+
+```csharp
+// 将来実装向けプレースホルダー (C# 疑似コード / 初期段階では実装しない)
+namespace RealtimeAvatarController.Motion
+{
+    // Generic 骨格向けモーションフレーム (design フェーズ以降で具体化)
+    // Transform 配列 (位置・回転・スケール) を保持することを想定
+    public sealed class GenericMotionFrame : MotionFrame
+    {
+        public override SkeletonType SkeletonType => SkeletonType.Generic;
+
+        // 各ボーンの Transform データ (型・構造は design フェーズで確定)
+        // public TransformData[] Bones { get; }
+    }
+}
+```
+
+#### `IMoCapSource.FetchLatestMotion()` 戻り値型の方針
+
+- **採用方針**: 戻り値型は `MotionFrame` 基底型を使用する
+- 呼び出し側は `MotionFrame.SkeletonType` を確認してキャストする、またはジェネリクス (`IMoCapSource<TFrame>`) を採用する。最終シグネチャは design フェーズで確定する
+- 例示 (仮): `MotionFrame FetchLatestMotion();`
+
+#### スレッド安全性の要求
+
+- **書き込み**: 受信スレッド (`IMoCapSource` 具象実装の内部スレッド等) から `MotionFrame` を書き込む
+- **読み込み**: Unity メインスレッド (`LateUpdate` 等) から最新の `MotionFrame` を読み取る
+- **方針**: 具体的なスレッド安全実装 (ダブルバッファ / `Interlocked` / `lock` / ロックレスキュー等) は design フェーズで選択する。受信スレッド側の書き込みは Unity API を呼び出さない
 
 ---
 
@@ -191,22 +274,40 @@ public interface ILipSyncSource : IDisposable
 
 ## 6. アセンブリ / 名前空間境界
 
-### 6.1 アセンブリ定義 (asmdef) の想定構成
+### 6.1 アセンブリ定義 (asmdef) の構成
 
-<!-- TODO: project-foundation agent - 命名確定 -->
+以下の asmdef を正式採用する。各アセンブリは担当 Spec の実装フェーズで実際のファイルとして作成される。
 
-想定例:
-- `RealtimeAvatarController.Core` (slot-core + 抽象群)
-- `RealtimeAvatarController.Motion` (motion-pipeline)
-- `RealtimeAvatarController.MoCap.VMC` (mocap-vmc)
-- `RealtimeAvatarController.Avatar.Builtin` (avatar-provider-builtin)
-- `RealtimeAvatarController.Samples.UI` (ui-sample / Samples~ 内)
+| asmdef 名 | 担当 Spec | 配置パス (パッケージルート相対) | 備考 |
+|-----------|----------|-------------------------------|------|
+| `RealtimeAvatarController.Core` | slot-core | `Runtime/Core/` | Slot 抽象・各公開インターフェース群 |
+| `RealtimeAvatarController.Motion` | motion-pipeline | `Runtime/Motion/` | モーションデータ中立表現・パイプライン |
+| `RealtimeAvatarController.MoCap.VMC` | mocap-vmc | `Runtime/MoCap/VMC/` | VMC OSC 受信具象実装 |
+| `RealtimeAvatarController.Avatar.Builtin` | avatar-provider-builtin | `Runtime/Avatar/Builtin/` | ビルトインアバター供給具象実装 |
+| `RealtimeAvatarController.Samples.UI` | ui-sample | `Samples~/UI/` | UI サンプル (Samples~ 機構) |
+
+**依存方向の制約**:
+- `Samples.UI` → 機能部アセンブリ各種 (一方向のみ)
+- 機能部アセンブリは `Samples.UI` を参照しない
+- UI フレームワーク (UGUI / UIToolkit 等) への依存は `Samples.UI` にのみ許容する
 
 ### 6.2 名前空間規約
 
-<!-- TODO: project-foundation agent - 命名確定 -->
+ルート名前空間を `RealtimeAvatarController` として確定する。
 
-ルート名前空間候補: `RealtimeAvatarController.*`
+| 名前空間 | 対応 asmdef | 用途 |
+|---------|------------|------|
+| `RealtimeAvatarController.Core` | `RealtimeAvatarController.Core` | Slot・各公開インターフェース |
+| `RealtimeAvatarController.Motion` | `RealtimeAvatarController.Motion` | モーションデータ・パイプライン |
+| `RealtimeAvatarController.MoCap.VMC` | `RealtimeAvatarController.MoCap.VMC` | VMC 受信実装 |
+| `RealtimeAvatarController.Avatar.Builtin` | `RealtimeAvatarController.Avatar.Builtin` | ビルトインアバター供給実装 |
+| `RealtimeAvatarController.Samples.UI` | `RealtimeAvatarController.Samples.UI` | UI サンプル |
+| `RealtimeAvatarController.*.Editor` | (各 asmdef の Editor 限定) | エディタ拡張コード |
+
+**規約の補足**:
+- 各クラス・インターフェースは上記マッピングに従い名前空間を選択する
+- エディタ限定コードは対応する機能名前空間に `.Editor` サブ名前空間を付加する (例: `RealtimeAvatarController.Core.Editor`)
+- テストコードは `.Tests` サブ名前空間を付加する (例: `RealtimeAvatarController.Core.Tests`)
 
 ---
 
