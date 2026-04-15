@@ -8,6 +8,25 @@
 
 アバターおよび MoCap ソースの候補は、ハードコードではなく `IProviderRegistry.GetRegisteredTypeIds()` / `IMoCapSourceRegistry.GetRegisteredTypeIds()` を介した**動的列挙**によって取得する。Slot の設定データは Descriptor ベース (`AvatarProviderDescriptor` / `MoCapSourceDescriptor`) を使用する。
 
+### ライブラリ採用方針 (dig ラウンド 2 確定)
+
+- **UniRx (`com.neuecc.unirx`) を採用する。R3 は採用しない。**
+  - `IMoCapSource.MotionStream` は `IObservable<MotionFrame>` (UniRx `Subject<T>` 実装) を使用する
+  - UI 層で `MotionStream` を購読する場合は UniRx の `.ObserveOnMainThread()` 拡張メソッドを使用する
+  - NuGet 依存を持たないため UPM 配布での scoped registry は OpenUPM 1 個のみで済む
+
+### Weight の初期版方針 (dig ラウンド 2 確定)
+
+- **初期版における Weight は常に `1.0` を使用する。`0.0` (skip) と `1.0` (full apply) の二値動作のみが初期版の有効値である。**
+- 中間値 (`0.0 < weight < 1.0`) のセマンティクスは、複数ソース混合シナリオを導入する際に改めて定義する。
+- UI における Weight 操作は、スライダーではなく**有効/無効を切り替える二値スイッチ (チェックボックスまたはトグル)** として実装する。
+
+### Config アセット参照方針 (dig ラウンド 2 確定)
+
+- アバター Provider の Config は `ProviderConfigBase` 派生 ScriptableObject アセットとして Inspector 上でドラッグ&ドロップにより参照を設定する。
+- MoCap ソースの Config は `MoCapSourceConfigBase` 派生 ScriptableObject アセットとして Inspector 上でドラッグ&ドロップにより参照を設定する。
+- Inspector の表示型は基底型 (`ProviderConfigBase` / `MoCapSourceConfigBase`) を使用し、利用者は具象 SO アセットを参照として渡す。
+
 ## Boundary Context
 
 - **In scope**:
@@ -61,6 +80,7 @@
 5. The UI shall 現在 Slot に割り当てられているアバターの名称・Provider 種別 (`AvatarProviderDescriptor.ProviderTypeId`) を表示する。
 6. When Slot が削除された場合, the UI shall 紐付けられたアバターを自動的に解放する処理を呼び出す。
 7. The UI は `IProviderRegistry` への参照を機能部 API として受け取る。UI 層が `IProviderRegistry` の具象実装を直接生成することはしない。
+8. The UI shall `AvatarProviderDescriptor.Config` フィールドに対して、`ProviderConfigBase` 派生 ScriptableObject アセットをドラッグ&ドロップで参照設定できる欄を提供する。Inspector 上の表示型は基底型 (`ProviderConfigBase`) を使用し、利用者は具象 SO アセット (例: `BuiltinAvatarProviderConfig`) を参照として渡す。選択肢のハードコードは禁止とし、Registry の typeId 選択 UI と組み合わせて使用する。
 
 ---
 
@@ -79,6 +99,7 @@
 7. When MoCap ソースが切り替えられた場合, the UI shall `IMoCapSourceRegistry.Release()` を通じて旧ソースの参照を解放してから新しい Descriptor を設定する。Slot 側から直接 `IMoCapSource.Dispose()` を呼び出さない。
 8. The UI shall 未割り当て状態 (ソースなし) を選択できる操作を提供する。
 9. The UI は `IMoCapSourceRegistry` への参照を機能部 API として受け取る。UI 層が `IMoCapSourceRegistry` の具象実装を直接生成することはしない。
+10. The UI shall `MoCapSourceDescriptor.Config` フィールドに対して、`MoCapSourceConfigBase` 派生 ScriptableObject アセットをドラッグ&ドロップで参照設定できる欄を提供する。Inspector 上の表示型は基底型 (`MoCapSourceConfigBase`) を使用し、利用者は具象 SO アセット (例: `VMCMoCapSourceConfig`) を参照として渡す。選択肢のハードコードは禁止とし、Registry の typeId 選択 UI と組み合わせて使用する。
 
 ---
 
@@ -86,12 +107,14 @@
 
 **Objective:** As a 開発者・検証者, I want 各 Slot のモーション合成 Weight を UI から変更できること, so that `motion-pipeline` の Weight 適用処理が正しく機能することを確認できる。
 
+> **初期版方針 (dig ラウンド 2 確定)**: 初期版では Weight は `1.0` (full apply) / `0.0` (skip) の二値のみを使用する。UI はスライダーではなく**有効/無効を切り替える二値スイッチ (チェックボックスまたはトグル)** として実装する。中間値スライダー UI は初期版では提供しない。将来の複数ソース混合シナリオに対応する際に改めて design フェーズで再検討する。
+
 #### Acceptance Criteria
 
-1. The UI shall 各 Slot に対して Weight 値 (0.0〜1.0) を調整できるスライダーまたは数値入力フィールドを提供する。
-2. When Weight 値が変更された場合, the UI shall 即座に `SlotSettings.weight` フィールドを更新し、`motion-pipeline` の Weight 適用に反映させる。
-3. The UI shall 現在の Weight 値を数値として表示する。
-4. When Weight 入力に 0.0〜1.0 の範囲外の値が入力された場合, the UI shall 入力値を 0.0〜1.0 にクランプして表示・反映する (機能部の `SlotSettings` クランプ仕様と整合する)。
+1. The UI shall 各 Slot に対して「有効 (Weight = 1.0)」/ 「無効 (Weight = 0.0)」を切り替えるチェックボックスまたはトグルスイッチを提供する。中間値を入力するスライダーや数値フィールドは初期版では提供しない。
+2. When トグルが「有効」に切り替えられた場合, the UI shall `SlotSettings.weight` を `1.0` に設定し、`motion-pipeline` の Weight 適用に反映させる。
+3. When トグルが「無効」に切り替えられた場合, the UI shall `SlotSettings.weight` を `0.0` に設定し、モーション適用をスキップする状態にする。
+4. The UI shall 現在のトグル状態 (有効/無効) を視覚的に明確に表示する。
 
 ---
 
@@ -171,9 +194,11 @@
 
 > **注意**: 本要件は**オプション**扱いである。デバッグ補助機能として有用だが、サンプル UI の必須動作要件ではなく、design フェーズで実装有無を判断する。
 
+> **ライブラリ方針 (dig ラウンド 2 確定)**: 本プロジェクトは UniRx (`com.neuecc.unirx`) を採用する。**R3 は採用しない。** `IMoCapSource.MotionStream` は UniRx の `Subject<MotionFrame>` で実装された `IObservable<MotionFrame>` である。
+
 #### Acceptance Criteria
 
 1. When `IMoCapSource` インスタンスへの参照が UI 側に渡された場合, the UI shall `IMoCapSource.MotionStream` (UniRx `IObservable<MotionFrame>`) を購読し、受信フレーム数や最新タイムスタンプ等のデバッグ情報をリアルタイムに表示できる。
-2. The UI shall `MotionStream` の購読時に `.ObserveOnMainThread()` を使用して Unity メインスレッド上でデータを受け取る。
+2. The UI shall `MotionStream` の購読時に UniRx の `.ObserveOnMainThread()` 拡張メソッドを使用して Unity メインスレッド上でデータを受け取る (`using UniRx;` が必要)。
 3. The UI shall Slot の削除・MoCap ソースの切り替え時に購読を適切に解除し (Dispose)、メモリリークを防ぐ。
-4. UniRx は UI 層の**必須依存ではなく**、`MotionStream` 購読機能を使用するコンポーネントにのみ条件付きで依存する設計を推奨する。`IMoCapSource` インスタンスが UI に渡されない場合、UniRx なしでも UI のコア機能が動作すること。
+4. UniRx (`com.neuecc.unirx`) は UI 層の**必須依存ではなく**、`MotionStream` 購読機能を使用するコンポーネントにのみ条件付きで依存する設計を推奨する。`IMoCapSource` インスタンスが UI に渡されない場合、UniRx なしでも UI のコア機能が動作すること。

@@ -5,9 +5,13 @@
 本ドキュメントは `motion-pipeline` Spec の要件を定義する。`motion-pipeline` は Realtime Avatar Controller において MoCap ソースから Push 型ストリーム (`IObservable<MotionFrame>`) で受信したモーションデータを Slot 単位の内部キャッシュに保持し、Slot に設定された Weight 値に従ってアバターへ適用するパイプラインを提供する。依存 Spec は `slot-core` であり、`slot-core` が定義する `SlotSettings` / `IMoCapSource` / `IAvatarProvider` 等の抽象インターフェースを参照する。
 
 **Wave A 反映事項 (dig ラウンド 1 確定済)**:
-- `IMoCapSource` は Push 型 (UniRx `IObservable<MotionFrame>`) を採用。`FetchLatestMotion()` は廃止
+- `IMoCapSource` は Push 型 (`IObservable<MotionFrame>`) を採用。`FetchLatestMotion()` は廃止
 - MoCap ソースは複数 Slot 間で参照共有。`MoCapSourceRegistry` が参照カウントでライフサイクルを管理
 - `SlotSettings` は Descriptor ベース POCO (`MoCapSourceDescriptor` 等)
+
+**dig ラウンド 2 確定事項**:
+- **UniRx 採用**: リアクティブライブラリは UniRx (`com.neuecc.unirx`) を採用する。R3 は採用しない。UniRx の `Subject<T>` は `System.IObservable<T>` を実装するため、`IObservable<MotionFrame>` の型シグネチャは変更しない。`ObserveOnMainThread()` 等の Unity スレッド連携拡張メソッドは UniRx が提供する (`using UniRx;` が必要)
+- **Weight 二値方針**: 初期版の有効な Weight 値は `{0.0 (skip), 1.0 (full apply)}` の二値のみ。`SlotSettings.weight` フィールド自体は将来の複数ソース混合シナリオのためのフックとして残す。`0.0 < weight < 1.0` の中間値セマンティクスは、複数ソース混合シナリオを導入する際に改めて定義する
 
 ## Boundary Context
 
@@ -30,7 +34,7 @@
   - `slot-core` が提供する `SlotSettings` の `weight` フィールドと `IMoCapSource` インターフェースを参照する
   - `mocap-vmc` が `IMoCapSource.MotionStream` (Push 型 `IObservable<MotionFrame>`) を通じて本 Spec が定義する中立表現を流す
   - 本 Spec のアセンブリは `RealtimeAvatarController.Motion` (asmdef: `RealtimeAvatarController.Motion`、配置パス: `Runtime/Motion/`)
-  - `RealtimeAvatarController.Motion` アセンブリは `RealtimeAvatarController.Core` 経由で UniRx に間接依存する (contracts.md 6 章参照)
+  - `RealtimeAvatarController.Motion` アセンブリは `RealtimeAvatarController.Core` 経由で UniRx (`com.neuecc.unirx`) に間接依存する (contracts.md 6 章参照)。R3 は不採用
   - `IMoCapSource` インスタンスは複数 Slot 間で参照共有されるため、`MotionCache` は Slot ごとに独立して保持する。Slot が破棄された際の `IMoCapSource.Dispose()` 呼び出しは `MoCapSourceRegistry` (contracts.md 1.4 章) の責務であり、motion-pipeline 側は購読解除のみを行う
 
 ---
@@ -98,15 +102,18 @@
 
 ### Requirement 5: Weight に従ったモーション適用
 
-**Objective:** As a ランタイム統合者, I want Slot に設定された Weight (0.0〜1.0) に従ってモーションをアバターへ適用できること, so that 複数 MoCap ソースの合成や段階的フェードイン / アウトを実現できる。
+**Objective:** As a ランタイム統合者, I want Slot に設定された Weight 値に従ってモーションをアバターへ適用できること, so that 将来の複数ソース混合シナリオに向けた拡張フックが確保される。
+
+> **初期版 Weight 方針 (dig ラウンド 2 確定)**: 初期版の有効な Weight 値は `{0.0 (skip), 1.0 (full apply)}` の二値のみ。フィールド自体は将来の複数ソース混合シナリオのためのフックとして残す。`0.0 < weight < 1.0` の中間値セマンティクスは、複数ソース混合シナリオを導入する際に改めて定義する。
 
 #### Acceptance Criteria
 
-1. The `IMotionApplier` shall `MotionFrame` を適用する際に Weight 値 (float) を受け取るパラメータを持つ。
-2. When Weight が 1.0 の場合, the `IMotionApplier` shall `MotionFrame` を変換なしでアバターへ適用する。
-3. When Weight が 0.0 の場合, the `IMotionApplier` shall アバターへのモーション適用を行わない (または前フレームのポーズを維持する)。
-4. When Weight が 0.0 より大きく 1.0 より小さい場合, the `IMotionApplier` shall `MotionFrame` のポーズをデフォルトポーズ (または現在のポーズ) と線形補間 (Lerp) して適用する。
-5. When Weight に 0.0〜1.0 の範囲外の値が渡された場合, the `IMotionApplier` shall 値を 0.0〜1.0 にクランプして処理を継続する。
+1. The `IMotionApplier` shall `MotionFrame` を適用する際に Weight 値 (float) を受け取るパラメータを持つ。Weight パラメータは将来の複数ソース混合シナリオのためのフックとして設計する。
+2. When Weight が `1.0` の場合, the `IMotionApplier` shall `MotionFrame` を完全適用 (full apply) する。すなわち変換なしでアバターへ適用する。
+3. When Weight が `0.0` の場合, the `IMotionApplier` shall アバターへのモーション適用をスキップし、前フレームのポーズを維持する (skip)。
+4. When Weight に `0.0〜1.0` の範囲外の値が渡された場合, the `IMotionApplier` shall 値を `0.0〜1.0` にクランプして処理を継続する。
+
+> **将来拡張 (中間値セマンティクス)**: `0.0 < weight < 1.0` の中間値 (複数 MoCap ソースの合成・フェードイン / アウト等) の挙動は、複数ソース混合シナリオ導入時に別途定義する。初期版では中間値が指定された場合の動作は未定義であり、実装に依存してよい。
 
 ---
 
@@ -180,11 +187,13 @@
 
 **Objective:** As a アーキテクチャ担当者, I want motion-pipeline の成果物が規定のアセンブリ・名前空間に配置されること, so that 他 Spec との依存関係が明確に分離される。
 
+> **UniRx 採用方針 (dig ラウンド 2 確定)**: リアクティブライブラリは **UniRx (`com.neuecc.unirx`) を採用する。R3 は採用しない**。UniRx の `Subject<T>` は `System.IObservable<T>` を実装するため、`IObservable<MotionFrame>` の型シグネチャに変更はない。`ObserveOnMainThread()` 等の Unity スレッド連携拡張メソッドは UniRx が提供する (`using UniRx;` を追加することで利用可能)。NuGet 依存を持たないため UPM 配布での scoped registry が OpenUPM 1 個のみで済む。
+
 #### Acceptance Criteria
 
 1. The motion-pipeline Spec の全クラス・インターフェースは `RealtimeAvatarController.Motion` 名前空間に属する。
 2. The asmdef ファイルは `RealtimeAvatarController.Motion` として定義され、`Runtime/Motion/` に配置される。
 3. The `RealtimeAvatarController.Motion` アセンブリは `RealtimeAvatarController.Core` アセンブリを参照し、`Samples.UI` 等の上位アセンブリを参照しない (contracts.md 6 章参照)。
-4. The `RealtimeAvatarController.Motion` アセンブリは `RealtimeAvatarController.Core` が UniRx を依存として持つことを通じて、UniRx に間接依存する。`MotionCache` が `IObservable<MotionFrame>` を購読する実装において UniRx 型 (`IObservable<T>` / `IDisposable` 等) を直接使用してよい。UniRx の直接参照 (asmdef 参照追加) が必要かどうかは design フェーズで確定する。
+4. The `RealtimeAvatarController.Motion` アセンブリは `RealtimeAvatarController.Core` が UniRx (`com.neuecc.unirx`) を依存として持つことを通じて、UniRx に間接依存する。`MotionCache` が `IObservable<MotionFrame>` を購読する実装において UniRx 型 (`IObservable<T>` / `IDisposable` 等) を直接使用してよい。UniRx の直接参照 (asmdef の references への `UniRx` 追加) が必要かどうかは design フェーズで確定する。
 5. When テストコードを配置する場合, the テストアセンブリは `RealtimeAvatarController.Motion.Tests` 名前空間を使用する。
 6. エディタ限定コードが存在する場合, `RealtimeAvatarController.Motion.Editor` 名前空間を使用する。

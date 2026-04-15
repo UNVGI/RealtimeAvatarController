@@ -11,10 +11,14 @@ Unity プロジェクト基盤と UPM パッケージ基盤を整備する。
 ### 実装する
 - Unity 6000.3.10f1 プロジェクトをリポジトリ直下 `RealtimeAvatarController/` に作成
 - UPM パッケージ雛形 (`package.json` を含む構造)
+  - `package.json` の `dependencies` に `com.neuecc.unirx` (最新安定版) を宣言
 - アセンブリ定義ファイル (asmdef) の分割: 機能部 / UI サンプル
+  - `RealtimeAvatarController.Core` asmdef に UniRx (`UniRx`) の参照を追加
+  - 他の機能部 asmdef は Core 経由で UniRx を間接利用 (直接参照禁止)
 - `Samples~` 機構による UI サンプルの同梱ルート
 - 最小限の CI / ビルド検証の下地 (任意)
 - 名前空間規約の確定
+- 利用者向け README への OpenUPM scoped registry 追加手順の記載 (manifest.json スニペット含む)
 
 ### スコープ外
 - 具体的なクラス実装 (各機能 Spec 側で行う)

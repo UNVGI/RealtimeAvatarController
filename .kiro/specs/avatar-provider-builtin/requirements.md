@@ -4,11 +4,14 @@
 
 本ドキュメントは `avatar-provider-builtin` Spec の要件を定義する。本 Spec は `slot-core` が定義した `IAvatarProvider` 抽象インターフェースのビルトイン具象実装を提供し、Prefab として配置されたアバターを Slot へ供給する責務を担う。
 
-Wave A で確定した設計方針に従い、以下の原則を採用する:
+Wave A および dig ラウンド 2 で確定した設計方針に従い、以下の原則を採用する:
 
 - **Descriptor / Registry / Factory モデル**: `SlotSettings.avatarProviderDescriptor` (`AvatarProviderDescriptor`) に基づいて `IProviderRegistry` が `BuiltinAvatarProviderFactory` を解決し、`BuiltinAvatarProvider` を生成する
 - **typeId = `"Builtin"`**: ビルトイン Provider の識別子は `"Builtin"` で固定
 - **参照共有は採用しない**: `IMoCapSource` と異なり、`IAvatarProvider` は 1 Slot に対して 1 インスタンスを割り当てる原則 (SlotManager が所有・破棄を管理)
+- **Config 型階層**: `slot-core` が定義した `ProviderConfigBase : ScriptableObject` (contracts.md 1.5 章) を基底とし、本 Spec が `BuiltinAvatarProviderConfig : ProviderConfigBase` を具象 Config として定義する責務を持つ
+- **Factory のキャスト責務**: `BuiltinAvatarProviderFactory` は `IAvatarProviderFactory.Create(ProviderConfigBase config)` の引数を `BuiltinAvatarProviderConfig` にキャストして使用し、キャスト失敗時のエラーハンドリングを実装する
+- **UniRx の間接依存**: UniRx (`com.neuecc.unirx`) は本 Spec が直接使用する可能性は低いが、`RealtimeAvatarController.Core` アセンブリ経由で間接的に存在することを認識する
 
 ## Boundary Context
 
@@ -21,14 +24,14 @@ Wave A で確定した設計方針に従い、以下の原則を採用する:
   - アバターのライフサイクル管理 (生成・破棄)
   - `RealtimeAvatarController.Avatar.Builtin` アセンブリの定義
 - **Out of scope**:
-  - `IAvatarProvider` / `IProviderRegistry` / `IAvatarProviderFactory` / `AvatarProviderDescriptor` の抽象定義 (`slot-core` Spec が担当)
+  - `IAvatarProvider` / `IProviderRegistry` / `IAvatarProviderFactory` / `AvatarProviderDescriptor` / `ProviderConfigBase` (基底 Config 型) の抽象定義 (`slot-core` Spec が担当)
   - Addressable Provider の具象実装 (初期段階では実装しない)
   - アバターへのモーション適用 (`motion-pipeline` Spec が担当)
   - 表情制御・リップシンクの具象実装 (初期段階では対象外)
   - UI / サンプルシーン (`ui-sample` Spec が担当)
   - `IMoCapSource` で採用している参照共有モデルの `IAvatarProvider` への適用
 - **Adjacent expectations**:
-  - `slot-core` が `IAvatarProvider`・`IProviderRegistry`・`IAvatarProviderFactory`・`AvatarProviderDescriptor`・`SlotSettings` を提供している
+  - `slot-core` が `IAvatarProvider`・`IProviderRegistry`・`IAvatarProviderFactory`・`AvatarProviderDescriptor`・`SlotSettings`・`ProviderConfigBase` (1.5 章) を提供している
   - `project-foundation` が Unity プロジェクトとアセンブリ定義の雛形を提供している
   - 将来 `avatar-provider-addressable` Spec が `IAvatarProvider` を実装する際、本 Spec の実装を変更する必要がない
 
@@ -51,16 +54,16 @@ Wave A で確定した設計方針に従い、以下の原則を採用する:
 
 ---
 
-### Requirement 2: Prefab によるアバター指定 (BuiltinAvatarProviderConfig)
+### Requirement 2: BuiltinAvatarProviderConfig 型定義と Prefab 参照
 
 **Objective:** As a コンテンツ制作者, I want Unity プロジェクト内に配置した Prefab をアバターとして指定できること, so that プロジェクトに含まれるあらゆるアバター Prefab を Slot に割り当てられる。
 
 #### Acceptance Criteria
 
-1. `AvatarProviderDescriptor.Config` として格納される具象設定型 `BuiltinAvatarProviderConfig` shall アバター Prefab への参照を保持するフィールドを持つ (ScriptableObject サブクラスまたはシリアライズ可能な POCO; 具体的なフィールド定義は design フェーズで確定)。
-2. `BuiltinAvatarProviderConfig` shall Unity エディタ上でシリアライズ可能な形式で定義される (`[Serializable]` 属性または `ScriptableObject` 継承)。
-3. `BuiltinAvatarProviderFactory` shall `AvatarProviderDescriptor.Config` を `BuiltinAvatarProviderConfig` にキャストして `BuiltinAvatarProvider` を生成し、Descriptor が `BuiltinAvatarProviderConfig` 以外の Config を持つ場合は例外またはエラーを返す。
-4. When Prefab 参照が設定されていない (null) 状態で `RequestAvatar()` が呼び出された場合, the BuiltinAvatarProvider shall 例外またはエラーを返し、null の `GameObject` を供給しない。
+1. 本 Spec は `ProviderConfigBase` (contracts.md 1.5 章、`slot-core` が定義) を継承した具象 Config 型 `BuiltinAvatarProviderConfig : ProviderConfigBase` を定義する責務を持つ。`BuiltinAvatarProviderConfig` は `RealtimeAvatarController.Avatar.Builtin` 名前空間・アセンブリに配置される。
+2. `BuiltinAvatarProviderConfig` shall `avatarPrefab` フィールド (型: `GameObject`) を持ち、Inspector でのドラッグ&ドロップによるアバター Prefab 参照の設定を可能にする。
+3. `BuiltinAvatarProviderConfig` は `ScriptableObject` を基底とする (`ProviderConfigBase` 継承により自動的に充足される) ため、Unity エディタ上でアセットとして作成・保存でき、`AvatarProviderDescriptor.Config` フィールドへの型安全な参照が可能である。
+4. When Prefab 参照 (`avatarPrefab`) が設定されていない (null) 状態で `RequestAvatar()` が呼び出された場合, the BuiltinAvatarProvider shall 例外またはエラーを返し、null の `GameObject` を供給しない。
 5. The BuiltinAvatarProvider shall プロジェクト内の任意の Prefab を受け付け、特定のアバター形式 (Humanoid / Generic) に限定しない。
 
 ---
@@ -132,14 +135,14 @@ Wave A で確定した設計方針に従い、以下の原則を採用する:
 
 ---
 
-### Requirement 8: BuiltinAvatarProviderFactory の責務
+### Requirement 8: BuiltinAvatarProviderFactory の責務とキャスト処理
 
 **Objective:** As a システム設計者, I want `IAvatarProviderFactory` を実装する `BuiltinAvatarProviderFactory` が存在すること, so that `IProviderRegistry` が Descriptor から `BuiltinAvatarProvider` インスタンスを生成できる。
 
 #### Acceptance Criteria
 
-1. `BuiltinAvatarProviderFactory` shall `IAvatarProviderFactory` インターフェース (contracts.md 1.4 章骨格) を完全に実装する。
-2. When `BuiltinAvatarProviderFactory.Create(config)` が呼び出された場合, `BuiltinAvatarProviderFactory` shall `config` を `BuiltinAvatarProviderConfig` として解釈し、新規 `BuiltinAvatarProvider` インスタンスを生成して返す。
-3. When `Create()` に `BuiltinAvatarProviderConfig` 以外の config 型が渡された場合, `BuiltinAvatarProviderFactory` shall 例外またはエラー値を返し、不正なインスタンスを生成しない。
+1. `BuiltinAvatarProviderFactory` shall `IAvatarProviderFactory` インターフェース (contracts.md 1.4 章骨格) を完全に実装する。`IAvatarProviderFactory.Create()` のシグネチャは `IAvatarProvider Create(ProviderConfigBase config)` である (contracts.md 1.4 章参照)。
+2. When `BuiltinAvatarProviderFactory.Create(ProviderConfigBase config)` が呼び出された場合, `BuiltinAvatarProviderFactory` shall 引数 `config` を `BuiltinAvatarProviderConfig` へキャスト (`config as BuiltinAvatarProviderConfig`) し、キャスト成功時に新規 `BuiltinAvatarProvider` インスタンスを生成して返す。
+3. When `Create()` に渡された `config` が `BuiltinAvatarProviderConfig` にキャストできない場合 (キャスト結果が null の場合)、`BuiltinAvatarProviderFactory` shall `ArgumentException` (またはそれに相当する例外) をスローし、不正なインスタンスを生成しない。エラーメッセージには期待型 (`BuiltinAvatarProviderConfig`) と実際の型名を含める。
 4. `BuiltinAvatarProviderFactory` shall `RealtimeAvatarController.Avatar.Builtin` 名前空間に属し、同アセンブリに配置される。
 5. `BuiltinAvatarProviderFactory` shall ステートレスに設計し、複数回の `Create()` 呼び出しが互いに干渉しない。

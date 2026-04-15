@@ -51,6 +51,7 @@
 3. The package shall `Runtime/`・`Editor/` のディレクトリ構造に従い、ランタイムコードとエディタ拡張コードを分離して配置できる。
 4. The package shall UPM の `Samples~` 機構に対応したサンプルディレクトリ構造を提供する (詳細は Requirement 5 を参照)。
 5. When git URL 経由で UPM インストールを実行した場合, the package shall Unity プロジェクトに正常にインポートされる。
+6. The `package.json` shall `dependencies` フィールドに `com.neuecc.unirx` を最新安定版として宣言する (具体バージョンは design フェーズで確定する)。
 
 ---
 
@@ -70,6 +71,8 @@
 3. The asmdef files shall `Packages/` または `Assets/` 内の適切な配置パスに対応した名前空間のディレクトリに配置される。
 4. When 機能部アセンブリのみを対象としたビルドを実行した場合, the build shall UI フレームワーク (UGUI / UIToolkit 等) への依存なくコンパイルが成功する。
 5. Each asmdef shall `rootNamespace` フィールドを `contracts.md` 6.2 章で確定した名前空間規約に従い設定する。
+6. The `RealtimeAvatarController.Core` asmdef shall `references` に UniRx (`UniRx` アセンブリ名) を追加し、UniRx が提供する `IObservable<T>` 拡張・`Subject<T>` 等を直接利用できるようにする。
+7. The asmdef files for `RealtimeAvatarController.Motion`・`RealtimeAvatarController.MoCap.VMC`・`RealtimeAvatarController.Avatar.Builtin` shall UniRx の asmdef を直接 `references` に追加せず、`RealtimeAvatarController.Core` 経由で間接的に UniRx の型を利用する。ただし各アセンブリが UniRx の拡張メソッドを直接呼び出す必要が生じた場合は design フェーズで要否を判断する。
 
 ---
 
@@ -128,3 +131,43 @@
 1. Where CI を構成する場合, the CI configuration shall Unity 6000.3.10f1 を使用したビルド検証ステップを含む。
 2. Where CI を構成する場合, the CI configuration shall `RealtimeAvatarController/` ディレクトリをプロジェクトパスとして設定する。
 3. The CI configuration is optional for the initial phase; ただし配置する場合はリポジトリルートの `.github/workflows/` または同等のディレクトリに格納する。
+
+---
+
+### Requirement 8: UniRx UPM 依存の宣言
+
+**Objective:** As a パッケージ利用者, I want 本パッケージが UniRx への依存を `package.json` で宣言していること, so that UPM の依存解決によって UniRx が自動的に取得される。
+
+#### Acceptance Criteria
+
+1. The `package.json` shall `dependencies` フィールドに `"com.neuecc.unirx": "<最新安定版>"` を宣言する (具体バージョン値は design フェーズで確定する)。
+2. The `com.neuecc.unirx` パッケージは OpenUPM scoped registry (`https://package.openupm.com`、スコープ `com.neuecc`) から取得する前提とする。
+3. 本パッケージの UPM 依存に NuGet 関連パッケージは含まない。UniRx が依存を追加しない唯一の scoped registry として OpenUPM 1 個のみで導入が完結することを確認する。
+4. When 利用者が本パッケージを UPM でインストールした場合, UniRx が未インストール環境では UPM が `com.neuecc.unirx` を自動的に解決できる状態にある (ただし scoped registry が登録済みであること。詳細は Requirement 9)。
+
+---
+
+### Requirement 9: 利用者向け README への OpenUPM scoped registry 導入手順の記載
+
+**Objective:** As a パッケージ利用者, I want README に UniRx 取得のための OpenUPM scoped registry 追加手順が記載されていること, so that 初めて本パッケージを導入する際に迷わず環境をセットアップできる。
+
+#### Acceptance Criteria
+
+1. The README shall 利用者が本パッケージをインストールする前提として、Unity プロジェクトの `Packages/manifest.json` に以下の scoped registry を追加する手順を説明する。
+2. The README shall 以下の内容を含む `manifest.json` スニペットを掲載する:
+   ```json
+   {
+     "scopedRegistries": [
+       {
+         "name": "OpenUPM",
+         "url": "https://package.openupm.com",
+         "scopes": [
+           "com.neuecc"
+         ]
+       }
+     ]
+   }
+   ```
+3. The README shall `scopedRegistries` を追加した後に `com.cysharp.realtimeavatarcontroller`（仮称）を `dependencies` に追加する手順を示す。パッケージ名の確定は design フェーズで行う。
+4. The README shall 手動編集に加えて `openupm-cli` コマンド例 (`openupm add com.neuecc.unirx`) を参考情報として掲載してよい (必須ではなく任意)。
+5. The README のスニペット例は `Packages/manifest.json` の既存エントリを破壊しないよう、追記形式 (マージ) で説明すること。

@@ -18,23 +18,46 @@ Slot 概念を中核とするデータモデル・ライフサイクル管理 AP
 - Slot ライフサイクル (生成・破棄; IMoCapSource の所有権は MoCapSourceRegistry に委譲)
 - ProviderRegistry / SourceRegistry (typeId → Factory 解決、利用可能候補列挙)
 - MoCapSourceRegistry (参照共有 / 参照カウントベース解放)
+- **Config 基底型階層の定義** (dig ラウンド 2 確定):
+  - `ProviderConfigBase : ScriptableObject` (アバター Provider Config の抽象基底)
+  - `MoCapSourceConfigBase : ScriptableObject` (MoCap ソース Config の抽象基底)
+  - `FacialControllerConfigBase : ScriptableObject` (表情制御 Config の抽象基底)
+  - `LipSyncSourceConfigBase : ScriptableObject` (リップシンク Config の抽象基底)
+  - 具象 Config は各担当 Spec が基底クラスを継承して定義する
+  - Factory の `Create` 引数型は各基底クラス型; 具象実装側でキャストして取得
 - 以下の抽象インターフェースの定義 (シグネチャ確定は design フェーズ):
   - `IMoCapSource` **Push 型 (UniRx `IObservable<MotionFrame>`)**: `FetchLatestMotion()` は定義しない
   - `IAvatarProvider`
   - `IFacialController` (受け口のみ)
   - `ILipSyncSource` (受け口のみ)
-- UniRx を `RealtimeAvatarController.Core` アセンブリの依存として追加
+- **UniRx (`com.neuecc.unirx`) を `RealtimeAvatarController.Core` アセンブリの依存として追加** (R3 は採用しない)
+  - OpenUPM の scoped registry 経由で取得; NuGet 依存なし
+  - `ObserveOnMainThread()` 等の UniRx 拡張メソッドが利用可能
+- **Weight 初期版固定方針** (dig ラウンド 2 確定):
+  - `SlotSettings.weight` フィールドは残す (将来の複数ソース混合用フック)
+  - 初期版 (1 Slot 1 MoCap source) では `weight` は常に `1.0`
+  - `0.0` (skip) と `1.0` (full apply) の二値動作のみが初期版の有効値
+  - `0.0 < weight < 1.0` の中間値セマンティクスは将来定義予定
 
 ### アーキテクチャ方針 (dig ラウンド 1 反映)
 
 #### Descriptor + Registry + Factory パターン
 ```
 SlotSettings (serializable POCO / ScriptableObject 任意)
-├── slotId / displayName / weight
-├── AvatarProviderDescriptor  { providerTypeId: string, config: SO or JSON }
-├── MoCapSourceDescriptor     { sourceTypeId: string,   config: SO or JSON }
-├── FacialControllerDescriptor? (null 許容)
-└── LipSyncSourceDescriptor?   (null 許容)
+├── slotId / displayName
+├── weight  ← 初期版は常に 1.0 (フィールドは将来の複数ソース混合用フックとして残す)
+├── AvatarProviderDescriptor  { providerTypeId: string, config: ProviderConfigBase }
+├── MoCapSourceDescriptor     { sourceTypeId: string,   config: MoCapSourceConfigBase }
+├── FacialControllerDescriptor? { controllerTypeId: string, config: FacialControllerConfigBase } (null 許容)
+└── LipSyncSourceDescriptor?   { sourceTypeId: string, config: LipSyncSourceConfigBase } (null 許容)
+
+Config 基底型階層 (slot-core が定義):
+  ProviderConfigBase : ScriptableObject        ← AvatarProviderDescriptor.Config の型
+  MoCapSourceConfigBase : ScriptableObject     ← MoCapSourceDescriptor.Config の型
+  FacialControllerConfigBase : ScriptableObject
+  LipSyncSourceConfigBase : ScriptableObject
+  ※ 具象 Config は担当 Spec が基底を継承して定義 (例: BuiltinAvatarProviderConfig)
+  ※ Factory 側は config as BuiltinAvatarProviderConfig でキャストして取得
 
 IProviderRegistry
   - Register(typeId, IAvatarProviderFactory)
@@ -48,17 +71,20 @@ IMoCapSourceRegistry
   - GetRegisteredTypeIds() → IReadOnlyList<string>
 ```
 
-#### IMoCapSource Push モデル (UniRx)
+#### IMoCapSource Push モデル (UniRx `com.neuecc.unirx` 採用 / R3 不採用)
 ```csharp
+// using UniRx; が必要 (ObserveOnMainThread() は UniRx の拡張メソッド)
+// IObservable<MotionFrame> は System.IObservable<T> — UniRx Subject<T> がこれを実装する
 public interface IMoCapSource : IDisposable
 {
     string SourceType { get; }
-    void Initialize(/* config */);
+    void Initialize(/* MoCapSourceConfigBase config */);
     IObservable<MotionFrame> MotionStream { get; }  // Push 型; FetchLatestMotion() は廃止
     void Shutdown();
 }
 // 購読側: source.MotionStream.ObserveOnMainThread().Subscribe(frame => ...)
 // マルチキャスト: MotionStream は Publish().RefCount() 等でラップ
+// パッケージ: com.neuecc.unirx (OpenUPM scoped registry) / NuGet 依存なし
 ```
 
 #### MoCap ソース参照共有モデル

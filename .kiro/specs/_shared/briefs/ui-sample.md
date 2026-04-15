@@ -18,7 +18,22 @@
 - 機能部 API の新規定義 (各機能 Spec で完結している前提)
 - 機能部への UI 層依存の持ち込み (機能部は UI 非依存を厳守)
 
-## 設計上の重要事項 (dig ラウンド 1 反映)
+## 設計上の重要事項 (dig ラウンド 1・2 反映)
+
+### ライブラリ採用 (dig ラウンド 2 確定)
+- **UniRx (`com.neuecc.unirx`) を採用。R3 は採用しない。**
+- `IMoCapSource.MotionStream` は UniRx `Subject<MotionFrame>` で実装された `IObservable<MotionFrame>`
+- UI 層での購読は `.ObserveOnMainThread()` (UniRx 拡張メソッド) を使用する
+
+### Weight の初期版方針 (dig ラウンド 2 確定)
+- 初期版 Weight は `1.0` (full apply) / `0.0` (skip) の**二値のみ**
+- UI はスライダーではなく**チェックボックスまたはトグルスイッチ**として実装する
+- 中間値スライダーは初期版では提供しない。将来の複数ソース混合シナリオで再検討
+
+### Config アセット参照 UI (dig ラウンド 2 確定)
+- `AvatarProviderDescriptor.Config` は `ProviderConfigBase` 派生 SO アセットをドラッグ&ドロップで参照設定
+- `MoCapSourceDescriptor.Config` は `MoCapSourceConfigBase` 派生 SO アセットをドラッグ&ドロップで参照設定
+- Inspector 表示型は基底型 (`ProviderConfigBase` / `MoCapSourceConfigBase`) を使用する
 
 ### Registry 経由の動的候補列挙
 - アバター Provider 候補は `IProviderRegistry.GetRegisteredTypeIds()` から動的に取得する
@@ -57,7 +72,7 @@
 ## 備考
 - UI フレームワーク (UGUI / UI Toolkit) は要件段階で提案し、design フェーズで確定
 - 動的候補列挙 UI (Registry 列挙結果のドロップダウン等) は UGUI・UI Toolkit いずれでも実現可能
-- UniRx による `MotionStream` 購読プレビューはオプション機能として要件化済み
+- UniRx (`com.neuecc.unirx`) による `MotionStream` 購読プレビューはオプション機能として要件化済み。R3 は採用しない
 - 運用の本命は別 VTuber システムへの組込みであり、本サンプルは検証デモの位置付け
 
 ## 言語

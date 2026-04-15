@@ -24,25 +24,28 @@ Slot は VTuber アバター制御の設定単位。`SlotSettings` は Descripto
 |-----------|---|:---------:|------|
 | `slotId` | `string` | 必須 | Slot を一意に識別する主キー |
 | `displayName` | `string` | 必須 | エディタ・UI 向け表示名 |
-| `weight` | `float` | 必須 | モーション合成ウェイト (0.0〜1.0、範囲外はクランプ) |
+| `weight` | `float` | 必須 | モーション合成ウェイト (0.0〜1.0、範囲外はクランプ)。**初期版では常に 1.0 を使用する。** |
 | `avatarProviderDescriptor` | `AvatarProviderDescriptor` | 必須 | アバター供給元の Descriptor (typeId + config) |
 | `moCapSourceDescriptor` | `MoCapSourceDescriptor` | 必須 | MoCap ソースの Descriptor (typeId + config) |
 | `facialControllerDescriptor` | `FacialControllerDescriptor?` | 省略可 (null 許容) | 表情制御の Descriptor |
 | `lipSyncSourceDescriptor` | `LipSyncSourceDescriptor?` | 省略可 (null 許容) | リップシンクソースの Descriptor |
 
-**Descriptor 骨格 (C# 疑似コード)**:
+> **weight フィールドの初期版方針 (dig ラウンド 2 確定)**: 初期版 (1 Slot 1 MoCap source 構成) では `weight` は常に `1.0` として扱う。`0.0` (skip) と `1.0` (full apply) の二値動作のみが初期版の有効値である。フィールド自体は将来の複数ソース混合シナリオのためのフックとして残す。`0.0 < weight < 1.0` の中間値セマンティクスは、複数ソース混合シナリオを導入する際に改めて定義する。
+
+**Config 基底型による Descriptor 骨格 (C# 疑似コード)**:
 
 ```csharp
 // 各 Descriptor は typed POCO としてシリアライズ可能
+// Config フィールドは ScriptableObject 基底型を継承した ProviderConfigBase を参照する
 [Serializable]
 public class AvatarProviderDescriptor
 {
     // Registry に登録された具象型を識別するキー (例: "Builtin", "Addressable")
     public string ProviderTypeId;
 
-    // 具象型ごとのコンフィグ (ScriptableObject サブクラスまたは JSON 文字列)
-    // design フェーズで具体化
-    public ScriptableObject Config; // または public string ConfigJson;
+    // 具象型ごとのコンフィグ。ProviderConfigBase (ScriptableObject 派生) を参照。
+    // Inspector でドラッグ&ドロップ可能。Factory 側はキャストで具象 Config を取得する。
+    public ProviderConfigBase Config;
 }
 
 [Serializable]
@@ -51,14 +54,26 @@ public class MoCapSourceDescriptor
     // Registry に登録された具象型を識別するキー (例: "VMC", "Custom")
     public string SourceTypeId;
 
-    // 具象型ごとのコンフィグ
-    public ScriptableObject Config; // または public string ConfigJson;
+    // 具象型ごとのコンフィグ。MoCapSourceConfigBase (ScriptableObject 派生) を参照。
+    public MoCapSourceConfigBase Config;
 }
 
-// FacialControllerDescriptor / LipSyncSourceDescriptor も同様の構造
+[Serializable]
+public class FacialControllerDescriptor
+{
+    public string ControllerTypeId;
+    public FacialControllerConfigBase Config;
+}
+
+[Serializable]
+public class LipSyncSourceDescriptor
+{
+    public string SourceTypeId;
+    public LipSyncSourceConfigBase Config;
+}
 ```
 
-> **設計の意図**: インターフェース型フィールド (`IAvatarProvider` 等) を Unity シリアライズに直接配置することはできない。Descriptor パターンにより、具象型の選択をランタイムの Registry/Factory 解決に委ねる。利用可能な具象型はランタイムのプロジェクト構成に応じて動的に決まるため、エディタ UI も Registry から候補を列挙して表示する。
+> **設計の意図**: インターフェース型フィールド (`IAvatarProvider` 等) を Unity シリアライズに直接配置することはできない。Descriptor パターンにより、具象型の選択をランタイムの Registry/Factory 解決に委ねる。利用可能な具象型はランタイムのプロジェクト構成に応じて動的に決まるため、エディタ UI も Registry から候補を列挙して表示する。Config フィールドを `ScriptableObject` 直参照ではなく各基底クラス型にすることで、Inspector での型安全な参照とアセット管理を両立する。
 
 ### 1.2 シリアライズ形式
 
@@ -71,6 +86,7 @@ public class MoCapSourceDescriptor
 | JSON | ファイル保存・外部連携 | `JsonUtility` または Newtonsoft.Json によるエクスポート / インポート |
 
 - **Descriptor フィールドはシリアライズの中核**: `AvatarProviderDescriptor` / `MoCapSourceDescriptor` 等は `[Serializable]` POCO として定義し、インターフェース直参照を避ける
+- **Config フィールドは ScriptableObject 基底派生型を参照**: 各 Descriptor の `Config` フィールドの型は `ProviderConfigBase` / `MoCapSourceConfigBase` 等の基底クラス (後述 1.5 章) を使用する。これにより Inspector でのドラッグ&ドロップ可能な型安全参照を実現する。`SlotSettings` 自体は POCO/SO のいずれでも可
 - **ScriptableObject は任意**: エディタとの統合性を重視する場合は SO を継承してよいが、ランタイム生成やユニットテストでは POCO のまま使用できる
 - **具象型依存の分離**: `SlotSettings` 自体は具象型 (`VMCMoCapSource` 等) を知らない。型解決は Registry/Factory が担う
 
@@ -155,14 +171,16 @@ namespace RealtimeAvatarController.Core
     }
 
     // Factory インターフェース骨格
+    // config 引数は ProviderConfigBase / MoCapSourceConfigBase 派生型 (1.5 章参照)
+    // Factory 実装側は具象型にキャストして使用する (例: config as BuiltinAvatarProviderConfig)
     public interface IAvatarProviderFactory
     {
-        IAvatarProvider Create(ScriptableObject config); // 引数型は design フェーズで確定
+        IAvatarProvider Create(ProviderConfigBase config);
     }
 
     public interface IMoCapSourceFactory
     {
-        IMoCapSource Create(ScriptableObject config); // 引数型は design フェーズで確定
+        IMoCapSource Create(MoCapSourceConfigBase config);
     }
 }
 ```
@@ -179,32 +197,106 @@ namespace RealtimeAvatarController.Core
 
 ---
 
+## 1.5 Config 基底型階層
+
+> **記入者**: `slot-core` エージェント (dig ラウンド 2 確定)
+
+各 Descriptor が参照する Config オブジェクトは ScriptableObject を基底とした型階層に従う。これにより、Inspector でのドラッグ&ドロップによる型安全な参照と、将来の具象 Config 追加を型システムで担保する。
+
+### 基底クラス一覧 (C# 疑似コード)
+
+```csharp
+namespace RealtimeAvatarController.Core
+{
+    /// <summary>
+    /// IAvatarProvider 用 Config の抽象基底クラス。
+    /// 具象 Config (例: BuiltinAvatarProviderConfig) はこのクラスを継承して定義する。
+    /// AvatarProviderDescriptor.Config フィールドの型として使用する。
+    /// </summary>
+    public abstract class ProviderConfigBase : ScriptableObject { }
+
+    /// <summary>
+    /// IMoCapSource 用 Config の抽象基底クラス。
+    /// 具象 Config (例: VMCMoCapSourceConfig) はこのクラスを継承して定義する。
+    /// MoCapSourceDescriptor.Config フィールドの型として使用する。
+    /// </summary>
+    public abstract class MoCapSourceConfigBase : ScriptableObject { }
+
+    /// <summary>
+    /// IFacialController 用 Config の抽象基底クラス。
+    /// 将来の具象 Config はこのクラスを継承する。
+    /// FacialControllerDescriptor.Config フィールドの型として使用する。
+    /// </summary>
+    public abstract class FacialControllerConfigBase : ScriptableObject { }
+
+    /// <summary>
+    /// ILipSyncSource 用 Config の抽象基底クラス。
+    /// 将来の具象 Config はこのクラスを継承する。
+    /// LipSyncSourceDescriptor.Config フィールドの型として使用する。
+    /// </summary>
+    public abstract class LipSyncSourceConfigBase : ScriptableObject { }
+}
+```
+
+### 具象 Config の定義責務
+
+| 基底クラス | 定義責務 Spec | 具象例 |
+|-----------|-------------|--------|
+| `ProviderConfigBase` | `slot-core` (基底定義) / `avatar-provider-builtin` (具象定義) | `BuiltinAvatarProviderConfig` |
+| `MoCapSourceConfigBase` | `slot-core` (基底定義) / `mocap-vmc` (具象定義) | `VMCMoCapSourceConfig` |
+| `FacialControllerConfigBase` | `slot-core` (基底定義) / 将来担当 Spec (具象定義) | (初期段階では具象なし) |
+| `LipSyncSourceConfigBase` | `slot-core` (基底定義) / 将来担当 Spec (具象定義) | (初期段階では具象なし) |
+
+### Factory でのキャスト方法
+
+```csharp
+// 例: BuiltinAvatarProviderFactory での使用
+public class BuiltinAvatarProviderFactory : IAvatarProviderFactory
+{
+    public IAvatarProvider Create(ProviderConfigBase config)
+    {
+        var builtinConfig = config as BuiltinAvatarProviderConfig;
+        if (builtinConfig == null)
+            throw new ArgumentException($"Expected BuiltinAvatarProviderConfig, got {config?.GetType().Name}");
+        return new BuiltinAvatarProvider(builtinConfig);
+    }
+}
+```
+
+---
+
 ## 2. MoCap ソース抽象
 
 ### 2.1 `IMoCapSource` シグネチャ
 
 > **注意**: 具体的な引数型・戻り値型はすべて design フェーズで確定する。ここでは骨格・契約のみ定義する。
 
-**設計方針の変更 (dig ラウンド 1 反映)**:
+**設計方針 (dig ラウンド 1・2 反映)**:
 - Pull 型 (`FetchLatestMotion()`) を**廃止**し、Push 型 (`IObservable<MotionFrame>`) を採用する
 - 受信全フレームを逃さず低レイテンシで処理するため UniRx `Subject` ベースのストリーミングを採用する
-- `UniRx` は `RealtimeAvatarController.Core` アセンブリの依存として追加する
+- **採用ライブラリ: UniRx (`com.neuecc.unirx`) ― R3 は採用しない**
+- `UniRx` は `RealtimeAvatarController.Core` アセンブリの依存として追加する (asmdef の references に `UniRx` を記載)
 - 1 つの `IMoCapSource` インスタンスを複数 Slot で参照共有できる (ライフサイクルは `MoCapSourceRegistry` が管理する)
+
+> **UniRx 採用理由 (dig ラウンド 2 確定)**: UniRx (`com.neuecc.unirx`) を採用する。R3 は採用しない。UniRx の `IObservable<T>` は `System.IObservable<T>` を実装しているため、契約の型シグネチャは `System.IObservable<MotionFrame>` のままで変更不要である。NuGet 依存を持たないため UPM 配布での scoped registry が OpenUPM 1 個のみで済み、配布手続きが簡素化される。
 
 ```csharp
 // 骨格 (C# 疑似コード / 型名は仮)
-// UniRx (UniRx.IObservable<T>) を依存として使用
+// using UniRx; を追加して ObserveOnMainThread() 等の拡張メソッドを利用する
+// IObservable<MotionFrame> は System.IObservable<T> であり、UniRx の Subject<T> はこれを実装する
 public interface IMoCapSource : IDisposable
 {
     // ソース種別識別子 (例: "VMC", "Custom" 等)
     string SourceType { get; }
 
     // 初期化: 通信パラメータ (ポート番号等) を受け取る
-    // 引数型は design フェーズで確定
-    void Initialize(/* MoCapSourceConfig config */);
+    // 引数型は design フェーズで確定 (MoCapSourceConfigBase 派生型を想定)
+    void Initialize(/* MoCapSourceConfigBase config */);
 
-    // Push 型モーションストリーム (UniRx IObservable)
-    // 受信スレッドが Subject.OnNext() を呼び出す; 購読側は ObserveOnMainThread() で Unity メインスレッドに同期する
+    // Push 型モーションストリーム
+    // 型: System.IObservable<MotionFrame> (UniRx Subject<T> で実装)
+    // 受信スレッドが Subject.OnNext() を呼び出す
+    // 購読側は UniRx の ObserveOnMainThread() 拡張メソッドで Unity メインスレッドに同期する
     // 戻り値の MotionFrame は motion-pipeline が定義するモーションデータ中立表現 (2.2 章) に準拠
     IObservable<MotionFrame> MotionStream { get; }
 
@@ -215,7 +307,7 @@ public interface IMoCapSource : IDisposable
 
 **スレッド安全性の要求**:
 - `MotionStream` への `OnNext()` 呼び出しは受信スレッドから行われる
-- 購読側 (Slot / Pipeline) は `.ObserveOnMainThread()` を使用して Unity メインスレッドで処理すること
+- 購読側 (Slot / Pipeline) は UniRx の `.ObserveOnMainThread()` 拡張メソッドを使用して Unity メインスレッドで処理すること (`using UniRx;` が必要)
 - `Initialize()` / `Shutdown()` はメインスレッドからの呼び出しを前提とする
 - `Subject<MotionFrame>` への `OnNext()` は UniRx の既定ではスレッドセーフではないため、具象実装は `Subject` のスレッドセーフラッパー (`Subject.Synchronize()` 等) または `SerialDisposable` + `lock` を使用すること (詳細は design フェーズで確定)
 
@@ -428,6 +520,12 @@ public interface ILipSyncSource : IDisposable
 - `Samples.UI` → 機能部アセンブリ各種 (一方向のみ)
 - 機能部アセンブリは `Samples.UI` を参照しない
 - UI フレームワーク (UGUI / UIToolkit 等) への依存は `Samples.UI` にのみ許容する
+
+**外部ライブラリ依存 (UniRx)**:
+- `RealtimeAvatarController.Core` は UniRx (`com.neuecc.unirx`) の asmdef (`UniRx`) を `references` に追加し、`IObservable<T>` 拡張メソッド・`Subject<T>` 等を直接利用する
+- `RealtimeAvatarController.Motion`・`RealtimeAvatarController.MoCap.VMC`・`RealtimeAvatarController.Avatar.Builtin` は UniRx の asmdef を直接 `references` に持たず、`RealtimeAvatarController.Core` 経由で UniRx の型を間接利用する (二重依存禁止)
+- ただし各アセンブリが UniRx の拡張メソッド (`ObserveOnMainThread()` 等) を直接呼び出す技術的必要が生じた場合は、design フェーズで要否を個別判断し本章に追記する
+- `RealtimeAvatarController.Samples.UI` も同様に UniRx への直接依存は持たず、機能部 API 経由で利用する
 
 ### 6.2 名前空間規約
 
