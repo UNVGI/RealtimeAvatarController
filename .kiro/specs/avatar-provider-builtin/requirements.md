@@ -2,24 +2,33 @@
 
 ## Introduction
 
-本ドキュメントは `avatar-provider-builtin` Spec の要件を定義する。本 Spec は `slot-core` が定義した `IAvatarProvider` 抽象インターフェースのビルトイン具象実装を提供し、Prefab として配置されたアバターを Slot へ供給する責務を担う。Addressable Asset System への将来的な拡張を阻害しない抽象遵守を設計上の重要な制約とする。
+本ドキュメントは `avatar-provider-builtin` Spec の要件を定義する。本 Spec は `slot-core` が定義した `IAvatarProvider` 抽象インターフェースのビルトイン具象実装を提供し、Prefab として配置されたアバターを Slot へ供給する責務を担う。
+
+Wave A で確定した設計方針に従い、以下の原則を採用する:
+
+- **Descriptor / Registry / Factory モデル**: `SlotSettings.avatarProviderDescriptor` (`AvatarProviderDescriptor`) に基づいて `IProviderRegistry` が `BuiltinAvatarProviderFactory` を解決し、`BuiltinAvatarProvider` を生成する
+- **typeId = `"Builtin"`**: ビルトイン Provider の識別子は `"Builtin"` で固定
+- **参照共有は採用しない**: `IMoCapSource` と異なり、`IAvatarProvider` は 1 Slot に対して 1 インスタンスを割り当てる原則 (SlotManager が所有・破棄を管理)
 
 ## Boundary Context
 
 - **In scope**:
   - `IAvatarProvider` の具象実装 (`BuiltinAvatarProvider`)
-  - Prefab 形式によるアバター指定と Scene 上へのインスタンス化
+  - `BuiltinAvatarProviderFactory` の実装 (`IAvatarProviderFactory` を実装し、Descriptor から `BuiltinAvatarProvider` インスタンスを生成する責務)
+  - `IProviderRegistry` への `typeId="Builtin"` の Factory 登録 (起動時)
+  - Prefab 形式によるアバター指定 (`AvatarProviderDescriptor.Config` に `BuiltinAvatarProviderConfig` を格納)
+  - Scene 上へのインスタンス化
   - アバターのライフサイクル管理 (生成・破棄)
-  - Slot との紐付け (SlotSettings 経由の Provider 参照)
   - `RealtimeAvatarController.Avatar.Builtin` アセンブリの定義
 - **Out of scope**:
-  - `IAvatarProvider` 抽象インターフェース自体の定義 (`slot-core` Spec が担当)
+  - `IAvatarProvider` / `IProviderRegistry` / `IAvatarProviderFactory` / `AvatarProviderDescriptor` の抽象定義 (`slot-core` Spec が担当)
   - Addressable Provider の具象実装 (初期段階では実装しない)
   - アバターへのモーション適用 (`motion-pipeline` Spec が担当)
   - 表情制御・リップシンクの具象実装 (初期段階では対象外)
   - UI / サンプルシーン (`ui-sample` Spec が担当)
+  - `IMoCapSource` で採用している参照共有モデルの `IAvatarProvider` への適用
 - **Adjacent expectations**:
-  - `slot-core` が `IAvatarProvider` インターフェースおよび `SlotSettings` を提供している
+  - `slot-core` が `IAvatarProvider`・`IProviderRegistry`・`IAvatarProviderFactory`・`AvatarProviderDescriptor`・`SlotSettings` を提供している
   - `project-foundation` が Unity プロジェクトとアセンブリ定義の雛形を提供している
   - 将来 `avatar-provider-addressable` Spec が `IAvatarProvider` を実装する際、本 Spec の実装を変更する必要がない
 
@@ -27,30 +36,32 @@
 
 ## Requirements
 
-### Requirement 1: BuiltinAvatarProvider の IAvatarProvider 実装
+### Requirement 1: BuiltinAvatarProvider の IAvatarProvider 実装および Registry 登録
 
-**Objective:** As a ツール統合者, I want `IAvatarProvider` の具象実装としてビルトインアバター供給クラスが存在すること, so that Slot にアバターを供給するための具体的な手段が提供される。
+**Objective:** As a ツール統合者, I want `IAvatarProvider` の具象実装としてビルトインアバター供給クラスが存在し、`IProviderRegistry` に `typeId="Builtin"` で登録されること, so that Slot にアバターを供給するための具体的な手段が Registry 経由で利用できる。
 
 #### Acceptance Criteria
 
-1. The BuiltinAvatarProvider shall `IAvatarProvider` インターフェースを完全に実装し、コンパイルエラーなく `IAvatarProvider` 型として参照できる。
+1. The BuiltinAvatarProvider shall `IAvatarProvider` インターフェース (contracts.md 3 章骨格) を完全に実装し、コンパイルエラーなく `IAvatarProvider` 型として参照できる。
 2. The BuiltinAvatarProvider shall `ProviderType` プロパティに `"Builtin"` を返す。
 3. The BuiltinAvatarProvider shall `RealtimeAvatarController.Avatar.Builtin` 名前空間に属する。
 4. The BuiltinAvatarProvider shall `RealtimeAvatarController.Avatar.Builtin` アセンブリ定義 (asmdef) 内に配置され、`RealtimeAvatarController.Core` アセンブリへの参照を持つ。
-5. When 将来の Addressable Provider が `IAvatarProvider` を実装する場合, the BuiltinAvatarProvider shall BuiltinAvatarProvider 自体を変更せずに並列利用できる構造を持つ。
+5. When アプリケーションが起動した場合, `BuiltinAvatarProviderFactory` shall `IProviderRegistry.Register("Builtin", factory)` を呼び出して `typeId="Builtin"` の Factory を登録する。
+6. When 将来の Addressable Provider が `IAvatarProvider` を実装する場合, the BuiltinAvatarProvider shall BuiltinAvatarProvider 自体を変更せずに並列利用できる構造を持つ。
 
 ---
 
-### Requirement 2: Prefab によるアバター指定
+### Requirement 2: Prefab によるアバター指定 (BuiltinAvatarProviderConfig)
 
 **Objective:** As a コンテンツ制作者, I want Unity プロジェクト内に配置した Prefab をアバターとして指定できること, so that プロジェクトに含まれるあらゆるアバター Prefab を Slot に割り当てられる。
 
 #### Acceptance Criteria
 
-1. The BuiltinAvatarProvider shall アバター Prefab を `GameObject` 参照フィールドとして保持し、設定できる。
-2. The BuiltinAvatarProvider shall Unity エディタ上で Prefab 参照を設定可能なシリアライズフィールドを持つ。
-3. When Prefab 参照が設定されていない (null) 状態で `RequestAvatar()` が呼び出された場合, the BuiltinAvatarProvider shall 例外またはエラーを返し、null の GameObject を供給しない。
-4. The BuiltinAvatarProvider shall プロジェクト内の任意の Prefab を受け付け、特定のアバター形式 (Humanoid/Generic) に限定しない。
+1. `AvatarProviderDescriptor.Config` として格納される具象設定型 `BuiltinAvatarProviderConfig` shall アバター Prefab への参照を保持するフィールドを持つ (ScriptableObject サブクラスまたはシリアライズ可能な POCO; 具体的なフィールド定義は design フェーズで確定)。
+2. `BuiltinAvatarProviderConfig` shall Unity エディタ上でシリアライズ可能な形式で定義される (`[Serializable]` 属性または `ScriptableObject` 継承)。
+3. `BuiltinAvatarProviderFactory` shall `AvatarProviderDescriptor.Config` を `BuiltinAvatarProviderConfig` にキャストして `BuiltinAvatarProvider` を生成し、Descriptor が `BuiltinAvatarProviderConfig` 以外の Config を持つ場合は例外またはエラーを返す。
+4. When Prefab 参照が設定されていない (null) 状態で `RequestAvatar()` が呼び出された場合, the BuiltinAvatarProvider shall 例外またはエラーを返し、null の `GameObject` を供給しない。
+5. The BuiltinAvatarProvider shall プロジェクト内の任意の Prefab を受け付け、特定のアバター形式 (Humanoid / Generic) に限定しない。
 
 ---
 
@@ -67,9 +78,9 @@
 
 ---
 
-### Requirement 4: アバターのライフサイクル管理
+### Requirement 4: アバターのライフサイクル管理 (1 Slot 1 インスタンス原則)
 
-**Objective:** As a ランタイム統合者, I want アバターの生成から破棄までのライフサイクルが管理されること, so that 不要になったアバターのリソースが確実に解放され、メモリリークが防止される。
+**Objective:** As a ランタイム統合者, I want アバターの生成から破棄までのライフサイクルが SlotManager によって管理されること, so that 不要になったアバターのリソースが確実に解放され、メモリリークが防止される。
 
 #### Acceptance Criteria
 
@@ -78,19 +89,20 @@
 3. When `Dispose()` が呼び出された場合, the BuiltinAvatarProvider shall 追跡中の全 `GameObject` を破棄し、内部リソースをすべて解放する。
 4. When `ReleaseAvatar()` に BuiltinAvatarProvider が供給していない `GameObject` が渡された場合, the BuiltinAvatarProvider shall エラーをログに記録し、その `GameObject` を破棄しない。
 5. When `Dispose()` 後に `RequestAvatar()` が呼び出された場合, the BuiltinAvatarProvider shall `ObjectDisposedException` または相当するエラーを発生させる。
+6. The BuiltinAvatarProvider shall **1 Slot に対して 1 インスタンスを供給する原則**に従い、`IMoCapSource` で採用している参照共有モデル (複数 Slot が同一インスタンスを参照・`MoCapSourceRegistry` による参照カウント管理) を採用しない。アバター Provider のライフサイクルは `SlotManager` が直接管理し、Slot の破棄と同時にアバター `GameObject` を破棄する。
 
 ---
 
-### Requirement 5: Slot との紐付け
+### Requirement 5: Slot との紐付け (IProviderRegistry 経由)
 
-**Objective:** As a ランタイム統合者, I want BuiltinAvatarProvider が SlotSettings を通じて Slot に紐付けられること, so that Slot 単位でアバターを供給・解放できる。
+**Objective:** As a ランタイム統合者, I want `SlotSettings.avatarProviderDescriptor` を用いて `IProviderRegistry` 経由で `BuiltinAvatarProvider` を取得し、Slot に紐付けられること, so that Slot 単位でアバターを供給・解放できる。
 
 #### Acceptance Criteria
 
-1. The BuiltinAvatarProvider shall `SlotSettings` の `avatarProvider` フィールドに `IAvatarProvider` 参照として設定可能である。
-2. When SlotManager が Slot をアクティブ化する場合, the BuiltinAvatarProvider shall SlotManager から `RequestAvatar()` を呼び出された際に対象 Slot 向けのアバター `GameObject` を返す。
-3. When SlotManager が Slot を破棄する場合, the BuiltinAvatarProvider shall SlotManager から `ReleaseAvatar()` を呼び出された際に対象アバターを確実に解放する。
-4. The BuiltinAvatarProvider shall 複数の Slot から同一の Provider インスタンスを参照している場合でも、各 Slot に対して独立したアバターインスタンスを供給できる。
+1. When `SlotManager` が Slot をアクティブ化する場合, `SlotManager` shall `IProviderRegistry.Resolve(slotSettings.avatarProviderDescriptor)` を呼び出して `IAvatarProvider` インスタンスを取得し、そのインスタンスの `RequestAvatar()` を呼び出してアバター `GameObject` を取得する。
+2. The BuiltinAvatarProvider shall `IProviderRegistry.Resolve()` 呼び出し時に `BuiltinAvatarProviderFactory.Create()` を通じてインスタンス化される。
+3. When SlotManager が Slot を破棄する場合, the BuiltinAvatarProvider shall `SlotManager` から `ReleaseAvatar()` および `Dispose()` を呼び出された際に対象アバターを確実に解放する。
+4. The BuiltinAvatarProvider shall 複数の Slot が異なる `BuiltinAvatarProvider` インスタンスを保有する構造において、各 Slot に対して独立したアバターインスタンスを供給できる。
 
 ---
 
@@ -106,13 +118,28 @@
 
 ---
 
-### Requirement 7: アセンブリ・名前空間境界
+### Requirement 7: アセンブリ・名前空間境界および Factory 登録方式
 
-**Objective:** As a パッケージ利用者, I want BuiltinAvatarProvider が独立したアセンブリに配置されること, so that ビルトイン Provider が不要なプロジェクトでは参照を外せる。
+**Objective:** As a パッケージ利用者, I want BuiltinAvatarProvider が独立したアセンブリに配置され、IProviderRegistry への Factory 登録が明示的に管理されること, so that ビルトイン Provider が不要なプロジェクトでは参照を外せる。
 
 #### Acceptance Criteria
 
 1. The BuiltinAvatarProvider shall `RealtimeAvatarController.Avatar.Builtin` アセンブリ定義 (`RealtimeAvatarController.Avatar.Builtin.asmdef`) に配置される。
 2. The asmdef shall `RealtimeAvatarController.Core` アセンブリのみを参照し、`RealtimeAvatarController.Motion` など他の機能アセンブリには依存しない。
-3. The BuiltinAvatarProvider shall `RealtimeAvatarController.Avatar.Builtin` 名前空間に属する。
+3. The BuiltinAvatarProvider および `BuiltinAvatarProviderFactory` は `RealtimeAvatarController.Avatar.Builtin` 名前空間に属する。
 4. When プロジェクトが `RealtimeAvatarController.Avatar.Builtin` アセンブリを参照しない場合, the BuiltinAvatarProvider shall 他のアセンブリのコンパイルに影響を与えない。
+5. `BuiltinAvatarProviderFactory` の `IProviderRegistry` への登録方式として、属性スキャンによる自動登録 (例: `[RegisterAvatarProvider("Builtin")]` カスタム属性を持つ型をアセンブリスキャンで自動登録) または手動登録 (起動エントリポイントで `IProviderRegistry.Register()` を直接呼び出す) のいずれかを採用できる。具体的な方式は design フェーズで確定する。
+
+---
+
+### Requirement 8: BuiltinAvatarProviderFactory の責務
+
+**Objective:** As a システム設計者, I want `IAvatarProviderFactory` を実装する `BuiltinAvatarProviderFactory` が存在すること, so that `IProviderRegistry` が Descriptor から `BuiltinAvatarProvider` インスタンスを生成できる。
+
+#### Acceptance Criteria
+
+1. `BuiltinAvatarProviderFactory` shall `IAvatarProviderFactory` インターフェース (contracts.md 1.4 章骨格) を完全に実装する。
+2. When `BuiltinAvatarProviderFactory.Create(config)` が呼び出された場合, `BuiltinAvatarProviderFactory` shall `config` を `BuiltinAvatarProviderConfig` として解釈し、新規 `BuiltinAvatarProvider` インスタンスを生成して返す。
+3. When `Create()` に `BuiltinAvatarProviderConfig` 以外の config 型が渡された場合, `BuiltinAvatarProviderFactory` shall 例外またはエラー値を返し、不正なインスタンスを生成しない。
+4. `BuiltinAvatarProviderFactory` shall `RealtimeAvatarController.Avatar.Builtin` 名前空間に属し、同アセンブリに配置される。
+5. `BuiltinAvatarProviderFactory` shall ステートレスに設計し、複数回の `Create()` 呼び出しが互いに干渉しない。

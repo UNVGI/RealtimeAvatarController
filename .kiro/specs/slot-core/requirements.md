@@ -27,17 +27,23 @@
 
 ## Requirements
 
-### Requirement 1: Slot データモデル
+### Requirement 1: Slot データモデル (Descriptor ベース)
 
 **Objective:** As a ツール統合者, I want Slot が必要な設定項目を一箇所で保持できること, so that アバター・モーション・表情制御の設定を統一的に管理できる。
 
+#### 背景 (dig ラウンド 1 反映)
+
+`IAvatarProvider` / `IMoCapSource` 等のインターフェース型フィールドを Unity の標準シリアライズに直接配置することは不可能である。また、利用可能な具象型はランタイムのプロジェクト構成に依存して動的に決まる。これらの問題を解決するため、`SlotSettings` は「型 ID 文字列 + 型付き設定オブジェクト」からなる **Descriptor パターン**を採用する。
+
 #### Acceptance Criteria
 
-1. The SlotSettings shall アバター参照 (`IAvatarProvider` 型)・MoCap ソース参照 (`IMoCapSource` 型)・Facial Controller 参照 (`IFacialController` 型、null 許容)・LipSync Source 参照 (`ILipSyncSource` 型、null 許容)・Weight 値 (float 0.0〜1.0)・Slot 識別子 (string)・表示名 (string) の各フィールドを保持する。
-2. The SlotSettings shall Unity の ScriptableObject として定義され、エディタおよびランタイムでシリアライズ・デシリアライズ可能である。
-3. When Weight 値に 0.0〜1.0 の範囲外の値が設定された場合, the SlotSettings shall 値を 0.0〜1.0 にクランプして保持する。
-4. The SlotSettings shall Slot 識別子フィールドを一意に識別するための主キーとして使用できる。
-5. When シリアライズ形式として ScriptableObject を採用する場合, the SlotSettings shall JSON へのエクスポートおよびインポートをサポートできる拡張余地を持つ。
+1. The SlotSettings shall 以下のフィールドを保持する: `slotId` (string、必須)、`displayName` (string、必須)、`weight` (float 0.0〜1.0、必須)、`avatarProviderDescriptor` (AvatarProviderDescriptor、必須)、`moCapSourceDescriptor` (MoCapSourceDescriptor、必須)、`facialControllerDescriptor` (FacialControllerDescriptor、null 許容)、`lipSyncSourceDescriptor` (LipSyncSourceDescriptor、null 許容)。
+2. The AvatarProviderDescriptor および MoCapSourceDescriptor shall `providerTypeId` / `sourceTypeId` (string) と型付き設定オブジェクト (config) を保持する。`typeId` は Registry に登録された具象型を識別するキーとして使用される。
+3. The SlotSettings shall `[Serializable]` 属性を持つ POCO として定義され、ScriptableObject 継承なしでも Unity シリアライズ・ユニットテストで使用できる。
+4. When SlotSettings を ScriptableObject として保持する場合, the SlotSettings shall Unity エディタでアセット (.asset) として保存・管理できる (ScriptableObject 継承は任意)。
+5. When Weight 値に 0.0〜1.0 の範囲外の値が設定された場合, the SlotSettings shall 値を 0.0〜1.0 にクランプして保持する。
+6. The SlotSettings shall `slotId` フィールドを一意に識別するための主キーとして使用できる。
+7. The SlotSettings shall インターフェース型フィールド (`IAvatarProvider` 等) を直接保持しない。具象型への参照解決は Registry/Factory が担い、`SlotSettings` 自体は具象型を知らない設計とする。
 
 ---
 
@@ -57,32 +63,43 @@
 
 ---
 
-### Requirement 3: Slot ライフサイクル
+### Requirement 3: Slot ライフサイクルとリソース所有権
 
 **Objective:** As a ランタイム統合者, I want Slot の生成・破棄が明確に管理されること, so that リソースリークを防ぎ、予測可能なリソース所有関係を維持できる。
 
+#### 背景 (dig ラウンド 1 反映)
+
+`IMoCapSource` のライフサイクル所有を `SlotManager` から `MoCapSourceRegistry` に移す。複数 Slot が同一 `IMoCapSource` インスタンスを参照共有するため、Slot の破棄は `IMoCapSource` の即時解放を意味しない。
+
 #### Acceptance Criteria
 
-1. When Slot が生成された場合, the SlotManager shall 関連する `IAvatarProvider`・`IMoCapSource` の初期化をトリガーできる。
-2. When Slot が破棄された場合, the SlotManager shall 関連する `IAvatarProvider`・`IMoCapSource` の解放処理をトリガーし、リソースを確実に解放する。
+1. When Slot が生成された場合, the SlotManager shall 関連する `IAvatarProvider` の初期化をトリガーできる。`IMoCapSource` の初期化は `MoCapSourceRegistry.Resolve()` 経由で行われる。
+2. When Slot が破棄された場合, the SlotManager shall 関連する `IAvatarProvider` の解放処理をトリガーし、リソースを確実に解放する。`IMoCapSource` については `MoCapSourceRegistry.Release()` を呼び出すに留め、直接 `Dispose()` を呼び出してはならない。
 3. The Slot shall 生成 (Created)・アクティブ (Active)・非アクティブ (Inactive)・破棄済み (Disposed) の各ライフサイクル状態を持つ。
 4. When Slot の状態が変化した場合, the SlotManager shall 状態変化イベントを購読者に通知する。
 5. If Slot 破棄中に例外が発生した場合, the SlotManager shall 例外をキャッチしてログに記録し、残余リソースの解放を継続する。
-6. The SlotSettings shall ScriptableObject として Unity エディタ上でアセットとして保存・管理できる。
+6. The IMoCapSource のライフサイクル所有は MoCapSourceRegistry が担い、SlotManager は所有権を持たない。参照カウントが 0 になったときのみ MoCapSourceRegistry が `Dispose()` を呼び出す。
 
 ---
 
-### Requirement 4: `IMoCapSource` 抽象インターフェース定義
+### Requirement 4: `IMoCapSource` 抽象インターフェース定義 (Push 型 / UniRx / 参照共有)
 
-**Objective:** As a Spec 設計者, I want `IMoCapSource` の骨格が定義されること, so that mocap-vmc Spec が具象実装を作成できる。
+**Objective:** As a Spec 設計者, I want `IMoCapSource` の骨格が定義されること, so that mocap-vmc Spec が具象実装を作成でき、受信全フレームを低レイテンシで処理できる。
+
+#### 背景 (dig ラウンド 1 反映)
+
+Pull 型 (`FetchLatestMotion()`) はポーリング間隔によるフレーム欠落が発生しうる。受信全フレームを逃さず低レイテンシで処理するため、**Push 型 (UniRx `IObservable<MotionFrame>`)** を採用する。また、同一 MoCap ソースを複数 Slot で共有する構成を許容するため、インスタンスのライフサイクル所有を `MoCapSourceRegistry` に移す。
 
 #### Acceptance Criteria
 
-1. The IMoCapSource shall 初期化メソッド・破棄メソッドの骨格を持つ。
-2. The IMoCapSource shall モーションデータを取得する API の骨格を持つ (pull 型・push 型・イベント型の選択は design フェーズで確定する)。
-3. The IMoCapSource shall ソース種別を識別するメタデータプロパティの骨格を持つ。
-4. The IMoCapSource shall 通信パラメータ (ポート番号等) を Slot 単位で設定できる構造の骨格を持つ。
-5. The IMoCapSource shall スレッド安全性の要求 (メインスレッド外からの呼び出し可否) を設計上明示できる骨格を持つ。
+1. The IMoCapSource shall `IObservable<MotionFrame> MotionStream { get; }` プロパティを持つ Push 型インターフェースとして定義される。`FetchLatestMotion()` は定義しない。
+2. The IMoCapSource shall 初期化メソッド (`Initialize`) および破棄メソッド (`Shutdown` または `IDisposable.Dispose()`) の骨格を持つ。
+3. The IMoCapSource shall ソース種別を識別するメタデータプロパティ (`SourceType: string`) の骨格を持つ。
+4. The IMoCapSource shall 通信パラメータ (ポート番号等) を `Initialize()` の引数として受け取る構造の骨格を持つ (引数型は design フェーズで確定)。
+5. The MotionStream shall 受信スレッドから `Subject.OnNext()` で配信され、購読側が `.ObserveOnMainThread()` を使用することで Unity メインスレッドで処理できる設計とする。
+6. The IMoCapSource の MotionStream shall `Publish().RefCount()` 等のマルチキャスト演算子により、複数 Slot からの同時購読を許容する設計とする。
+7. The IMoCapSource のインスタンスライフサイクルは SlotManager ではなく MoCapSourceRegistry が管理する。Slot 側から直接 `Dispose()` を呼び出してはならない。
+8. The 依存ライブラリとして UniRx を `RealtimeAvatarController.Core` アセンブリの依存に追加する (asmdef の references に `UniRx` を記載する)。
 
 ---
 
@@ -123,12 +140,49 @@
 
 ---
 
-### Requirement 8: 設定シリアライズ可能性
+### Requirement 8: 設定シリアライズ可能性 (POCO / SO / JSON 許容)
 
 **Objective:** As a ユーザー, I want Slot 設定を保存・復元できること, so that アバター構成をプロジェクト間で再利用できる。
 
+#### 背景 (dig ラウンド 1 反映)
+
+`SlotSettings` の保持形式として ScriptableObject のみを前提とする設計を撤回し、POCO / SO / JSON の 3 形式をすべて許容する設計方針を採用する。Descriptor パターンの採用により、インターフェース型参照を直接シリアライズする問題は解消される。
+
 #### Acceptance Criteria
 
-1. The SlotSettings shall Unity の標準シリアライズ機構 (ScriptableObject) によりディスクへの保存・読み込みが可能である。
-2. The SlotRegistry shall 登録済み Slot 一覧を外部から列挙できる API を提供し、シリアライズツールからアクセス可能にする。
-3. When SlotSettings をシリアライズする際に `IMoCapSource` 等のインターフェース参照が含まれる場合, the SlotSettings shall 参照をシリアライズ可能な形式 (例: アセット参照または型名) で保持できる。
+1. The SlotSettings shall `[Serializable]` 属性を持つ POCO として定義され、ScriptableObject を継承しない形でも Unity シリアライズおよびユニットテストで使用できる。
+2. When SlotSettings を ScriptableObject として保持する場合, the SlotSettings shall Unity エディタでアセット (.asset) として保存・読み込みが可能である (ScriptableObject 継承は任意の選択肢)。
+3. The SlotSettings shall JSON へのシリアライズおよびデシリアライズをサポートできる設計とする (`JsonUtility` または Newtonsoft.Json による実装余地を確保する)。
+4. The Descriptor フィールド (`AvatarProviderDescriptor` / `MoCapSourceDescriptor` 等) は `[Serializable]` POCO として定義され、インターフェース型フィールドを直接保持しない。これにより Unity 標準シリアライズが正常動作する。
+5. The SlotRegistry shall 登録済み Slot 一覧を外部から列挙できる API を提供し、シリアライズツールからアクセス可能にする。
+
+---
+
+### Requirement 9: ProviderRegistry / SourceRegistry の動的登録と候補列挙
+
+**Objective:** As a ランタイム統合者, I want 利用可能な IAvatarProvider / IMoCapSource の具象型を起動時に動的に登録し、エディタ UI から候補を列挙できること, so that プロジェクト構成に依存した具象型選択をランタイムで解決できる。
+
+#### Acceptance Criteria
+
+1. The IProviderRegistry shall `typeId` (string) をキーとして `IAvatarProviderFactory` を登録できる API (`Register`) を持つ。
+2. The IProviderRegistry shall `AvatarProviderDescriptor` を受け取り、対応する `IAvatarProvider` インスタンスを生成して返す API (`Resolve`) を持つ。未登録 `typeId` の場合は明示的なエラー (例外または Result 型) を返す。
+3. The IProviderRegistry shall 登録済みの `providerTypeId` 一覧を返す API (`GetRegisteredTypeIds`) を持ち、エディタ UI が利用可能な候補を列挙できる。
+4. The IMoCapSourceRegistry shall `typeId` (string) をキーとして `IMoCapSourceFactory` を登録できる API (`Register`) を持つ。
+5. The IMoCapSourceRegistry shall `MoCapSourceDescriptor` を受け取り、対応する `IMoCapSource` インスタンスを返す API (`Resolve`) を持つ。同一設定のインスタンスが既に存在する場合は参照を共有する。
+6. The IMoCapSourceRegistry shall `IMoCapSource` の参照解放通知を受け取る API (`Release`) を持ち、参照数が 0 になった時点でインスタンスを `Dispose()` する (参照カウント方式またはその等価物)。
+7. The IMoCapSourceRegistry shall 登録済みの `sourceTypeId` 一覧を返す API (`GetRegisteredTypeIds`) を持ち、エディタ UI が利用可能な候補を列挙できる。
+8. The エントリ登録方式 (属性スキャン / DI / 手動登録) は design フェーズで確定する。初期実装では少なくとも手動登録方式が動作すること。
+
+---
+
+### Requirement 10: MoCap ソース参照共有ライフサイクル
+
+**Objective:** As a ランタイム統合者, I want 複数の Slot が同一 IMoCapSource インスタンスを共有参照できること, so that 同一の MoCap 入力を複数アバターに適用できる。
+
+#### Acceptance Criteria
+
+1. The IMoCapSourceRegistry shall 複数の Slot が同一 `IMoCapSource` インスタンスを参照共有できる設計をサポートする。同一 `MoCapSourceDescriptor` に対して複数の `Resolve()` 呼び出しが行われた場合、同一インスタンスを返す。
+2. When Slot が破棄された場合, the SlotManager shall `IMoCapSourceRegistry.Release()` を呼び出し、参照カウントをデクリメントする。`IMoCapSource.Dispose()` を直接呼び出してはならない。
+3. When MoCapSourceRegistry が持つ参照カウントが 0 になった場合, the MoCapSourceRegistry shall 対応する `IMoCapSource` インスタンスの `Dispose()` を呼び出してリソースを解放する。
+4. The MotionStream のマルチキャスト (複数購読者サポート) は `IMoCapSource` 具象実装または `MoCapSourceRegistry` のラッパーで `Publish().RefCount()` 等を使用して実現する (詳細は design フェーズで確定)。
+5. The 旧設計の「同一ポートへの複数バインド禁止」制約は撤回する。参照共有モデルにより、同一エンドポイントへの複数バインドは発生しない。

@@ -2,7 +2,12 @@
 
 ## Introduction
 
-本ドキュメントは `motion-pipeline` Spec の要件を定義する。`motion-pipeline` は Realtime Avatar Controller において MoCap ソースから受信したモーションデータを内部キャッシュに保持し、Slot に設定された Weight 値に従ってアバターへ適用するパイプラインを提供する。依存 Spec は `slot-core` であり、`slot-core` が定義する `SlotSettings` / `IMoCapSource` / `IAvatarProvider` 等の抽象インターフェースを参照する。
+本ドキュメントは `motion-pipeline` Spec の要件を定義する。`motion-pipeline` は Realtime Avatar Controller において MoCap ソースから Push 型ストリーム (`IObservable<MotionFrame>`) で受信したモーションデータを Slot 単位の内部キャッシュに保持し、Slot に設定された Weight 値に従ってアバターへ適用するパイプラインを提供する。依存 Spec は `slot-core` であり、`slot-core` が定義する `SlotSettings` / `IMoCapSource` / `IAvatarProvider` 等の抽象インターフェースを参照する。
+
+**Wave A 反映事項 (dig ラウンド 1 確定済)**:
+- `IMoCapSource` は Push 型 (UniRx `IObservable<MotionFrame>`) を採用。`FetchLatestMotion()` は廃止
+- MoCap ソースは複数 Slot 間で参照共有。`MoCapSourceRegistry` が参照カウントでライフサイクルを管理
+- `SlotSettings` は Descriptor ベース POCO (`MoCapSourceDescriptor` 等)
 
 ## Boundary Context
 
@@ -23,8 +28,10 @@
   - UI / サンプルシーン (ui-sample Spec の責務)
 - **Adjacent expectations**:
   - `slot-core` が提供する `SlotSettings` の `weight` フィールドと `IMoCapSource` インターフェースを参照する
-  - `mocap-vmc` が `IMoCapSource.FetchLatestMotion()` を通じて本 Spec が定義する中立表現を返す
+  - `mocap-vmc` が `IMoCapSource.MotionStream` (Push 型 `IObservable<MotionFrame>`) を通じて本 Spec が定義する中立表現を流す
   - 本 Spec のアセンブリは `RealtimeAvatarController.Motion` (asmdef: `RealtimeAvatarController.Motion`、配置パス: `Runtime/Motion/`)
+  - `RealtimeAvatarController.Motion` アセンブリは `RealtimeAvatarController.Core` 経由で UniRx に間接依存する (contracts.md 6 章参照)
+  - `IMoCapSource` インスタンスは複数 Slot 間で参照共有されるため、`MotionCache` は Slot ごとに独立して保持する。Slot が破棄された際の `IMoCapSource.Dispose()` 呼び出しは `MoCapSourceRegistry` (contracts.md 1.4 章) の責務であり、motion-pipeline 側は購読解除のみを行う
 
 ---
 
@@ -53,7 +60,7 @@
 1. The `MotionFrame` (抽象基底型) shall `HumanoidMotionFrame` および将来の Generic フレーム型が派生できる基底型として定義される。
 2. The `MotionFrame` shall タイムスタンプ (受信時刻相当の `double` または `long`) フィールドを持つ。
 3. The `MotionFrame` shall 骨格種別を識別できるプロパティ (`SkeletonType` 列挙型等) の骨格を持つ。
-4. `IMoCapSource.FetchLatestMotion()` の戻り値は `MotionFrame` 基底型 (または型パラメータ) として宣言し、design フェーズで最終シグネチャを確定する。
+4. `IMoCapSource.MotionStream` (`IObservable<MotionFrame>`) が流すフレーム型は `MotionFrame` 基底型 (または型パラメータ) として宣言し、design フェーズで最終シグネチャを確定する。Pull 型 (`FetchLatestMotion()`) は採用しない。
 5. The `MotionFrame` は `RealtimeAvatarController.Motion` 名前空間に属する。
 
 ---
@@ -71,17 +78,21 @@
 
 ---
 
-### Requirement 4: Slot 単位の内部キャッシュ
+### Requirement 4: Slot 単位の内部キャッシュと Push 型購読
 
 **Objective:** As a ランタイム統合者, I want MoCap データの受信と Unity アバターへの適用を分離できること, so that 受信スレッドのレイテンシがメインスレッドの描画フレームレートに影響しない。
 
 #### Acceptance Criteria
 
-1. The `MotionCache` (またはそれに相当するバッファ型) shall Slot ごとに最新の `MotionFrame` を保持する。
-2. When 受信スレッドが新しい `MotionFrame` を書き込む場合, the `MotionCache` shall メインスレッドの読み取りをブロックしないスレッドセーフな更新を保証する。
-3. The `MotionCache` shall メインスレッドから最新の `MotionFrame` を読み取る API を提供する。
-4. When `MotionCache` から読み取ったフレームが null または無効な場合, the パイプライン shall アバターへの適用をスキップし、前フレームのポーズを維持する。
-5. The `MotionCache` は `RealtimeAvatarController.Motion` 名前空間に属し、スレッドモデルの具体的な実装方式 (ダブルバッファ / lock / ロックレスキュー等) は design フェーズで確定する。
+1. The `MotionCache` (またはそれに相当するバッファ型) shall Slot ごとに独立したインスタンスを持ち、最新の `MotionFrame` を保持する。複数 Slot が同一 `IMoCapSource` を共有参照する場合でも、各 Slot の `MotionCache` は互いに独立している。
+2. The `MotionCache` shall `IMoCapSource.MotionStream` (`IObservable<MotionFrame>`) を購読することでフレームを受け取る (Push 型)。購読の開始は `MotionCache` の初期化時、または `IMoCapSource` の紐付け時に行う。
+3. When `MotionCache` が同一 `MotionStream` を複数 Slot から並列購読する場合, the パイプライン shall UniRx のマルチキャスト (`Publish().RefCount()` 等) が前提として機能することを要件段階で許容する。最終的な購読構成は design フェーズで確定する。
+4. `MotionStream` の受信スレッドから `MotionCache` へのフレーム書き込みについて、以下の 2 方式をどちらも要件段階では許容し、design フェーズで選択する:
+   - **方式 A**: 購読時に `.ObserveOnMainThread()` を適用し、フレーム受信からキャッシュ書き込みまでをメインスレッドで完結させる
+   - **方式 B**: 受信スレッドでスレッドセーフなプリミティブを使ってキャッシュへ書き込み、メインスレッドの `LateUpdate` タイミングで読み出す (ダブルバッファ / `Interlocked` 等)
+5. When Slot が破棄される場合, the `MotionCache` shall 購読の解除 (`IDisposable.Dispose()`) のみを行う。`IMoCapSource` 自体の `Dispose()` は `MoCapSourceRegistry` が参照カウントをもとに制御するため、`MotionCache` や motion-pipeline 側から `IMoCapSource.Dispose()` を直接呼び出してはならない。
+6. When `MotionCache` から読み取ったフレームが null または無効な場合, the パイプライン shall アバターへの適用をスキップし、前フレームのポーズを維持する。
+7. The `MotionCache` は `RealtimeAvatarController.Motion` 名前空間に属し、スレッドモデルの具体的な実装方式は design フェーズで確定する。
 
 ---
 
@@ -132,10 +143,10 @@
 
 #### Acceptance Criteria
 
-1. When `IMoCapSource` の参照が Slot に設定されている状態で別の `IMoCapSource` に切り替えが行われた場合, the `MotionCache` shall 切替直後のフレームで新しいソースのデータを優先的に使用する。
+1. When `IMoCapSource` の参照が Slot に設定されている状態で別の `IMoCapSource` に切り替えが行われた場合, the `MotionCache` shall 旧ソースへの購読を解除し、新しいソースの `MotionStream` を購読することで切替を完了する。切替直後のフレームで新しいソースのデータを優先的に使用する。
 2. When 切替直後に新しいソースからデータが届いていない場合, the パイプライン shall 前ソースの最終フレームまたはデフォルトポーズを維持してアバターを保護する。
 3. The パイプライン shall `IMoCapSource` の切替処理をメインスレッドから実行できる API を提供する。
-4. When MoCap ソースが切り替えられた場合, the 古い `IMoCapSource` shall `Shutdown()` および `Dispose()` が呼び出されてリソースが解放される。
+4. When MoCap ソースが切り替えられた場合, the motion-pipeline 側は旧 `IMoCapSource` への購読解除のみを行い、`IMoCapSource` の `Shutdown()` / `Dispose()` は `MoCapSourceRegistry.Release()` を呼び出した `SlotManager` の責務とする。motion-pipeline は `IMoCapSource` のライフサイクル終端を直接制御しない。
 
 ---
 
@@ -165,7 +176,7 @@
 
 ---
 
-### Requirement 11: アセンブリ / 名前空間境界
+### Requirement 11: アセンブリ / 名前空間境界と UniRx 依存
 
 **Objective:** As a アーキテクチャ担当者, I want motion-pipeline の成果物が規定のアセンブリ・名前空間に配置されること, so that 他 Spec との依存関係が明確に分離される。
 
@@ -173,6 +184,7 @@
 
 1. The motion-pipeline Spec の全クラス・インターフェースは `RealtimeAvatarController.Motion` 名前空間に属する。
 2. The asmdef ファイルは `RealtimeAvatarController.Motion` として定義され、`Runtime/Motion/` に配置される。
-3. The `RealtimeAvatarController.Motion` アセンブリは `RealtimeAvatarController.Core` アセンブリを参照し、`Samples.UI` 等の上位アセンブリを参照しない。
-4. When テストコードを配置する場合, the テストアセンブリは `RealtimeAvatarController.Motion.Tests` 名前空間を使用する。
-5. エディタ限定コードが存在する場合, `RealtimeAvatarController.Motion.Editor` 名前空間を使用する。
+3. The `RealtimeAvatarController.Motion` アセンブリは `RealtimeAvatarController.Core` アセンブリを参照し、`Samples.UI` 等の上位アセンブリを参照しない (contracts.md 6 章参照)。
+4. The `RealtimeAvatarController.Motion` アセンブリは `RealtimeAvatarController.Core` が UniRx を依存として持つことを通じて、UniRx に間接依存する。`MotionCache` が `IObservable<MotionFrame>` を購読する実装において UniRx 型 (`IObservable<T>` / `IDisposable` 等) を直接使用してよい。UniRx の直接参照 (asmdef 参照追加) が必要かどうかは design フェーズで確定する。
+5. When テストコードを配置する場合, the テストアセンブリは `RealtimeAvatarController.Motion.Tests` 名前空間を使用する。
+6. エディタ限定コードが存在する場合, `RealtimeAvatarController.Motion.Editor` 名前空間を使用する。
