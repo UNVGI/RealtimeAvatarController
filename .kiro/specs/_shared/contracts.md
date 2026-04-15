@@ -389,13 +389,15 @@ namespace RealtimeAvatarController.Core
         public static void OverrideMoCapSourceRegistry(IMoCapSourceRegistry registry)
             => s_moCapSourceRegistry = registry;
 
-        // --- 内部実装 (詳細は design フェーズで確定) ---
+        // --- 内部実装 (design フェーズ最終確定) ---
         private static IProviderRegistry s_providerRegistry;
         private static IMoCapSourceRegistry s_moCapSourceRegistry;
+        // IFacialControllerRegistry / ILipSyncSourceRegistry も同パターン (design フェーズ確定)
 
         private static T GetOrCreate<T>(ref T field) where T : class
         {
-            // デフォルト実装インスタンスを遅延生成する (詳細は design フェーズで確定)
+            // デフォルト実装インスタンスを遅延生成する (null チェック + 代入)
+            // マルチスレッド競合は起動時登録完了後は読み取り専用のため許容する
             // ...
             return field;
         }
@@ -410,7 +412,7 @@ namespace RealtimeAvatarController.Core
 | Editor / Runtime で同一インスタンス共有 | 静的フィールドで保持。Domain Reload ON なら Editor 再起動時に自動リセット |
 | Domain Reload OFF (Enter Play Mode 最適化) での二重登録 | `SubsystemRegistration` タイミングの `ResetForTest()` で自動リセット |
 | ユニットテストでの Registry 差し替え | `OverrideProviderRegistry()` / `OverrideMoCapSourceRegistry()` で任意実装を注入 |
-| 正式なインスタンス生成責務 | design フェーズで `GetOrCreate` の実装を確定する |
+| 正式なインスタンス生成責務 | 遅延初期化 (null チェック + DefaultXxxRegistry 生成) — design フェーズ確定 |
 
 ---
 
@@ -514,7 +516,7 @@ namespace RealtimeAvatarController.Core
 | VMC 受信エラー | `IMoCapSource` 具象実装が `ISlotErrorChannel` に発行 (または SlotManager 経由) |
 | Registry 競合 | `IProviderRegistry` / `IMoCapSourceRegistry` が `ISlotErrorChannel` に発行 |
 
-> **注意**: `ISlotErrorChannel` のインスタンス取得方法 (Locator 経由 / DI 等) は design フェーズで確定する。
+> **確定 (design フェーズ)**: `ISlotErrorChannel` のインスタンスは `RegistryLocator.ErrorChannel` 静的プロパティ経由で取得する。テスト時は `RegistryLocator.OverrideErrorChannel()` でモックを注入できる。
 
 ---
 
@@ -559,7 +561,7 @@ namespace RealtimeAvatarController.Core
 - `SlotSettings` の `fallbackBehavior` フィールド (1.1 章参照) で Slot ごとに個別設定する
 - **デフォルト値: `FallbackBehavior.HoldLastPose`**
 - フォールバック実行後、`SlotManager` は `ISlotErrorChannel` にエラーを通知する (1.7 章参照)
-- フォールバック状態からの回復方法 (エラーが解消した場合の挙動) は design フェーズで確定する
+- フォールバック状態からの回復方法 (エラーが解消した場合の挙動) は tasks フェーズで詳細を確定する (Wave B との合意事項)
 
 ---
 
@@ -567,35 +569,40 @@ namespace RealtimeAvatarController.Core
 
 ### 2.1 `IMoCapSource` シグネチャ
 
-> **注意**: 具体的な引数型・戻り値型はすべて design フェーズで確定する。ここでは骨格・契約のみ定義する。
+> **最終仕様確定** (slot-core design フェーズ / Wave A 先行波)。以降は合意変更のみ。
 
-**設計方針 (dig ラウンド 1・2 反映)**:
+**設計方針 (design フェーズ最終確定)**:
 - Pull 型 (`FetchLatestMotion()`) を**廃止**し、Push 型 (`IObservable<MotionFrame>`) を採用する
 - 受信全フレームを逃さず低レイテンシで処理するため UniRx `Subject` ベースのストリーミングを採用する
 - **採用ライブラリ: UniRx (`com.neuecc.unirx`) ― R3 は採用しない**
-- `UniRx` は `RealtimeAvatarController.Core` アセンブリの依存として追加する (asmdef の references に `UniRx` を記載)
+- **非同期: UniTask (`com.cysharp.unitask`) を採用する。Task は採用しない**
+- `UniRx` / `UniTask` は `RealtimeAvatarController.Core` アセンブリの依存として追加する
 - 1 つの `IMoCapSource` インスタンスを複数 Slot で参照共有できる (ライフサイクルは `MoCapSourceRegistry` が管理する)
 
-> **UniRx 採用理由 (dig ラウンド 2 確定)**: UniRx (`com.neuecc.unirx`) を採用する。R3 は採用しない。UniRx の `IObservable<T>` は `System.IObservable<T>` を実装しているため、契約の型シグネチャは `System.IObservable<MotionFrame>` のままで変更不要である。NuGet 依存を持たないため UPM 配布での scoped registry が OpenUPM 1 個のみで済み、配布手続きが簡素化される。
+> **UniRx 採用理由 (dig ラウンド 2 / design フェーズ最終確定)**: UniRx (`com.neuecc.unirx`) を採用する。R3 は採用しない。UniRx の `IObservable<T>` は `System.IObservable<T>` を実装しているため、契約の型シグネチャは `System.IObservable<MotionFrame>` のままで変更不要である。NuGet 依存を持たないため UPM 配布での scoped registry が OpenUPM 1 個のみで済み、配布手続きが簡素化される。
+
+> **UniTask 採用理由 (design フェーズ確定)**: `SlotManager.AddSlotAsync` は将来の Addressable Provider が非同期 Asset ロードを行うため非同期 API が必要。Unity `PlayerLoop` と統合された UniTask を採用することでメインスレッド復帰・キャンセル処理が簡潔に書ける。UniRx 導入時点で既に OpenUPM scoped registry は追加済みのため、新たなトレードオフは最小。
 
 ```csharp
-// 骨格 (C# 疑似コード / 型名は仮)
-// using UniRx; を追加して ObserveOnMainThread() 等の拡張メソッドを利用する
+// 最終シグネチャ (design フェーズ確定)
+// using UniRx; が必要 (ObserveOnMainThread() は UniRx 拡張メソッド)
 // IObservable<MotionFrame> は System.IObservable<T> であり、UniRx の Subject<T> はこれを実装する
 public interface IMoCapSource : IDisposable
 {
-    // ソース種別識別子 (例: "VMC", "Custom" 等)
+    /// <summary>ソース種別識別子 (例: "VMC", "Custom")</summary>
     string SourceType { get; }
 
-    // 初期化: 通信パラメータ (ポート番号等) を受け取る
-    // 引数型は design フェーズで確定 (MoCapSourceConfigBase 派生型を想定)
-    void Initialize(/* MoCapSourceConfigBase config */);
+    /// <summary>
+    /// 初期化。通信パラメータを格納した Config を渡す。
+    /// メインスレッドからの呼び出しを前提とする。
+    /// </summary>
+    void Initialize(MoCapSourceConfigBase config);
 
-    // Push 型モーションストリーム
-    // 型: System.IObservable<MotionFrame> (UniRx Subject<T> で実装)
-    // 受信スレッドが Subject.OnNext() を呼び出す
-    // 購読側は UniRx の ObserveOnMainThread() 拡張メソッドで Unity メインスレッドに同期する
-    // 戻り値の MotionFrame は motion-pipeline が定義するモーションデータ中立表現 (2.2 章) に準拠
+    /// <summary>
+    /// Push 型モーションストリーム。受信スレッドから Subject.OnNext() で配信される。
+    /// 購読側は .ObserveOnMainThread() でメインスレッドに同期すること。
+    /// OnError は発行しない。エラーは内部処理しストリームを継続する。
+    /// </summary>
     IObservable<MotionFrame> MotionStream { get; }
 
     // 破棄 (IDisposable.Dispose() で代替可)
@@ -622,14 +629,15 @@ public interface IMoCapSource : IDisposable
 
 ### 2.2 モーションデータ中立表現
 
-> **記入者**: `motion-pipeline` エージェント (Wave 2)。`slot-core` の 2.1 章と整合したうえで型骨格を確定。
+> **最終仕様確定** (motion-pipeline design フェーズ / Wave B)。以降は合意変更のみ。
+> 記入者: `motion-pipeline` エージェント (Wave B)。`slot-core` の 2.1 章と整合したうえで型骨格を確定。
 
-#### 基底型: `MotionFrame`
+#### 基底型: `MotionFrame` (最終確定)
 
-全骨格形式 (Humanoid / Generic 等) の共通基底型。`IMoCapSource.MotionStream` (Push 型ストリーム) が流すフレーム型として採用する。
+全骨格形式 (Humanoid / Generic 等) の共通基底型。`IMoCapSource.MotionStream` (Push 型ストリーム) が流すフレーム型として採用する。**抽象クラス** を選定 (struct 案は不採用: 継承不可・ボックス化コスト等の理由)。
 
 ```csharp
-// 骨格 (C# 疑似コード / 型名は仮。最終シグネチャは design フェーズで確定)
+// 最終シグネチャ (motion-pipeline design フェーズ確定)
 namespace RealtimeAvatarController.Motion
 {
     // 骨格種別識別子
@@ -639,10 +647,10 @@ namespace RealtimeAvatarController.Motion
         Generic,
     }
 
-    // 全骨格形式共通の基底型 (抽象クラスまたはインターフェース; design フェーズで確定)
+    // 全骨格形式共通の基底型 (抽象クラス)
     public abstract class MotionFrame
     {
-        // 受信タイムスタンプ (dig ラウンド 4 確定: Stopwatch ベース monotonic、double 秒単位)
+        // 受信タイムスタンプ (Stopwatch ベース monotonic、double 秒単位)
         // 値: Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency で算出
         // 基準: App 起動時 (Stopwatch 起動基準の相対値)
         // 打刻タイミング: 受信ワーカースレッド上でフレーム構築時
@@ -655,114 +663,141 @@ namespace RealtimeAvatarController.Motion
 
         // このフレームが表す骨格種別
         public abstract SkeletonType SkeletonType { get; }
+
+        protected MotionFrame(double timestamp) { Timestamp = timestamp; }
     }
 }
 ```
 
-#### Humanoid 向け中立表現: `HumanoidMotionFrame`
+#### Humanoid 向け中立表現: `HumanoidMotionFrame` (最終確定)
 
-Unity `HumanPose` 相当の構造を持つ具象型。Muscle 値配列と Root の位置・回転を保持する。
+Unity `HumanPose` 相当の構造を持つ具象型。Muscle 値配列と Root の位置・回転を保持するイミュータブル sealed class。
 
 ```csharp
+// 最終シグネチャ (motion-pipeline design フェーズ確定)
 namespace RealtimeAvatarController.Motion
 {
-    // Humanoid 骨格向けモーションフレーム (C# 疑似コード)
     public sealed class HumanoidMotionFrame : MotionFrame
     {
         public override SkeletonType SkeletonType => SkeletonType.Humanoid;
 
-        // Unity HumanPose.muscles 相当 (要素数は HumanTrait.MuscleCount に準拠)
+        // Unity HumanPose.muscles 相当
+        // 要素数: HumanTrait.MuscleCount = 95 (正常フレーム) / 0 (無効フレーム)
         public float[] Muscles { get; }
 
-        // ルート位置 (ワールド空間またはローカル空間; design フェーズで確定)
+        // Root 位置 (HumanPose.bodyPosition 相当)
         public Vector3 RootPosition { get; }
 
-        // ルート回転
+        // Root 回転 (HumanPose.bodyRotation 相当)
         public Quaternion RootRotation { get; }
+
+        // true: 有効フレーム (Muscles.Length > 0)
+        // false: 無効フレーム (Muscles.Length == 0、データなし / 初期化前)
+        public bool IsValid => Muscles.Length > 0;
+
+        public HumanoidMotionFrame(double timestamp, float[] muscles,
+            Vector3 rootPosition, Quaternion rootRotation) : base(timestamp)
+        {
+            Muscles = muscles ?? Array.Empty<float>();
+            RootPosition = rootPosition;
+            RootRotation = rootRotation;
+        }
+
+        public static HumanoidMotionFrame CreateInvalid(double timestamp)
+            => new HumanoidMotionFrame(timestamp, Array.Empty<float>(), Vector3.zero, Quaternion.identity);
     }
 }
 ```
 
 **補足**:
 - `Muscles.Length == 0` は「データなし / 初期化前」を示す無効フレームとして扱う
-- イミュータブル設計 (コンストラクタで全値を受け取り、以降は読み取り専用) を推奨する
+- 無効フレームは通常動作扱いであり、`ISlotErrorChannel` へのエラー発行は行わない
+- 全プロパティは readonly。コンストラクタで完全初期化するイミュータブル設計
 
 #### Generic 向け中立表現 (初期段階: 抽象のみ)
 
 初期段階では具象型は定義しない。将来の Generic 具象実装のためにプレースホルダーとして以下の方針のみを合意する。
 
 ```csharp
-// 将来実装向けプレースホルダー (C# 疑似コード / 初期段階では実装しない)
+// 将来実装向けプレースホルダー (初期段階では実装しない)
 namespace RealtimeAvatarController.Motion
 {
-    // Generic 骨格向けモーションフレーム (design フェーズ以降で具体化)
-    // Transform 配列 (位置・回転・スケール) を保持することを想定
-    public sealed class GenericMotionFrame : MotionFrame
+    // Generic 骨格向けモーションフレーム抽象クラス
+    // 具象実装は将来の Generic Spec が担う
+    public abstract class GenericMotionFrame : MotionFrame
     {
         public override SkeletonType SkeletonType => SkeletonType.Generic;
+        protected GenericMotionFrame(double timestamp) : base(timestamp) { }
 
-        // 各ボーンの Transform データ (型・構造は design フェーズで確定)
-        // public TransformData[] Bones { get; }
+        // 将来実装予定:
+        // public TransformData[] Bones { get; }  // 各ボーンの位置・回転・スケール
     }
 }
 ```
 
-#### `IMoCapSource.MotionStream` のフレーム型方針
+#### `IMoCapSource.MotionStream` のフレーム型方針 (最終確定)
 
-- **採用方針**: `IObservable<MotionFrame>` のフレーム型は `MotionFrame` 基底型を使用する
-- 購読側は `MotionFrame.SkeletonType` を確認してキャストする、またはジェネリクス (`IMoCapSource<TFrame>`) を採用する。最終シグネチャは design フェーズで確定する
-- 例示 (仮): `IObservable<MotionFrame> MotionStream { get; }` (2.1 章参照)
+- **採用方針**: `IObservable<MotionFrame>` のフレーム型は `MotionFrame` 基底型を使用する (`IObservable<MotionFrame> MotionStream { get; }`)
+- 購読側は `MotionFrame.SkeletonType` を確認してキャストする (`HumanoidMotionFrame` への `as` キャスト)
+- ジェネリクス型パラメータ (`IMoCapSource<TFrame>`) は採用しない
 
-#### タイムスタンプ仕様 (dig ラウンド 4 確定)
+#### タイムスタンプ仕様 (最終確定)
 
 | 項目 | 内容 |
 |------|------|
 | 型 | `double` (秒単位) |
 | 基準 | App 起動時 (Stopwatch 起動基準の相対値) |
-| 取得方法 | `Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency` |
+| 取得式 | `Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency` |
 | 打刻タイミング | 受信ワーカースレッド上でフレーム構築時 (Unity メインスレッド API 不使用のため安全) |
 | 用途 | Slot 内フレーム順序整列 / 遅延計測 / デバッグログ |
 | プロセス間比較 | **不可** (相対値のため異なるプロセスとの比較は意味を持たない) |
 | 将来拡張 | ログ用途で wall clock が必要な場合は `WallClock: DateTime?` フィールドの追加を検討する。初期版では **未実装** とする |
 
-#### スレッド安全性の要求
+#### スレッド安全性の要求 (最終確定)
 
-- **書き込み**: 受信スレッド (`IMoCapSource` 具象実装の内部スレッド等) から `MotionFrame` を書き込む。`Timestamp` の打刻も受信スレッド上で行い、Unity API は使用しない
-- **読み込み**: Unity メインスレッド (`LateUpdate` 等) から最新の `MotionFrame` を読み取る
-- **方針**: 具体的なスレッド安全実装 (ダブルバッファ / `Interlocked` / `lock` / ロックレスキュー等) は design フェーズで選択する。受信スレッド側の書き込みは Unity API を呼び出さない
+- **書き込み**: 受信スレッドから `Interlocked.Exchange` によりアトミックに `MotionCache._latestFrame` を更新する。`Timestamp` の打刻も受信スレッド上で行い、Unity API は使用しない
+- **読み込み**: Unity メインスレッド (`LateUpdate` 等) から `Volatile.Read` で最新フレームを読み取る
+- **選定方式**: 方式 B (受信スレッド直接書込 / `Interlocked.Exchange`) を採用。方式 A (`ObserveOnMainThread()` 経由) は高頻度フレームでキュー蓄積が生じるため不採用
 
 ---
 
 ## 3. アバター供給抽象
 
-### 3.1 `IAvatarProvider` (仮) シグネチャ
+### 3.1 `IAvatarProvider` シグネチャ
 
-> **注意**: 具体的な引数型・戻り値型はすべて design フェーズで確定する。ここでは骨格・契約のみ定義する。
+> **最終仕様確定** (slot-core design フェーズ / Wave A 先行波)。以降は合意変更のみ。
+> 非同期 API の戻り値型は **UniTask** に確定 (Task は採用しない)。
 
 ```csharp
-// 骨格 (C# 疑似コード / 型名は仮)
+// 最終シグネチャ (design フェーズ確定)
+// using Cysharp.Threading.Tasks; が必要 (UniTask は UniTask パッケージが提供)
 public interface IAvatarProvider : IDisposable
 {
-    // Provider 種別識別子 (例: "Builtin", "Addressable" 等)
+    /// <summary>Provider 種別識別子 (例: "Builtin", "Addressable")</summary>
     string ProviderType { get; }
 
-    // アバター要求 (同期版)
-    // 戻り値は供給された GameObject 参照 (Prefab インスタンス)
-    GameObject RequestAvatar(/* AvatarRequest request */);
+    /// <summary>
+    /// アバターを同期的に要求する。
+    /// 非同期 Provider では NotSupportedException をスローしてよい。
+    /// </summary>
+    GameObject RequestAvatar(ProviderConfigBase config);
 
-    // アバター要求 (非同期版): Addressable 等の将来実装に対応する拡張余地
-    // UniTask / Task<GameObject> どちらを採用するかは design フェーズで確定
-    /* Task<GameObject> */ object RequestAvatarAsync(/* AvatarRequest request */);
+    /// <summary>
+    /// アバターを非同期に要求する。UniTask を採用 (Task ではない)。
+    /// 同期 Provider は同期完了の UniTask を返してよい。
+    /// </summary>
+    UniTask<GameObject> RequestAvatarAsync(ProviderConfigBase config, CancellationToken cancellationToken = default);
 
-    // アバター解放: 供給した GameObject を受け取りリソースを解放する
+    /// <summary>供給したアバターを解放する。</summary>
     void ReleaseAvatar(GameObject avatar);
 }
 ```
 
 **同期 / 非同期の許容方針**:
 - `IAvatarProvider` は同期・非同期のいずれの具象実装も許容する
-- ビルトイン Provider (初期段階) は同期版を実装する
-- Addressable Provider (将来) は非同期版を実装し、同期版は NotImplementedException でも可
+- ビルトイン Provider (初期段階) は同期版を実装し、`RequestAvatarAsync` は `UniTask.FromResult` で同期完了を返す
+- Addressable Provider (将来) は非同期版を実装し、`RequestAvatar` は `NotSupportedException` でも可
+- **UniTask を確定** (design フェーズ決定。Task / ValueTask は採用しない)
 
 ### 3.2 Addressable 拡張余地
 
@@ -773,56 +808,64 @@ public interface IAvatarProvider : IDisposable
 
 ## 4. 表情制御抽象 (受け口のみ)
 
-### 4.1 `IFacialController` (仮) シグネチャ
+### 4.1 `IFacialController` シグネチャ
 
-> **注意**: 具体的な引数型・戻り値型はすべて design フェーズで確定する。ここでは骨格のみ定義する。
+> **最終仕様確定** (slot-core design フェーズ / Wave A)。初期段階では具象実装なし。受け口のみ。
+> 引数 `facialData` の型は将来の具象実装フェーズで `object` から具象型に更新する。
 
 ```csharp
-// 骨格 (C# 疑似コード / 型名は仮)
+// 最終シグネチャ (design フェーズ確定 / 受け口のみ)
 public interface IFacialController : IDisposable
 {
-    // 初期化: 制御対象アバターの GameObject を受け取る
-    void Initialize(/* GameObject avatarRoot */);
+    /// <summary>初期化。制御対象アバターの GameObject を受け取る。</summary>
+    void Initialize(GameObject avatarRoot);
 
-    // 表情データ適用: 表情データ型は design フェーズで確定
-    void ApplyFacialData(/* FacialData data */);
+    /// <summary>
+    /// 表情データを適用する。
+    /// 引数型 FacialData は将来の具象実装フェーズで確定する。初期段階では object 型を使用する。
+    /// </summary>
+    void ApplyFacialData(object facialData);
 
-    // 解放 (IDisposable.Dispose() で代替可)
+    /// <summary>シャットダウン。IDisposable.Dispose() と等価。</summary>
     void Shutdown();
 }
 ```
 
 ### 4.2 備考
 
-初期段階では具象実装は存在しない。Slot に対して null / 未割当が許容される。
+初期段階では具象実装は存在しない。Slot に対して null / 未割当が許容される。`facialData` の具象型は将来担当 Spec が確定する。
 
 ---
 
 ## 5. リップシンク抽象 (受け口のみ)
 
-### 5.1 `ILipSyncSource` (仮) シグネチャ
+### 5.1 `ILipSyncSource` シグネチャ
 
-> **注意**: 具体的な引数型・戻り値型はすべて design フェーズで確定する。ここでは骨格のみ定義する。
+> **最終仕様確定** (slot-core design フェーズ / Wave A)。初期段階では具象実装なし。受け口のみ。
+> `FetchLatestLipSync()` の戻り値型は将来の具象実装フェーズで `object` から具象型に更新する。
 
 ```csharp
-// 骨格 (C# 疑似コード / 型名は仮)
+// 最終シグネチャ (design フェーズ確定 / 受け口のみ)
 public interface ILipSyncSource : IDisposable
 {
-    // 初期化
-    void Initialize(/* LipSyncSourceConfig config */);
+    /// <summary>初期化。</summary>
+    void Initialize(LipSyncSourceConfigBase config);
 
-    // リップシンクデータ取得 (pull 型を基本とする; push / イベント型は design フェーズで検討)
-    // 戻り値型は design フェーズで確定 (母音ブレンドシェイプ値配列等を想定)
-    /* LipSyncData */ object FetchLatestLipSync();
+    /// <summary>
+    /// 最新のリップシンクデータを取得する (Pull 型)。
+    /// 戻り値型は将来の具象実装フェーズで確定する (母音ブレンドシェイプ値配列等を想定)。
+    /// 初期段階では object 型を使用する。
+    /// </summary>
+    object FetchLatestLipSync();
 
-    // 解放 (IDisposable.Dispose() で代替可)
+    /// <summary>シャットダウン。IDisposable.Dispose() と等価。</summary>
     void Shutdown();
 }
 ```
 
 ### 5.2 備考
 
-初期段階では具象実装は存在しない。Slot に対して null / 未割当が許容される。
+初期段階では具象実装は存在しない。Slot に対して null / 未割当が許容される。`FetchLatestLipSync()` の戻り値具象型は将来担当 Spec が確定する。
 
 ---
 
@@ -897,11 +940,22 @@ public interface ILipSyncSource : IDisposable
 - 機能部アセンブリは `Samples.UI` を参照しない
 - UI フレームワーク (UGUI / UIToolkit 等) への依存は `Samples.UI` にのみ許容する
 
-**外部ライブラリ依存 (UniRx)**:
-- `RealtimeAvatarController.Core` は UniRx (`com.neuecc.unirx`) の asmdef (`UniRx`) を `references` に追加し、`IObservable<T>` 拡張メソッド・`Subject<T>` 等を直接利用する
-- `RealtimeAvatarController.Motion`・`RealtimeAvatarController.MoCap.VMC`・`RealtimeAvatarController.Avatar.Builtin` は UniRx の asmdef を直接 `references` に持たず、`RealtimeAvatarController.Core` 経由で UniRx の型を間接利用する (二重依存禁止)
+**外部ライブラリ依存 (UniRx / UniTask)**:
+
+> **project-foundation design フェーズ最終確定 (Wave B)**: UniTask (`com.cysharp.unitask`) を `package.json` の `dependencies` に追加し、`RealtimeAvatarController.Core` の asmdef `references` に `UniRx` と `UniTask` の両方を追加することを確定した。バージョンは `com.neuecc.unirx: 7.1.0` / `com.cysharp.unitask: 2.5.10`。
+
+- `RealtimeAvatarController.Core` は UniRx (`com.neuecc.unirx`) の asmdef (`UniRx`) および UniTask (`com.cysharp.unitask`) の asmdef (`UniTask`) を `references` に追加し、`IObservable<T>` 拡張メソッド・`Subject<T>`・`UniTask<T>` 等を直接利用する
+- `RealtimeAvatarController.Motion`・`RealtimeAvatarController.MoCap.VMC`・`RealtimeAvatarController.Avatar.Builtin` は UniRx / UniTask の asmdef を直接 `references` に持たず、`RealtimeAvatarController.Core` 経由で型を間接利用する (二重依存禁止)
 - ただし各アセンブリが UniRx の拡張メソッド (`ObserveOnMainThread()` 等) を直接呼び出す技術的必要が生じた場合は、design フェーズで要否を個別判断し本章に追記する
-- `RealtimeAvatarController.Samples.UI` も同様に UniRx への直接依存は持たず、機能部 API 経由で利用する
+- `RealtimeAvatarController.Samples.UI` も同様に UniRx / UniTask への直接依存は持たず、機能部 API 経由で利用する
+- **package.json の dependencies (project-foundation design フェーズ確定)**:
+  ```json
+  "dependencies": {
+    "com.neuecc.unirx": "7.1.0",
+    "com.cysharp.unitask": "2.5.10"
+  }
+  ```
+- **OpenUPM scoped registry**: `com.neuecc` および `com.cysharp` の両スコープを `https://package.openupm.com` に追加する (manifest.json の `scopedRegistries` セクション)
 
 ### 6.2 名前空間規約
 
