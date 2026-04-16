@@ -59,5 +59,19 @@ namespace RealtimeAvatarController.Core
         {
             return _slots.Values.ToList().AsReadOnly();
         }
+
+        /// <summary>
+        /// <see cref="SlotManager"/> からの状態遷移要求に応じて <see cref="SlotHandle"/> を再構築する。
+        /// <see cref="SlotHandle"/> をイミュータブル (読み取り専用プロパティ) に保つための内部 API。
+        /// </summary>
+        /// <exception cref="InvalidOperationException">指定 <paramref name="slotId"/> が登録されていない場合。</exception>
+        internal void UpdateSlotState(string slotId, SlotState newState)
+        {
+            if (!_slots.TryGetValue(slotId, out var handle))
+                throw new InvalidOperationException(
+                    $"slotId '{slotId}' は登録されていないため状態を更新できません。");
+
+            _slots[slotId] = new SlotHandle(handle.SlotId, handle.DisplayName, newState, handle.Settings);
+        }
     }
 }
