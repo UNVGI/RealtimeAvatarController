@@ -12,7 +12,8 @@ using RealtimeAvatarController.Core.Tests.Mocks;
 namespace RealtimeAvatarController.Core.Tests
 {
     /// <summary>
-    /// SlotManager のコア実装 EditMode テスト (タスク 12.2〜12.4 範囲)。
+    /// SlotManager の EditMode テスト (タスク 12.2〜12.8 網羅)。
+    /// タスク 12.8 時点で SlotManager 全挙動を EditMode で検証する最終形となる。
     /// 観点:
     ///   - AddSlotAsync 成功 (Created → Active 遷移、OnSlotStateChanged 通知)
     ///   - 同一 slotId の重複追加 → InvalidOperationException
@@ -24,8 +25,19 @@ namespace RealtimeAvatarController.Core.Tests
     ///   - 初期化失敗 (タスク 12.4 / Req 3.7, 3.8, 12.4): Provider / Source Resolve 失敗・
     ///     RequestAvatarAsync 失敗時に Created → Disposed 遷移 + InitFailure 発行、
     ///     例外は呼び出し側に伝播しない、部分取得済みリソースは解放される。
-    /// ApplyFailure・全 Slot 解放 Dispose は後続タスク 12.5〜12.8 で検証する。
-    /// Requirements: 1.5, 2.6, 2.7, 2.8, 3.1, 3.2, 3.4, 3.7, 3.8, 12.4
+    ///   - RemoveSlotAsync リソース解放 (タスク 12.5 / Req 3.2, 3.5, 3.6, 10.2):
+    ///     Provider.ReleaseAvatar → Provider.Dispose → MoCapSourceRegistry.Release の厳密順序、
+    ///     共有 MoCapSource の参照カウント管理、各解放ステップの例外耐性。
+    ///   - ApplyWithFallback (タスク 12.6 / Req 13.3, 13.4, 12.4):
+    ///     HoldLastPose / Hide / TPose 各フォールバック挙動 + ApplyFailure 発行、
+    ///     未登録 slotId の no-op、例外非伝播。
+    ///   - Dispose による全 Slot 解放 (タスク 12.7 / Req 3.2, 3.5):
+    ///     各 Slot への Active → Disposed 通知、Subject Complete、冪等性、
+    ///     Dispose 後 AddSlotAsync / RemoveSlotAsync は ObjectDisposedException、
+    ///     途中例外時の残余 Slot 解放継続。
+    ///   - コンストラクタ引数 null チェック (ArgumentNullException)。
+    /// Requirements: 1.5, 2.1, 2.2, 2.3, 2.6, 2.7, 2.8, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8,
+    ///               10.2, 12.4, 13.3, 13.4, 14.1, 14.3
     /// </summary>
     [TestFixture]
     public class SlotManagerTests

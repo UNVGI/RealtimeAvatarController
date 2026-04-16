@@ -45,3 +45,4 @@ Wave 2: slot-core
 12.5 OK (e7f162a)
 12.6 OK (ad54190)
 12.7 OK (5437826)
+12.8 OK (tests completed during 12.2-12.7 TDD — all observation points covered, header comment updated)
