@@ -1,0 +1,22 @@
+Task 14.1: SlotLifecyclePlayModeTests を実装する
+
+対象ファイル:
+- RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/Tests/PlayMode/slot-core/SlotLifecyclePlayModeTests.cs (新規)
+- RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/Tests/PlayMode/slot-core/SlotLifecyclePlayModeTests.cs.meta (新規)
+
+実装概要:
+- [UnityTest] + UniTask.ToCoroutine による Slot 動的ライフサイクルの PlayMode 統合検証。
+- シナリオ Y (ランタイム動的生成): SlotSettings / ProviderConfig / MoCapSourceConfig を
+  ScriptableObject.CreateInstance で生成し、RegistryLocator.ProviderRegistry /
+  MoCapSourceRegistry に Factory を登録してから SlotManager 経由で Add/Remove を実行する。
+- テストケース:
+  1. AddSlotAsync_ThenRemoveSlotAsync_TransitionsCreatedToActiveToDisposed —
+     Created → Active → Disposed の OnSlotStateChanged 通知と状態遷移を検証。
+  2. AddSlotAsync_RuntimeCreatedSettings_ResolvesFactoriesAndProducesAvatar —
+     Factory 解決とアバター GameObject 生成を検証。
+  3. AddMultipleSlots_ThenRemoveEach_AllSlotsTransitionToDisposed —
+     複数 Slot 並行管理 + 個別削除。
+- Mock は PlayMode asmdef 内にクローズドに private sealed class として定義
+  (requirements.md Req 14.6 / EditMode の internal Mocks には依存しない)。
+
+Requirements: 1.8, 2.8, 14.2
