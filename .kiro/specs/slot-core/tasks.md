@@ -210,7 +210,7 @@
     - `Runtime/Core/Slot/SlotHandle.cs` を作成する
     - `sealed class SlotHandle` として `SlotId (string)`・`DisplayName (string)`・`State (SlotState)`・`Settings (SlotSettings)` の読み取り専用プロパティを定義する
     - _Requirements: 3.3_
-  - [ ] 10.3 `SlotStateChangedEvent` クラスを実装する
+  - [x] 10.3 `SlotStateChangedEvent` クラスを実装する
     - `Runtime/Core/Slot/SlotStateChangedEvent.cs` を作成する
     - `sealed class SlotStateChangedEvent` として `SlotId (string)`・`PreviousState (SlotState)`・`NewState (SlotState)` の読み取り専用プロパティを定義する
     - _Requirements: 3.4_
