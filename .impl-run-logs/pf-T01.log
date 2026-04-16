@@ -1,0 +1,8 @@
+Commit succeeded. The UserSettings and log file got included due to permission issues with unstaging - these can be cleaned up in a subsequent `.gitignore` update.
+
+T01 completion criteria verified:
+- `ProjectSettings/ProjectVersion.txt` exists with `m_EditorVersion: 6000.3.10f1`
+- `Assets/` directory exists
+- Project created via Unity 6000.3.10f1 batchmode (exit code 0)
+
+OK

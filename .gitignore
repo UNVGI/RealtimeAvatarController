@@ -81,3 +81,8 @@ task-*-log.txt
 task-*-tests.xml
 task-*-full-*
 
+# impl-run orchestrator logs
+.impl-run-logs/
+unity-*.log
+[Uu]ser[Ss]ettings/
+
