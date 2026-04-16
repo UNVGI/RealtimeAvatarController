@@ -1,0 +1,19 @@
+{
+  "name": "RealtimeAvatarController.Samples.UI",
+  "rootNamespace": "RealtimeAvatarController.Samples.UI",
+  "references": [
+    "RealtimeAvatarController.Core",
+    "RealtimeAvatarController.Motion",
+    "RealtimeAvatarController.MoCap.VMC",
+    "RealtimeAvatarController.Avatar.Builtin"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

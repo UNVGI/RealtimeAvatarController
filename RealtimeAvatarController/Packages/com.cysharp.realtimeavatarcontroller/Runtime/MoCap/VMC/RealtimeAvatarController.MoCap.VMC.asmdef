@@ -1,0 +1,17 @@
+{
+  "name": "RealtimeAvatarController.MoCap.VMC",
+  "rootNamespace": "RealtimeAvatarController.MoCap.VMC",
+  "references": [
+    "RealtimeAvatarController.Core",
+    "RealtimeAvatarController.Motion"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

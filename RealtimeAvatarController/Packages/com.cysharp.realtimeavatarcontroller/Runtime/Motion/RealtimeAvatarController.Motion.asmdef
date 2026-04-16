@@ -1,0 +1,16 @@
+{
+  "name": "RealtimeAvatarController.Motion",
+  "rootNamespace": "RealtimeAvatarController.Motion",
+  "references": [
+    "RealtimeAvatarController.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

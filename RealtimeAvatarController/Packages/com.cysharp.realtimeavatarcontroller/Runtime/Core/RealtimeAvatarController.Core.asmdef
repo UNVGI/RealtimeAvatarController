@@ -1,0 +1,17 @@
+{
+  "name": "RealtimeAvatarController.Core",
+  "rootNamespace": "RealtimeAvatarController.Core",
+  "references": [
+    "UniRx",
+    "UniTask"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
