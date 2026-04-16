@@ -1,0 +1,25 @@
+Task 8.3: InternalsVisibleTo 設定を追加する (validation-design.md [N-3] 対応)
+
+## 作業内容
+
+1. `Runtime/Core/AssemblyInfo.cs` の存在確認
+   - 既に `[assembly: InternalsVisibleTo("RealtimeAvatarController.Core.Tests.EditMode")]` が記載済み。
+   - パス: `RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/Runtime/Core/AssemblyInfo.cs`
+
+2. `AssemblyInfo.cs.meta` を新規作成
+   - Unity が自動生成する前にバージョン管理へコミットするため、明示的に .meta ファイルを追加した。
+   - guid: e69b58c631ea9ed50eb0f19b927083a9
+
+3. internal 型の可視性確認
+   - `DefaultProviderRegistry` (Runtime/Core/Registry/DefaultProviderRegistry.cs:11) — `internal sealed`
+   - `DefaultMoCapSourceRegistry` (Runtime/Core/Registry/DefaultMoCapSourceRegistry.cs:14) — `internal sealed`
+   - `DefaultFacialControllerRegistry` (Runtime/Core/Registry/DefaultFacialControllerRegistry.cs:11) — `internal sealed`
+   - `DefaultLipSyncSourceRegistry` (Runtime/Core/Registry/DefaultLipSyncSourceRegistry.cs:11) — `internal sealed`
+   - `DefaultSlotErrorChannel` (Runtime/Core/Error/DefaultSlotErrorChannel.cs:12) — `internal sealed`
+   - `SlotRegistry` は Task 11.1 で `internal sealed` として実装予定 (現段階では未作成)。
+
+4. 既存 EditMode テスト (ProviderRegistryTests.cs 等) が `DefaultProviderRegistry` 等の internal 型を直接参照しており、`InternalsVisibleTo` が機能していることを確認した。
+
+## Requirements カバレッジ
+
+- 14.1: テストプロジェクトから Runtime Core の internal 型へアクセス可能 ✓

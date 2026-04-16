@@ -181,7 +181,7 @@
     - `Tests/EditMode/Core/RegistryLocatorTests.cs` を作成する
     - テスト観点: 最初のアクセスでインスタンスが生成されること、`ResetForTest()` 後に新インスタンスが生成されること、`Override*()` でモック差し替えが反映されること、`[SetUp]` / `[TearDown]` で ResetForTest を呼ぶこと
     - _Requirements: 11.3, 11.4, 11.5, 14.3_
-  - [ ] 8.3 `InternalsVisibleTo` 設定を追加する (validation-design.md [N-3] 対応)
+  - [x] 8.3 `InternalsVisibleTo` 設定を追加する (validation-design.md [N-3] 対応)
     - `Runtime/Core/RealtimeAvatarController.Core.asmdef` の `overrideReferences` または `AssemblyInfo.cs` に `[assembly: InternalsVisibleTo("RealtimeAvatarController.Core.Tests.EditMode")]` を追加する
     - `SlotRegistry`・`DefaultProviderRegistry`・`DefaultMoCapSourceRegistry`・`DefaultFacialControllerRegistry`・`DefaultLipSyncSourceRegistry`・`DefaultSlotErrorChannel` など `internal` 型がテストから参照できることを確認する
     - _Requirements: 14.1_

@@ -31,3 +31,4 @@ Wave 2: slot-core
 7.5 OK (tests completed during 7.2-7.4 TDD — coverage verified)
 8.1 OK (0f17052)
 8.2 OK (72534bf)
+8.3 OK
