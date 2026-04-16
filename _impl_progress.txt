@@ -24,3 +24,4 @@ Wave 2: slot-core
 6.3 OK (e4cf175)
 6.4 OK (5a8a43f)
 6.5 OK (c5cec16)
+7.1 OK (892969a) [manual commit - max turns recovery]
