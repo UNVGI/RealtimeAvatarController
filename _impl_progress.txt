@@ -12,3 +12,4 @@ Wave 2: slot-core
 3.2 OK (c093c8d)
 3.3 OK (fd05ba0)
 3.4 OK (no changes - tests already completed in 3.1-3.3)
+4.1 OK (cd9b024)
