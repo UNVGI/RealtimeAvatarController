@@ -35,3 +35,4 @@ Wave 2: slot-core
 9.1 OK (63609e4) [manual commit - max turns recovery]
 9.2 OK (tests completed during 9.1 TDD — coverage verified)
 10.1 OK (40bac62)
+10.2 OK

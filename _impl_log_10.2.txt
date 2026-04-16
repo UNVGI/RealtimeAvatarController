@@ -1,0 +1,11 @@
+Task 10.2: SlotHandle クラスを実装する
+
+- Runtime/Core/Slot/SlotHandle.cs を作成
+- sealed class SlotHandle として実装
+  - SlotId (string) 読み取り専用プロパティ
+  - DisplayName (string) 読み取り専用プロパティ
+  - State (SlotState) 読み取り専用プロパティ
+  - Settings (SlotSettings) 読み取り専用プロパティ
+- 4 引数コンストラクタで各プロパティを初期化 (イミュータブル)
+- design.md §11 の SlotHandle 定義に準拠
+- Requirements: 3.3
