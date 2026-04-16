@@ -27,3 +27,4 @@ Wave 2: slot-core
 7.1 OK (892969a) [manual commit - max turns recovery]
 7.2 OK (78742ba)
 7.3 OK (5057fb1) [manual commit - max turns recovery]
+7.4 OK
