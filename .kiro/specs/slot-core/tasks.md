@@ -201,7 +201,7 @@
     - _Requirements: 1.1, 1.6, 1.7, 1.8, 14.3_
 
 - [ ] 10. `SlotState` / `SlotHandle` / `SlotStateChangedEvent` の実装 (_Requirements: 3.3, 3.4_)
-  - [ ] 10.1 `SlotState` enum を実装する
+  - [x] 10.1 `SlotState` enum を実装する
     - `Runtime/Core/Slot/SlotState.cs` を作成する
     - `Created`・`Active`・`Inactive`・`Disposed` の 4 値を定義する
     - `Inactive` の XML コメントに「将来機能。API 未定義 (Active ⇄ Inactive 遷移 API は設計予約済み)」と明記する (validation-design.md [N-2] 対応)
