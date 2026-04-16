@@ -1,0 +1,27 @@
+Task 9.2: SlotSettings の EditMode テストを完成させる
+
+ステータス: OK (9.1 の TDD フェーズで完了済みのカバレッジを確認)
+
+検証結果:
+  対象ファイル: RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/Tests/EditMode/slot-core/SlotSettingsTests.cs
+  対象実装:   RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/Runtime/Core/Slot/SlotSettings.cs
+
+tasks.md 9.2 のテスト観点カバレッジ:
+  [x] Validate() 成功                                   → Validate_AllRequiredFieldsSet_Succeeds / Validate_OptionalFieldsNull_Succeeds
+  [x] slotId 欠落→例外                                  → Validate_SlotIdNull_* / Validate_SlotIdEmpty_*
+  [x] displayName 欠落→例外                             → Validate_DisplayNameNull_* / Validate_DisplayNameEmpty_*
+  [x] avatarProviderDescriptor null→例外                → Validate_AvatarProviderDescriptorNull_*
+  [x] avatarProviderDescriptor.ProviderTypeId 欠落→例外 → Validate_AvatarProviderTypeIdNull_* / ...Empty_*
+  [x] moCapSourceDescriptor null→例外                   → Validate_MoCapSourceDescriptorNull_*
+  [x] moCapSourceDescriptor.SourceTypeId 欠落→例外      → Validate_MoCapSourceTypeIdNull_* / ...Empty_*
+  [x] CreateInstance 後フィールドセット → Validate 成功 → Validate_CreateInstanceThenSetFields_Succeeds
+
+Requirements 対応: 1.1, 1.6, 1.7, 1.8, 14.3
+
+追加で検証している観点 (9.1 実装駆動テスト起因):
+  - ScriptableObject 継承 / [Serializable] 属性
+  - weight デフォルト 1.0 / fallbackBehavior デフォルト HoldLastPose
+  - facialControllerDescriptor / lipSyncSourceDescriptor のデフォルト null
+  - フィールドのアサイン & 取得
+
+変更なし: 既存テストで 9.2 の要件を完全カバーしているため追加・修正不要。
