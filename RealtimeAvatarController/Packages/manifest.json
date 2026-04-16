@@ -1,4 +1,21 @@
 {
+  "scopedRegistries": [
+    {
+      "name": "OpenUPM",
+      "url": "https://package.openupm.com",
+      "scopes": [
+        "com.neuecc",
+        "com.cysharp"
+      ]
+    },
+    {
+      "name": "npm (hidano)",
+      "url": "https://registry.npmjs.com",
+      "scopes": [
+        "com.hidano"
+      ]
+    }
+  ],
   "dependencies": {
     "com.unity.multiplayer.center": "1.0.1",
     "com.unity.modules.accessibility": "1.0.0",
