@@ -14,13 +14,12 @@ namespace RealtimeAvatarController.Core
     /// <see cref="IProviderRegistry"/> / <see cref="IMoCapSourceRegistry"/> / <see cref="ISlotErrorChannel"/>
     /// に対して Provider / MoCapSource の解決・解放・エラー発行を委譲する。
     /// <para>
-    /// 本クラスの 12.6 時点ではコア実装・weight クランプ・初期化失敗時の
-    /// <c>Created → Disposed</c> 遷移に加え、<see cref="RemoveSlotAsync"/> の
-    /// 厳密順序・例外耐性リソース解放、さらに <see cref="ApplyWithFallback"/> による
-    /// <see cref="SlotErrorCategory.ApplyFailure"/> 発行とフォールバック挙動
-    /// (<see cref="FallbackBehavior.HoldLastPose"/> / <see cref="FallbackBehavior.TPose"/> /
-    /// <see cref="FallbackBehavior.Hide"/>) のスケルトンを提供する。
-    /// Dispose 全 Slot 解放 (タスク 12.7) は後続タスクで拡張する。
+    /// 本クラスの 12.7 時点ではコア実装・weight クランプ・初期化失敗時の
+    /// <c>Created → Disposed</c> 遷移・<see cref="RemoveSlotAsync"/> の厳密順序と例外耐性リソース解放、
+    /// <see cref="ApplyWithFallback"/> による <see cref="SlotErrorCategory.ApplyFailure"/> 発行と
+    /// フォールバック挙動 (<see cref="FallbackBehavior.HoldLastPose"/> / <see cref="FallbackBehavior.TPose"/> /
+    /// <see cref="FallbackBehavior.Hide"/>) のスケルトン、加えて <see cref="Dispose"/> による全 Slot の
+    /// 一括解放 (design.md §4.1 <c>Active → Disposed</c>) を提供する。
     /// </para>
     /// <para>
     /// TODO (validation-design.md [N-2]): Inactive ⇄ Active 遷移 API は設計予約済みで未実装。
@@ -202,13 +201,44 @@ namespace RealtimeAvatarController.Core
         }
 
         /// <summary>
-        /// <see cref="OnSlotStateChanged"/> Subject を Complete する。
-        /// 全 Slot の解放処理はタスク 12.7 で拡張する。
+        /// 全 Slot を <see cref="RemoveSlotAsync"/> と等価の順序
+        /// (<c>Provider.ReleaseAvatar → Provider.Dispose → MoCapSourceRegistry.Release</c>) で解放し、
+        /// 各 Slot について <c>Active → Disposed</c> 遷移イベントを <see cref="OnSlotStateChanged"/> に
+        /// 発行したうえで Subject を Complete する (design.md §4.1 / §6.2)。
+        /// 解放中の例外は <see cref="ReleaseSlotResources"/> 内で catch・ログ記録され、
+        /// 残余 Slot の解放処理は継続する (Req 3.5)。冪等であり 2 回目以降の呼び出しは no-op。
         /// </summary>
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
+
+            var slots = _slotRegistry.GetAllSlots();
+            var slotIds = new List<string>(slots.Count);
+            var previousStates = new List<SlotState>(slots.Count);
+            foreach (var handle in slots)
+            {
+                slotIds.Add(handle.SlotId);
+                previousStates.Add(handle.State);
+            }
+
+            for (var i = 0; i < slotIds.Count; i++)
+            {
+                var slotId = slotIds[i];
+                var previous = previousStates[i];
+
+                _resources.TryGetValue(slotId, out var res);
+                _resources.Remove(slotId);
+
+                ReleaseSlotResources(slotId, res);
+
+                try { _slotRegistry.RemoveSlot(slotId); }
+                catch (InvalidOperationException) { /* 既に除去済みの場合は無視 */ }
+
+                _stateChanged.OnNext(new SlotStateChangedEvent(slotId, previous, SlotState.Disposed));
+            }
+
+            _resources.Clear();
             _stateChanged.OnCompleted();
             _stateChanged.Dispose();
         }

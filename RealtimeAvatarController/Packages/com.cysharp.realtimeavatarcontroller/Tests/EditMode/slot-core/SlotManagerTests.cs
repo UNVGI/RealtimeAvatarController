@@ -670,6 +670,173 @@ namespace RealtimeAvatarController.Core.Tests
                 () => _manager.ApplyWithFallback("slot-1", () => throw new InvalidOperationException("boom")));
         }
 
+        // --- Dispose で全 Slot 解放 (タスク 12.7 / Req 3.2, 3.5) ---
+
+        [Test]
+        public async Task Dispose_WithMultipleSlots_ReleasesAllProviderAndMoCapSourceResources()
+        {
+            // タスク 12.7 / Req 3.2: Dispose は全 Slot に対して RemoveSlotAsync 相当の解放処理を実行する。
+            // Provider.ReleaseAvatar → Provider.Dispose → MoCapSourceRegistry.Release 経由の
+            // MoCapSource.Dispose が各 Slot で 1 回ずつ呼ばれることを確認する。
+            var providers = new List<MockAvatarProvider>();
+            _providerFactory.CreateFunc = _ =>
+            {
+                var p = new MockAvatarProvider();
+                providers.Add(p);
+                return p;
+            };
+            var sources = new List<MockMoCapSource>();
+            _moCapSourceFactory.CreateFunc = _ =>
+            {
+                var s = new MockMoCapSource();
+                sources.Add(s);
+                return s;
+            };
+
+            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).ToTask();
+            await _manager.AddSlotAsync(CreateSettings("slot-2", "Slot 2")).ToTask();
+
+            Assert.That(providers, Has.Count.EqualTo(2));
+            Assert.That(sources, Has.Count.EqualTo(2));
+
+            _manager.Dispose();
+
+            foreach (var p in providers)
+            {
+                Assert.That(p.ReleaseAvatarCallCount, Is.EqualTo(1),
+                    "Dispose は各 Slot の Provider.ReleaseAvatar を呼ぶこと");
+                Assert.That(p.DisposeCallCount, Is.EqualTo(1),
+                    "Dispose は各 Slot の Provider.Dispose を呼ぶこと");
+            }
+            foreach (var s in sources)
+            {
+                Assert.That(s.DisposeCallCount, Is.EqualTo(1),
+                    "Dispose は Registry 経由で各 MoCapSource を Dispose すること");
+            }
+
+            Assert.That(_manager.GetSlots(), Is.Empty, "Dispose 後は登録 Slot が空であること");
+        }
+
+        [Test]
+        public async Task Dispose_EmitsDisposedStateChangeForEachSlotAndCompletesStateChangedSubject()
+        {
+            // タスク 12.7: 各 Slot の Active → Disposed 遷移を OnSlotStateChanged に通知し、
+            // その後に Subject を Complete する (design.md §4.1)。
+            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).ToTask();
+            await _manager.AddSlotAsync(CreateSettings("slot-2", "Slot 2")).ToTask();
+
+            var events = new List<SlotStateChangedEvent>();
+            var completed = false;
+            using (_manager.OnSlotStateChanged.Subscribe(events.Add, () => completed = true))
+            {
+                _manager.Dispose();
+            }
+
+            Assert.That(events, Has.Count.EqualTo(2),
+                "Dispose は各 Slot に対して 1 回ずつ OnSlotStateChanged を発行すること");
+            Assert.That(events.TrueForAll(e => e.NewState == SlotState.Disposed), Is.True);
+            Assert.That(events.TrueForAll(e => e.PreviousState == SlotState.Active), Is.True);
+            var ids = new List<string>();
+            foreach (var e in events) ids.Add(e.SlotId);
+            Assert.That(ids, Contains.Item("slot-1"));
+            Assert.That(ids, Contains.Item("slot-2"));
+            Assert.That(completed, Is.True,
+                "Dispose は OnSlotStateChanged Subject を OnCompleted で終端すること");
+        }
+
+        [Test]
+        public void Dispose_NoSlots_CompletesStateChangedSubjectWithoutEmittingEvents()
+        {
+            var events = new List<SlotStateChangedEvent>();
+            var completed = false;
+            using (_manager.OnSlotStateChanged.Subscribe(events.Add, () => completed = true))
+            {
+                _manager.Dispose();
+            }
+
+            Assert.That(events, Is.Empty);
+            Assert.That(completed, Is.True);
+        }
+
+        [Test]
+        public async Task Dispose_Idempotent_SecondCallDoesNotReleaseResourcesAgain()
+        {
+            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).ToTask();
+
+            var provider = _providerFactory.LastCreatedProvider;
+            var source = _moCapSourceFactory.LastCreatedSource;
+
+            _manager.Dispose();
+
+            Assert.That(provider.DisposeCallCount, Is.EqualTo(1));
+            Assert.That(source.DisposeCallCount, Is.EqualTo(1));
+
+            _manager.Dispose();
+
+            Assert.That(provider.DisposeCallCount, Is.EqualTo(1),
+                "Dispose は冪等であり、2 回目の呼び出しで追加解放を行ってはならない");
+            Assert.That(source.DisposeCallCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task Dispose_OneSlotProviderDisposeThrows_ContinuesToReleaseRemainingSlots()
+        {
+            // Req 3.5: 破棄中に例外が発生した場合は catch してログに記録し、残余リソースの解放を継続する。
+            var providers = new List<MockAvatarProvider>();
+            _providerFactory.CreateFunc = _ =>
+            {
+                var p = new MockAvatarProvider();
+                providers.Add(p);
+                return p;
+            };
+            var sources = new List<MockMoCapSource>();
+            _moCapSourceFactory.CreateFunc = _ =>
+            {
+                var s = new MockMoCapSource();
+                sources.Add(s);
+                return s;
+            };
+
+            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).ToTask();
+            await _manager.AddSlotAsync(CreateSettings("slot-2", "Slot 2")).ToTask();
+
+            providers[0].DisposeException =
+                new InvalidOperationException("first provider dispose boom");
+
+            LogAssert.Expect(LogType.Warning,
+                new System.Text.RegularExpressions.Regex(@"\[SlotManager\].*Provider\.Dispose"));
+
+            _manager.Dispose();
+
+            Assert.That(providers[0].DisposeCallCount, Is.EqualTo(1));
+            Assert.That(providers[1].DisposeCallCount, Is.EqualTo(1),
+                "先行 Slot の Provider.Dispose で例外が発生しても残余 Slot の Provider.Dispose は実行されること");
+            Assert.That(sources[0].DisposeCallCount, Is.EqualTo(1),
+                "先行 Slot の Provider.Dispose で例外が発生しても MoCapSource の Dispose は継続すること");
+            Assert.That(sources[1].DisposeCallCount, Is.EqualTo(1));
+            Assert.That(_manager.GetSlots(), Is.Empty);
+        }
+
+        [Test]
+        public async Task Dispose_AfterDispose_AddSlotAsyncThrowsObjectDisposedException()
+        {
+            _manager.Dispose();
+
+            Assert.ThrowsAsync<ObjectDisposedException>(
+                async () => await _manager.AddSlotAsync(CreateSettings("slot-x", "x")).ToTask());
+        }
+
+        [Test]
+        public async Task Dispose_AfterDispose_RemoveSlotAsyncThrowsObjectDisposedException()
+        {
+            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).ToTask();
+
+            _manager.Dispose();
+
+            Assert.ThrowsAsync<ObjectDisposedException>(
+                async () => await _manager.RemoveSlotAsync("slot-1").ToTask());
+        }
+
         // --- コンストラクタ引数 null チェック ---
 
         [Test]
