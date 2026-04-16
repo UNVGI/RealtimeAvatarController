@@ -2,16 +2,18 @@
   "name": "RealtimeAvatarController.Avatar.Builtin.Tests.PlayMode",
   "rootNamespace": "RealtimeAvatarController.Avatar.Builtin.Tests",
   "references": [
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner",
     "RealtimeAvatarController.Avatar.Builtin"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
-  "overrideReferences": false,
-  "precompiledReferences": [],
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll"],
   "autoReferenced": false,
-  "defineConstraints": [],
-  "optionalUnityReferences": ["TestAssemblies"],
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+  "optionalUnityReferences": [],
   "versionDefines": [],
   "noEngineReferences": false
 }
