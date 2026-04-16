@@ -16,6 +16,16 @@
     "com.cysharp.unitask": "2.5.10",
     "com.hidano.uosc": "1.0.0"
   },
+  "scopedRegistries": [
+    {
+      "name": "OpenUPM",
+      "url": "https://package.openupm.com",
+      "scopes": [
+        "com.neuecc.unirx",
+        "com.cysharp.unitask"
+      ]
+    }
+  ],
   "samples": [
     {
       "displayName": "UI Sample",
