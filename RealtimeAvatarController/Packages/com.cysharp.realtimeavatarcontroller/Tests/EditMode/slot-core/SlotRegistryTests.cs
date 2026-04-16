@@ -211,5 +211,35 @@ namespace RealtimeAvatarController.Core.Tests
                 UnityEngine.Object.DestroyImmediate(settings2);
             }
         }
+
+        // --- validation-design.md [N-3] / Task 15.2: internal sealed スコープの徹底確認 ---
+
+        [Test]
+        public void SlotRegistry_Type_IsNotPublic()
+        {
+            var type = typeof(SlotRegistry);
+            Assert.That(type.IsPublic, Is.False,
+                "SlotRegistry はパッケージ外から参照されないよう internal でなければならない (validation-design.md [N-3])");
+            Assert.That(type.IsNotPublic, Is.True,
+                "SlotRegistry の可視性は internal (IsNotPublic == true) である必要がある");
+        }
+
+        [Test]
+        public void SlotRegistry_Type_IsSealed()
+        {
+            var type = typeof(SlotRegistry);
+            Assert.That(type.IsSealed, Is.True,
+                "SlotRegistry は継承拡張を禁止するため sealed でなければならない (validation-design.md [N-3])");
+        }
+
+        [Test]
+        public void SlotRegistry_Type_IsVisibleToTestsViaInternalsVisibleTo()
+        {
+            var type = typeof(SlotRegistry);
+            Assert.That(type, Is.Not.Null,
+                "InternalsVisibleTo 設定 (タスク 8.3) により SlotRegistry がテストアセンブリから参照可能であること");
+            Assert.That(type.Assembly.GetName().Name, Is.EqualTo("RealtimeAvatarController.Core"),
+                "SlotRegistry は Core アセンブリに配置され、テストは InternalsVisibleTo 経由でのみアクセス可能");
+        }
     }
 }

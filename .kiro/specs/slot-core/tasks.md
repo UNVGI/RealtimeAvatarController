@@ -306,7 +306,7 @@
     - `SlotState.cs` の `Inactive` 値 XML コメントに「`InactivateSlotAsync` / `ReactivateSlotAsync` API を将来追加予定」と明記する
     - `SlotManager.cs` の `TODO` コメントとして「Inactive ⇄ Active 遷移 API は未実装 (設計予約)」を追記する
     - _Requirements: 3.3_
-  - [ ] 15.2 `SlotRegistry` の `internal` スコープを徹底する (validation-design.md [N-3] 対応)
+  - [x] 15.2 `SlotRegistry` の `internal` スコープを徹底する (validation-design.md [N-3] 対応)
     - `SlotRegistry` クラスが `internal sealed` であることをコードレビューとテストで確認する
     - テストから `SlotRegistry` の内部メソッドを直接テストする場合は `InternalsVisibleTo` 経由で行う (タスク 8.3 と連動)
     - _Requirements: 2.1, 2.2_
