@@ -57,3 +57,6 @@ Wave 2: slot-core
 15.5 OK (c992cc9) [manual commit - max turns recovery]
 
 === Wave 2: slot-core 完了 (56/56 OK) ===
+
+Wave 3: motion-pipeline
+1-1 OK (f31f55f)
