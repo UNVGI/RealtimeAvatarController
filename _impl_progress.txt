@@ -60,3 +60,4 @@ Wave 2: slot-core
 
 Wave 3: motion-pipeline
 1-1 OK (f31f55f)
+1-2 OK (4d6a7b7)
