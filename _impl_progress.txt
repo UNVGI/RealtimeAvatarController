@@ -28,3 +28,4 @@ Wave 2: slot-core
 7.2 OK (78742ba)
 7.3 OK (5057fb1) [manual commit - max turns recovery]
 7.4 OK (2d75fa8)
+7.5 OK (tests completed during 7.2-7.4 TDD — coverage verified)

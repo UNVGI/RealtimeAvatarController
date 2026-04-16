@@ -1,0 +1,46 @@
+# Task 7.5 Registry 群の EditMode テストを完成させる
+
+## 状態
+タスク 7.2〜7.4 にて各 Registry 実装と並行して TDD で EditMode テストを先行作成済みのため、
+7.5 の「完成させる」観点では差分作業は発生しなかった。
+既存ファイルがタスク要件の全観点を満たしていることを確認した。
+
+## 確認したテスト観点 (tasks.md 7.5)
+
+### ProviderRegistryTests.cs
+- Register 成功 (Register_ValidTypeIdAndFactory_Succeeds / Register_MultipleTypeIds_Succeeds)
+- 競合例外 (Register_DuplicateTypeId_ThrowsRegistryConflictException)
+  - RegistryName="IProviderRegistry" / TypeId="Builtin" を確認
+- Resolve 成功 (Resolve_RegisteredTypeId_ReturnsProviderFromFactory)
+  - Factory.Create に Descriptor.Config が渡ることを確認 (Resolve_PassesDescriptorConfigToFactory)
+- 未登録例外 (Resolve_UnregisteredTypeId_ThrowsKeyNotFoundException)
+- GetRegisteredTypeIds (Empty / AfterRegistrations / ReturnsReadOnlyList)
+
+### MoCapSourceRegistryTests.cs
+- 参照共有 (Resolve_SameDescriptor_ReturnsSameInstance / Resolve_EquivalentDescriptor_ReturnsSameInstance)
+  - 同一 Descriptor / 等価 Descriptor で同一インスタンスが返り Factory.Create は 1 回のみ呼ばれる
+- 異なる Config では別インスタンス (Resolve_DifferentDescriptors_ReturnsDifferentInstances)
+- Release で refCount デクリメント (Release_DecrementsRefCount_DoesNotDisposeUntilZero)
+- refCount=0 で Dispose (Release_WhenRefCountReachesZero_DisposesSource)
+- Dispose 後の再 Resolve で新インスタンス生成 (Release_AfterDispose_ResolvingAgainCreatesNewInstance)
+- 登録外 Release で例外にならない (Release_UnmanagedSource_DoesNotThrow)
+- RegistryConflictException (Register_DuplicateTypeId_ThrowsRegistryConflictException)
+  - RegistryName="IMoCapSourceRegistry"
+- 未登録 typeId Resolve で KeyNotFoundException
+
+### 補助: FacialControllerRegistryTests.cs / LipSyncSourceRegistryTests.cs
+- 7.4 タスク実施時に TDD で作成済み。Register/Resolve/競合/未登録/GetRegisteredTypeIds を網羅。
+
+## SetUp/TearDown
+全 Registry テストで RegistryLocator.ResetForTest() を SetUp/TearDown で呼び出し済み。
+
+## 参照
+- Requirements: 9.9, 10.1, 10.2, 10.3, 14.3
+- Files:
+  - RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/Tests/EditMode/slot-core/ProviderRegistryTests.cs
+  - RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/Tests/EditMode/slot-core/MoCapSourceRegistryTests.cs
+  - RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/Tests/EditMode/slot-core/FacialControllerRegistryTests.cs
+  - RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/Tests/EditMode/slot-core/LipSyncSourceRegistryTests.cs
+
+## 結論
+タスク 7.5 の完成条件は既存テストで満たされている。追加実装・修正不要。
