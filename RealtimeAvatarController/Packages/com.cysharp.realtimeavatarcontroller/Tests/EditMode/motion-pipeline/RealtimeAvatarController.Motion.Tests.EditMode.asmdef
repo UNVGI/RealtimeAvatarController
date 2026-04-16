@@ -2,18 +2,28 @@
   "name": "RealtimeAvatarController.Motion.Tests.EditMode",
   "rootNamespace": "RealtimeAvatarController.Motion.Tests",
   "references": [
+    "RealtimeAvatarController.Motion",
+    "RealtimeAvatarController.Core",
+    "UniRx",
     "UnityEngine.TestRunner",
-    "UnityEditor.TestRunner",
-    "RealtimeAvatarController.Motion"
+    "UnityEditor.TestRunner"
   ],
-  "includePlatforms": ["Editor"],
+  "includePlatforms": [
+    "Editor"
+  ],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
   "overrideReferences": true,
-  "precompiledReferences": ["nunit.framework.dll"],
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
   "autoReferenced": false,
-  "defineConstraints": ["UNITY_INCLUDE_TESTS"],
-  "optionalUnityReferences": [],
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
   "versionDefines": [],
   "noEngineReferences": false
 }
