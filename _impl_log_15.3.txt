@@ -1,0 +1,13 @@
+Task: 15.3 VmcReceive エラーはワーカースレッドから直接 Publish 可能な旨を引き継ぎ文書に記録する (validation-design.md [N-4] 対応)
+
+変更概要:
+- ISlotErrorChannel.cs の XML コメントを拡充し、以下を明記:
+  - 実装側で Subject.Synchronize() をラップしているため Publish() はワーカースレッドから直接呼び出し可能
+  - VmcReceive 等のワーカースレッド起源エラーをメインスレッドへ移譲してから発行する必要がない
+  - 購読側がメインスレッド切替 (.ObserveOnMainThread()) を担う責務分担
+- 本件は mocap-vmc Spec への引き継ぎ事項として ISlotErrorChannel のインターフェースコメントに恒久的に記録
+  - tasks.md 末尾「他 Spec への引き継ぎ事項」テーブルにも同内容が既に記載されている (line 360)
+
+補足:
+- DefaultSlotErrorChannel 実装は既に Subject<SlotError>().Synchronize() で初期化済み (タスク 6.4)
+- 文書化のみの変更でコード挙動・テスト影響なし
