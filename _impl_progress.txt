@@ -5,3 +5,4 @@ Wave 2: slot-core
 1.4 OK (41de40b)
 1.5 OK (e1575d9)
 2.1 OK (c0cef5c) [manual commit - max turns recovery]
+2.2 OK (c3ec184)
