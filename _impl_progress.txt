@@ -53,3 +53,4 @@ Wave 2: slot-core
 15.1 OK (1326873)
 15.2 OK (6999861)
 15.3 OK (434015f)
+15.4 OK (no changes - contracts.md §1.7 verified consistent with design.md §11)

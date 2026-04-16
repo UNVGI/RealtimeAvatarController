@@ -1,0 +1,32 @@
+Task: 15.4 contracts.md §1.7 を確認する
+
+【確認対象】
+- _shared/contracts.md §1〜§5 (特に §1.7 エラーハンドリング契約)
+- slot-core/design.md §11 公開契約サマリ (§11.1 公開 API 一覧 / §11.2 実装制約)
+
+【§1.7 エラーハンドリング契約の整合確認】
+- ISlotErrorChannel: IObservable<SlotError> Errors + Publish(SlotError) → design.md §11.1 と一致
+- SlotError: SlotId / Category / Exception / Timestamp → design.md §11.1 と一致
+- SlotErrorCategory: VmcReceive / InitFailure / ApplyFailure / RegistryConflict → design.md §11.1 と一致
+- Debug.LogError 抑制ポリシー (同一 SlotId+Category 初回 1F のみ出力) → design.md §4.3 と一致
+- エラー通知責務分担表:
+  - Slot 初期化失敗: SlotManager.AddSlotAsync 内 try-catch → Publish(InitFailure) ✓
+  - Applier エラー: SlotManager が FallbackBehavior 実行後に Publish(ApplyFailure) ✓
+  - VMC 受信エラー: IMoCapSource 具象実装が Publish(VmcReceive) (Subject.Synchronize によりワーカースレッド直呼び出し可) ✓
+  - Registry 競合: Factory 側 RegisterRuntime/RegisterEditor が try-catch し Publish(RegistryConflict) ✓
+- design フェーズ最終確定注記 (Publish(SlotError) 追加、RegistryLocator.ErrorChannel 経由アクセス) が反映済み
+
+【§1〜§5 全体の design.md §11.1 整合確認】
+- §1 SlotSettings / Descriptor / Config 基底型 / RegistryLocator / ISlotErrorChannel → §11.1 と一致
+- §2 IMoCapSource (IObservable<MotionFrame> MotionStream / UniRx+UniTask 採用) → §11.1 / §11.2 と一致
+- §3 IAvatarProvider (同期+UniTask 非同期両対応、ProviderConfigBase 引数) → §11.1 と一致
+- §4 IFacialController (Initialize(GameObject) / ApplyFacialData(object) / Shutdown) → §11.1 と一致
+- §5 ILipSyncSource (Initialize(LipSyncSourceConfigBase) / FetchLatestLipSync() / Shutdown) → §11.1 と一致
+
+【結論】
+contracts.md §1.7 は validation-design.md [E-1] / 「ApplyFailure 発行主体の SlotManager 一本化」/ 「ISlotErrorChannel.Publish() の contracts 追記」で言及された最終形をすべて反映済み。
+§1〜§5 全体も design.md §11.1 公開 API 一覧と整合している。
+差分なし、contracts.md の更新は不要と判断。
+
+【参考】
+- validation-design.md L72 は「contracts.md は独立ファイルとして存在せず、design.md §11 が公開契約サマリを兼ねる」と記載するが、実際には `_shared/contracts.md` が独立ファイルとして存在しており、§1〜§1.8 に最終確定 API が記載されている。双方を読み合わせても矛盾は発見されず。
