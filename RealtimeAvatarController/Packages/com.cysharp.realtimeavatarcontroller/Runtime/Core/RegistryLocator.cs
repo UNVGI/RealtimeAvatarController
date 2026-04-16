@@ -55,7 +55,5 @@ namespace RealtimeAvatarController.Core
             s_errorChannel = null;
             s_suppressedErrors?.Clear();
         }
-
-        private sealed class DefaultMoCapSourceRegistry : IMoCapSourceRegistry { }
     }
 }
