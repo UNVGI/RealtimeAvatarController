@@ -36,3 +36,4 @@ Wave 2: slot-core
 9.2 OK (tests completed during 9.1 TDD — coverage verified)
 10.1 OK (40bac62)
 10.2 OK (fa8f332)
+10.3 OK (7b5cb48)
