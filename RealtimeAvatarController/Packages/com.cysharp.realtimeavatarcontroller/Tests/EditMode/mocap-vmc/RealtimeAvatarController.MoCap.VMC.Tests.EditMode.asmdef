@@ -1,0 +1,17 @@
+{
+  "name": "RealtimeAvatarController.MoCap.VMC.Tests.EditMode",
+  "rootNamespace": "RealtimeAvatarController.MoCap.VMC.Tests",
+  "references": [
+    "RealtimeAvatarController.MoCap.VMC"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
