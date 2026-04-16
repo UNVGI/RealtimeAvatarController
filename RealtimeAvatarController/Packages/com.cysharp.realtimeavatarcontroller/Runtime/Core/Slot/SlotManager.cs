@@ -349,10 +349,13 @@ namespace RealtimeAvatarController.Core
                     break;
 
                 case FallbackBehavior.Hide:
-                    // Hide は Renderer.enabled = false を使用する。
-                    // GameObject.SetActive(false) は使用しない (validation-design.md 引き継ぎ事項 #3 / §11.2)。
-                    // 次フレーム正常 Apply 時に Renderer.enabled = true に復元する自動回復挙動は
-                    // Req 13.5 未確定 (motion-pipeline 合意後に実装予定)。
+                    // Hide フォールバック実装方針 (validation-design.md §11.2 / 引き継ぎ事項 #3 で確定):
+                    //   - アバターに紐付く全 Renderer.enabled を false に設定する。
+                    //   - GameObject.SetActive(false) は使用しない
+                    //     (motion-pipeline の確定実装と統一するため。GameObject 自体は生存させる)。
+                    //   - 次フレームの正常 Apply 時に Renderer.enabled = true に復元する
+                    //     (この復元は復帰側の責務であり、復帰トリガとなる自動回復挙動の
+                    //      具体実装は Req 13.5 / motion-pipeline 合意後に追加する)。
                     if (avatar != null)
                     {
                         var renderers = avatar.GetComponentsInChildren<Renderer>(true);
