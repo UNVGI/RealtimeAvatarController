@@ -19,8 +19,9 @@ namespace RealtimeAvatarController.Core.Tests
     ///   - 未登録 slotId の RemoveSlotAsync → InvalidOperationException
     ///   - GetSlots / GetSlot
     ///   - OnSlotStateChanged の通知内容 (SlotId / PreviousState / NewState)
-    /// weight クランプ・InitFailure・ApplyFailure・全 Slot 解放 Dispose は後続タスク 12.3〜12.8 で検証する。
-    /// Requirements: 2.6, 2.7, 2.8, 3.1, 3.2, 3.4
+    ///   - weight クランプ (タスク 12.3 / Req 1.5): 1.5f → 1.0f、-0.25f → 0.0f、0.5f → 0.5f
+    /// InitFailure・ApplyFailure・全 Slot 解放 Dispose は後続タスク 12.4〜12.8 で検証する。
+    /// Requirements: 1.5, 2.6, 2.7, 2.8, 3.1, 3.2, 3.4
     /// </summary>
     [TestFixture]
     public class SlotManagerTests
@@ -217,6 +218,43 @@ namespace RealtimeAvatarController.Core.Tests
             Assert.That(handle, Is.Not.Null);
             Assert.That(handle.State, Is.EqualTo(SlotState.Active));
             Assert.That(handle.Settings, Is.SameAs(settings));
+        }
+
+        // --- weight クランプ (タスク 12.3 / Req 1.5) ---
+
+        [Test]
+        public async Task AddSlotAsync_WeightAboveOne_ClampsToOne()
+        {
+            var settings = CreateSettings("slot-1", "Slot 1");
+            settings.weight = 1.5f;
+
+            await _manager.AddSlotAsync(settings).ToTask();
+
+            Assert.That(settings.weight, Is.EqualTo(1.0f));
+            Assert.That(_manager.GetSlot("slot-1").Settings.weight, Is.EqualTo(1.0f));
+        }
+
+        [Test]
+        public async Task AddSlotAsync_WeightBelowZero_ClampsToZero()
+        {
+            var settings = CreateSettings("slot-1", "Slot 1");
+            settings.weight = -0.25f;
+
+            await _manager.AddSlotAsync(settings).ToTask();
+
+            Assert.That(settings.weight, Is.EqualTo(0.0f));
+            Assert.That(_manager.GetSlot("slot-1").Settings.weight, Is.EqualTo(0.0f));
+        }
+
+        [Test]
+        public async Task AddSlotAsync_WeightInRange_RemainsUnchanged()
+        {
+            var settings = CreateSettings("slot-1", "Slot 1");
+            settings.weight = 0.5f;
+
+            await _manager.AddSlotAsync(settings).ToTask();
+
+            Assert.That(settings.weight, Is.EqualTo(0.5f));
         }
 
         // --- コンストラクタ引数 null チェック ---

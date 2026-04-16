@@ -14,11 +14,11 @@ namespace RealtimeAvatarController.Core
     /// <see cref="IProviderRegistry"/> / <see cref="IMoCapSourceRegistry"/> / <see cref="ISlotErrorChannel"/>
     /// に対して Provider / MoCapSource の解決・解放・エラー発行を委譲する。
     /// <para>
-    /// 本クラスの 12.2 時点ではコア実装のみを提供する:
-    /// 正常系 Add/Remove・重複 slotId チェック・状態遷移通知・GetSlots/GetSlot。
-    /// weight クランプ (タスク 12.3)・初期化失敗時の Disposed 遷移 (タスク 12.4)・
-    /// 詳細リソース解放 (タスク 12.5)・ApplyFailure/フォールバック (タスク 12.6)・
-    /// Dispose 全 Slot 解放 (タスク 12.7) は後続タスクで拡張する。
+    /// 本クラスの 12.3 時点ではコア実装と weight クランプを提供する:
+    /// 正常系 Add/Remove・重複 slotId チェック・状態遷移通知・GetSlots/GetSlot・
+    /// AddSlotAsync 内の <c>Mathf.Clamp01(settings.weight)</c>。
+    /// 初期化失敗時の Disposed 遷移 (タスク 12.4)・詳細リソース解放 (タスク 12.5)・
+    /// ApplyFailure/フォールバック (タスク 12.6)・Dispose 全 Slot 解放 (タスク 12.7) は後続タスクで拡張する。
     /// </para>
     /// <para>
     /// TODO (validation-design.md [N-2]): Inactive ⇄ Active 遷移 API は設計予約済みで未実装。
@@ -73,6 +73,10 @@ namespace RealtimeAvatarController.Core
             ThrowIfDisposed();
 
             settings.Validate();
+
+            // weight クランプ (タスク 12.3 / Req 1.5): SlotSettings 側ではクランプせず、
+            // SlotManager 側で Mathf.Clamp01 により 0.0〜1.0 に収める。
+            settings.weight = Mathf.Clamp01(settings.weight);
 
             // 重複 slotId は SlotRegistry.AddSlot が InvalidOperationException をスロー。
             _slotRegistry.AddSlot(settings.slotId, settings);
