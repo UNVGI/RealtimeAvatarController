@@ -3,6 +3,8 @@
   "rootNamespace": "RealtimeAvatarController.Core.Tests",
   "references": [
     "RealtimeAvatarController.Core",
+    "UniRx",
+    "UniTask",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner"
   ],
@@ -19,7 +21,9 @@
   "defineConstraints": [
     "UNITY_INCLUDE_TESTS"
   ],
-  "optionalUnityReferences": [],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
   "versionDefines": [],
   "noEngineReferences": false
 }
