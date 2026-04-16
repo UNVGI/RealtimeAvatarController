@@ -1,0 +1,16 @@
+{
+  "name": "RealtimeAvatarController.Core.Editor",
+  "rootNamespace": "RealtimeAvatarController.Core.Editor",
+  "references": [
+    "RealtimeAvatarController.Core"
+  ],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

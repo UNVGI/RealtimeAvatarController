@@ -1,0 +1,16 @@
+{
+  "name": "RealtimeAvatarController.MoCap.VMC.Editor",
+  "rootNamespace": "RealtimeAvatarController.MoCap.VMC.Editor",
+  "references": [
+    "RealtimeAvatarController.MoCap.VMC"
+  ],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

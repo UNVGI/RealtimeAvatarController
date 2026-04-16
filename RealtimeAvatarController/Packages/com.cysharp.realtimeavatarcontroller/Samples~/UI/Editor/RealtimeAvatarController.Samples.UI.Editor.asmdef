@@ -1,0 +1,16 @@
+{
+  "name": "RealtimeAvatarController.Samples.UI.Editor",
+  "rootNamespace": "RealtimeAvatarController.Samples.UI.Editor",
+  "references": [
+    "RealtimeAvatarController.Samples.UI"
+  ],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
