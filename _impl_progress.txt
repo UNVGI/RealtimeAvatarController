@@ -67,3 +67,4 @@ Wave 3: motion-pipeline
 2-3 OK (094f285)
 2-4 OK (cd7af40)
 3-1 OK (06cc8a4)
+4-1 OK (7a940ab) [child reported FAIL but commit contains full MotionCache.cs implementation; commit message deviates from convention]
