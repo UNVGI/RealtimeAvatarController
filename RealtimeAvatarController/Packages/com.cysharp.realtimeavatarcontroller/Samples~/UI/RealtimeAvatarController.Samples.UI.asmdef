@@ -5,7 +5,8 @@
     "RealtimeAvatarController.Core",
     "RealtimeAvatarController.Motion",
     "RealtimeAvatarController.MoCap.VMC",
-    "RealtimeAvatarController.Avatar.Builtin"
+    "RealtimeAvatarController.Avatar.Builtin",
+    "UniRx"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

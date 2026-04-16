@@ -1,5 +1,36 @@
 {
   "dependencies": {
+    "com.cysharp.realtimeavatarcontroller": {
+      "version": "file:com.cysharp.realtimeavatarcontroller",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.neuecc.unirx": "7.1.0",
+        "com.cysharp.unitask": "2.5.10",
+        "com.hidano.uosc": "1.0.0"
+      }
+    },
+    "com.cysharp.unitask": {
+      "version": "2.5.10",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://package.openupm.com"
+    },
+    "com.hidano.uosc": {
+      "version": "1.0.0",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://registry.npmjs.com"
+    },
+    "com.neuecc.unirx": {
+      "version": "7.1.0",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://package.openupm.com"
+    },
     "com.unity.multiplayer.center": {
       "version": "1.0.1",
       "depth": 0,
