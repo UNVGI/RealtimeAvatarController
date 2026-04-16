@@ -14,11 +14,14 @@ namespace RealtimeAvatarController.Core
     /// <see cref="IProviderRegistry"/> / <see cref="IMoCapSourceRegistry"/> / <see cref="ISlotErrorChannel"/>
     /// に対して Provider / MoCapSource の解決・解放・エラー発行を委譲する。
     /// <para>
-    /// 本クラスの 12.3 時点ではコア実装と weight クランプを提供する:
+    /// 本クラスの 12.4 時点ではコア実装・weight クランプに加え、初期化失敗時の
+    /// <c>Created → Disposed</c> 遷移を提供する:
     /// 正常系 Add/Remove・重複 slotId チェック・状態遷移通知・GetSlots/GetSlot・
-    /// AddSlotAsync 内の <c>Mathf.Clamp01(settings.weight)</c>。
-    /// 初期化失敗時の Disposed 遷移 (タスク 12.4)・詳細リソース解放 (タスク 12.5)・
-    /// ApplyFailure/フォールバック (タスク 12.6)・Dispose 全 Slot 解放 (タスク 12.7) は後続タスクで拡張する。
+    /// AddSlotAsync 内の <c>Mathf.Clamp01(settings.weight)</c>・
+    /// Provider / Source Resolve・<see cref="IAvatarProvider.RequestAvatarAsync"/> 失敗時の
+    /// 例外捕捉 → 部分リソース解放 → <see cref="SlotErrorCategory.InitFailure"/> 発行 → Disposed 遷移。
+    /// RemoveSlotAsync の詳細リソース解放 (タスク 12.5)・ApplyFailure/フォールバック (タスク 12.6)・
+    /// Dispose 全 Slot 解放 (タスク 12.7) は後続タスクで拡張する。
     /// </para>
     /// <para>
     /// TODO (validation-design.md [N-2]): Inactive ⇄ Active 遷移 API は設計予約済みで未実装。
@@ -79,14 +82,30 @@ namespace RealtimeAvatarController.Core
             settings.weight = Mathf.Clamp01(settings.weight);
 
             // 重複 slotId は SlotRegistry.AddSlot が InvalidOperationException をスロー。
+            // 初期化失敗の try-catch より前で発生させ、呼び出し側に伝播させる (Req 2.3)。
             _slotRegistry.AddSlot(settings.slotId, settings);
             var slotId = settings.slotId;
 
-            var provider = _providerRegistry.Resolve(settings.avatarProviderDescriptor);
-            var source = _moCapSourceRegistry.Resolve(settings.moCapSourceDescriptor);
-            source.Initialize(settings.moCapSourceDescriptor.Config);
-            var avatar = await provider.RequestAvatarAsync(
-                settings.avatarProviderDescriptor.Config, cancellationToken);
+            IAvatarProvider provider = null;
+            IMoCapSource source = null;
+            GameObject avatar = null;
+            try
+            {
+                provider = _providerRegistry.Resolve(settings.avatarProviderDescriptor);
+                source = _moCapSourceRegistry.Resolve(settings.moCapSourceDescriptor);
+                source.Initialize(settings.moCapSourceDescriptor.Config);
+                avatar = await provider.RequestAvatarAsync(
+                    settings.avatarProviderDescriptor.Config, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // タスク 12.4 / Req 3.7, 3.8, 12.4:
+                // Provider / Source Resolve・RequestAvatarAsync の例外を捕捉し、
+                // 部分的に確保済みリソースを可能な限り解放してから Slot を Disposed に遷移させ、
+                // ISlotErrorChannel に InitFailure を発行する。UniTask は正常完了とする。
+                HandleInitFailure(slotId, provider, source, avatar, ex);
+                return;
+            }
 
             _resources[slotId] = new SlotResources
             {
@@ -152,6 +171,51 @@ namespace RealtimeAvatarController.Core
         private void ThrowIfDisposed()
         {
             if (_disposed) throw new ObjectDisposedException(nameof(SlotManager));
+        }
+
+        /// <summary>
+        /// 初期化失敗時の後処理。部分的に取得した Provider / Source / Avatar を解放し、
+        /// Slot を <see cref="SlotRegistry"/> から除去して <see cref="SlotState.Disposed"/> 遷移イベントを
+        /// 発行し、<see cref="ISlotErrorChannel"/> に <see cref="SlotErrorCategory.InitFailure"/> を通知する。
+        /// クリーンアップ途中で発生した例外は握り潰し、残余リソース解放を継続する (Req 3.5)。
+        /// </summary>
+        private void HandleInitFailure(
+            string slotId,
+            IAvatarProvider provider,
+            IMoCapSource source,
+            GameObject avatar,
+            Exception initException)
+        {
+            try
+            {
+                if (provider != null)
+                {
+                    if (avatar != null)
+                    {
+                        try { provider.ReleaseAvatar(avatar); }
+                        catch (Exception cleanupEx) { Debug.LogWarning($"[SlotManager] InitFailure cleanup: ReleaseAvatar 失敗 ({slotId}): {cleanupEx}"); }
+                    }
+                    try { provider.Dispose(); }
+                    catch (Exception cleanupEx) { Debug.LogWarning($"[SlotManager] InitFailure cleanup: Provider.Dispose 失敗 ({slotId}): {cleanupEx}"); }
+                }
+                if (source != null)
+                {
+                    try { _moCapSourceRegistry.Release(source); }
+                    catch (Exception cleanupEx) { Debug.LogWarning($"[SlotManager] InitFailure cleanup: MoCapSourceRegistry.Release 失敗 ({slotId}): {cleanupEx}"); }
+                }
+            }
+            finally
+            {
+                var handle = _slotRegistry.GetSlot(slotId);
+                var previous = handle?.State ?? SlotState.Created;
+                if (handle != null)
+                {
+                    try { _slotRegistry.RemoveSlot(slotId); }
+                    catch (InvalidOperationException) { /* 既に除去済みの場合は無視 */ }
+                }
+                _stateChanged.OnNext(new SlotStateChangedEvent(slotId, previous, SlotState.Disposed));
+                _errorChannel.Publish(new SlotError(slotId, SlotErrorCategory.InitFailure, initException, DateTime.UtcNow));
+            }
         }
 
         private void TransitionState(string slotId, SlotState newState)

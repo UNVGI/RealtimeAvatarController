@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using NUnit.Framework;
 using UniRx;
 using UnityEngine;
+using UnityEngine.TestTools;
 using Cysharp.Threading.Tasks;
 using RealtimeAvatarController.Core;
 using RealtimeAvatarController.Core.Tests.Mocks;
@@ -11,7 +12,7 @@ using RealtimeAvatarController.Core.Tests.Mocks;
 namespace RealtimeAvatarController.Core.Tests
 {
     /// <summary>
-    /// SlotManager のコア実装 EditMode テスト (タスク 12.2 範囲)。
+    /// SlotManager のコア実装 EditMode テスト (タスク 12.2〜12.4 範囲)。
     /// 観点:
     ///   - AddSlotAsync 成功 (Created → Active 遷移、OnSlotStateChanged 通知)
     ///   - 同一 slotId の重複追加 → InvalidOperationException
@@ -20,8 +21,11 @@ namespace RealtimeAvatarController.Core.Tests
     ///   - GetSlots / GetSlot
     ///   - OnSlotStateChanged の通知内容 (SlotId / PreviousState / NewState)
     ///   - weight クランプ (タスク 12.3 / Req 1.5): 1.5f → 1.0f、-0.25f → 0.0f、0.5f → 0.5f
-    /// InitFailure・ApplyFailure・全 Slot 解放 Dispose は後続タスク 12.4〜12.8 で検証する。
-    /// Requirements: 1.5, 2.6, 2.7, 2.8, 3.1, 3.2, 3.4
+    ///   - 初期化失敗 (タスク 12.4 / Req 3.7, 3.8, 12.4): Provider / Source Resolve 失敗・
+    ///     RequestAvatarAsync 失敗時に Created → Disposed 遷移 + InitFailure 発行、
+    ///     例外は呼び出し側に伝播しない、部分取得済みリソースは解放される。
+    /// ApplyFailure・全 Slot 解放 Dispose は後続タスク 12.5〜12.8 で検証する。
+    /// Requirements: 1.5, 2.6, 2.7, 2.8, 3.1, 3.2, 3.4, 3.7, 3.8, 12.4
     /// </summary>
     [TestFixture]
     public class SlotManagerTests
@@ -255,6 +259,108 @@ namespace RealtimeAvatarController.Core.Tests
             await _manager.AddSlotAsync(settings).ToTask();
 
             Assert.That(settings.weight, Is.EqualTo(0.5f));
+        }
+
+        // --- 初期化失敗時の Created → Disposed 遷移 (タスク 12.4 / Req 3.7, 3.8, 12.4) ---
+
+        [Test]
+        public async Task AddSlotAsync_ProviderResolveThrows_TransitionsToDisposedAndPublishesInitFailure()
+        {
+            var providerException = new InvalidOperationException("provider boom");
+            _providerFactory.CreateException = providerException;
+
+            var settings = CreateSettings("slot-1", "Slot 1");
+            var stateEvents = new List<SlotStateChangedEvent>();
+            var errors = new List<SlotError>();
+            using (_manager.OnSlotStateChanged.Subscribe(stateEvents.Add))
+            using (_errorChannel.Errors.Subscribe(errors.Add))
+            {
+                LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*InitFailure"));
+                await _manager.AddSlotAsync(settings).ToTask();
+            }
+
+            Assert.That(_manager.GetSlot("slot-1"), Is.Null, "初期化失敗 Slot は Registry から除去されること");
+            Assert.That(stateEvents, Has.Count.EqualTo(1));
+            Assert.That(stateEvents[0].SlotId, Is.EqualTo("slot-1"));
+            Assert.That(stateEvents[0].PreviousState, Is.EqualTo(SlotState.Created));
+            Assert.That(stateEvents[0].NewState, Is.EqualTo(SlotState.Disposed));
+
+            Assert.That(errors, Has.Count.EqualTo(1));
+            Assert.That(errors[0].SlotId, Is.EqualTo("slot-1"));
+            Assert.That(errors[0].Category, Is.EqualTo(SlotErrorCategory.InitFailure));
+            Assert.That(errors[0].Exception, Is.SameAs(providerException));
+            Assert.That(errors[0].Timestamp.Kind, Is.EqualTo(DateTimeKind.Utc));
+        }
+
+        [Test]
+        public async Task AddSlotAsync_MoCapSourceResolveThrows_TransitionsToDisposedAndPublishesInitFailure()
+        {
+            var sourceException = new InvalidOperationException("source boom");
+            _moCapSourceFactory.CreateException = sourceException;
+
+            var settings = CreateSettings("slot-1", "Slot 1");
+            var errors = new List<SlotError>();
+            using (_errorChannel.Errors.Subscribe(errors.Add))
+            {
+                LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*InitFailure"));
+                await _manager.AddSlotAsync(settings).ToTask();
+            }
+
+            Assert.That(_manager.GetSlot("slot-1"), Is.Null);
+            Assert.That(errors, Has.Count.EqualTo(1));
+            Assert.That(errors[0].Category, Is.EqualTo(SlotErrorCategory.InitFailure));
+            Assert.That(errors[0].Exception, Is.SameAs(sourceException));
+
+            // Provider が先に Resolve されているため、部分的に取得した Provider は Dispose / ReleaseAvatar されること。
+            Assert.That(_providerFactory.LastCreatedProvider.DisposeCallCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task AddSlotAsync_RequestAvatarAsyncThrows_TransitionsToDisposedAndPublishesInitFailure()
+        {
+            var settings = CreateSettings("slot-1", "Slot 1");
+
+            var avatarException = new InvalidOperationException("avatar boom");
+            _providerFactory.CreateFunc = _ =>
+            {
+                var provider = new MockAvatarProvider { RequestAvatarException = avatarException };
+                return provider;
+            };
+
+            var errors = new List<SlotError>();
+            using (_errorChannel.Errors.Subscribe(errors.Add))
+            {
+                LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*InitFailure"));
+                await _manager.AddSlotAsync(settings).ToTask();
+            }
+
+            Assert.That(_manager.GetSlot("slot-1"), Is.Null);
+            Assert.That(errors, Has.Count.EqualTo(1));
+            Assert.That(errors[0].Category, Is.EqualTo(SlotErrorCategory.InitFailure));
+            Assert.That(errors[0].Exception, Is.SameAs(avatarException));
+
+            // RequestAvatarAsync 失敗時も MoCapSource は Release され、参照カウント 0 で Dispose される。
+            Assert.That(_moCapSourceFactory.LastCreatedSource.DisposeCallCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task AddSlotAsync_InitFailure_SubsequentAddWithSameSlotIdSucceeds()
+        {
+            _providerFactory.CreateException = new InvalidOperationException("first try fails");
+
+            var first = CreateSettings("slot-1", "Slot 1");
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*InitFailure"));
+            await _manager.AddSlotAsync(first).ToTask();
+
+            _providerFactory.CreateException = null;
+
+            var second = CreateSettings("slot-1", "Slot 1 retry");
+            await _manager.AddSlotAsync(second).ToTask();
+
+            var handle = _manager.GetSlot("slot-1");
+            Assert.That(handle, Is.Not.Null);
+            Assert.That(handle.State, Is.EqualTo(SlotState.Active));
+            Assert.That(handle.DisplayName, Is.EqualTo("Slot 1 retry"));
         }
 
         // --- コンストラクタ引数 null チェック ---
