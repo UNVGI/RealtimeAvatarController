@@ -84,5 +84,7 @@ task-*-full-*
 # impl-run orchestrator logs
 .impl-run-logs/
 unity-*.log
+unity_*.log
+remove_*.sh
 [Uu]ser[Ss]ettings/
 
