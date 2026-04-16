@@ -253,7 +253,8 @@ Samples~/
     "RealtimeAvatarController.Core",
     "RealtimeAvatarController.Motion",
     "RealtimeAvatarController.MoCap.VMC",
-    "RealtimeAvatarController.Avatar.Builtin"
+    "RealtimeAvatarController.Avatar.Builtin",
+    "UniRx"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
@@ -270,6 +271,7 @@ Samples~/
 - **担当 Spec**: ui-sample
 - **配置パス**: `Samples~/UI/RealtimeAvatarController.Samples.UI.asmdef`
 - **役割**: UI サンプル。機能部全アセンブリを参照するが、機能部は本 asmdef を参照しない (一方向依存)。`autoReferenced: false` として機能部ビルドへの混入を防ぐ。
+- **UniRx 直接参照**: `references` に `UniRx` を直接列挙している。これは contracts.md §6.1 の「UniRx 直接参照は Core のみ」の原則に対する**明示的例外**。根拠: `.ObserveOnMainThread()` 拡張メソッドの使用 (ErrorChannel 購読時)。UniTask は不要のため直接参照しない (Core 経由)。
 
 ### 4.2 Editor 専用 asmdef
 
