@@ -39,6 +39,22 @@ namespace RealtimeAvatarController.Core.Tests
             }
         }
 
+        [Test]
+        public void ProviderConfigBase_ConcreteSubclass_CanBeCastToBaseType()
+        {
+            var instance = ScriptableObject.CreateInstance<ConcreteProviderConfig>();
+            try
+            {
+                ProviderConfigBase baseRef = instance;
+                Assert.That(baseRef, Is.Not.Null);
+                Assert.That(baseRef, Is.SameAs(instance));
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
         // --- MoCapSourceConfigBase テスト ---
 
         /// <summary>
