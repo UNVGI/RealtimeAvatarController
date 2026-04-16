@@ -22,3 +22,4 @@ Wave 2: slot-core
 6.1 OK (5030752)
 6.2 OK (8d778a9)
 6.3 OK (e4cf175)
+6.4 OK (5a8a43f)
