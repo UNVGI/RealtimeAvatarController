@@ -14,6 +14,11 @@ namespace RealtimeAvatarController.Core
         /// <summary>
         /// リソースを保持したまま一時停止中 (再アクティブ化可能)。
         /// 将来機能。API 未定義 (Active ⇄ Inactive 遷移 API は設計予約済み)。
+        /// <para>
+        /// 将来予約 (validation-design.md [N-2]):
+        /// <c>InactivateSlotAsync</c> / <c>ReactivateSlotAsync</c> API を将来追加予定。
+        /// 現時点では <see cref="SlotManager"/> からこの状態へ遷移する手段は存在しない。
+        /// </para>
         /// </summary>
         Inactive,
 

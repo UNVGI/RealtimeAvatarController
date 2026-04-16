@@ -22,7 +22,10 @@ namespace RealtimeAvatarController.Core
     /// 一括解放 (design.md §4.1 <c>Active → Disposed</c>) を提供する。
     /// </para>
     /// <para>
-    /// TODO (validation-design.md [N-2]): Inactive ⇄ Active 遷移 API は設計予約済みで未実装。
+    /// TODO (validation-design.md [N-2]): Inactive ⇄ Active 遷移 API は未実装 (設計予約)。
+    /// 将来 <c>InactivateSlotAsync</c> / <c>ReactivateSlotAsync</c> を追加し、
+    /// <see cref="SlotState.Active"/> ⇄ <see cref="SlotState.Inactive"/> 遷移を可能にする予定
+    /// (リソースは保持したままモーション適用のみ停止する用途を想定)。
     /// </para>
     /// </summary>
     public sealed class SlotManager : IDisposable
