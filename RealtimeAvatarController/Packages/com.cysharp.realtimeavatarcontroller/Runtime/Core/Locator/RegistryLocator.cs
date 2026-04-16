@@ -11,24 +11,56 @@ namespace RealtimeAvatarController.Core
     /// テスト時は <see cref="ResetForTest"/> / Override*() を使用してインスタンスを差し替える。
     /// </summary>
     /// <remarks>
-    /// Factory 自己登録パターン (design.md §3.15 / §4.5):
+    /// <para>
+    /// 属性ベース自動登録パターン (design.md §3.15 / §4.5 / §4.6、validation-design.md Tasks 引き継ぎ事項 #2)。
+    /// 各 Spec の具象 Factory は以下のパターンに従い自己登録メソッドを定義し、
+    /// <see cref="RegistryConflictException"/> を try-catch で捕捉して <see cref="ErrorChannel"/> へ通知する。
+    /// Registry 自身は ErrorChannel に発行しない (発行責務は呼び出し元の Factory 側)。
+    /// </para>
     /// <code>
-    /// // ランタイム登録エントリポイント
-    /// [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-    /// private static void RegisterRuntime()
+    /// public sealed class ConcreteFactory : IAvatarProviderFactory
     /// {
-    ///     try
+    ///     // ① ランタイム登録エントリポイント (Player / Build)
+    ///     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    ///     private static void RegisterRuntime()
     ///     {
-    ///         RegistryLocator.ProviderRegistry.Register("TypeId", new ConcreteFactory());
+    ///         try
+    ///         {
+    ///             RegistryLocator.ProviderRegistry.Register("TypeId", new ConcreteFactory());
+    ///         }
+    ///         catch (RegistryConflictException ex)
+    ///         {
+    ///             // Registry 競合を ErrorChannel に通知する (slotId は空文字列でよい)
+    ///             RegistryLocator.ErrorChannel.Publish(
+    ///                 new SlotError(string.Empty, SlotErrorCategory.RegistryConflict, ex, System.DateTime.UtcNow));
+    ///         }
     ///     }
-    ///     catch (RegistryConflictException ex)
+    ///
+    ///     // ② Editor 登録エントリポイント (Inspector / エディタ UI 候補列挙)
+    /// #if UNITY_EDITOR
+    ///     [UnityEditor.InitializeOnLoadMethod]
+    ///     private static void RegisterEditor()
     ///     {
-    ///         RegistryLocator.ErrorChannel.Publish(
-    ///             new SlotError("", SlotErrorCategory.RegistryConflict, ex, System.DateTime.UtcNow));
+    ///         try
+    ///         {
+    ///             RegistryLocator.ProviderRegistry.Register("TypeId", new ConcreteFactory());
+    ///         }
+    ///         catch (RegistryConflictException ex)
+    ///         {
+    ///             RegistryLocator.ErrorChannel.Publish(
+    ///                 new SlotError(string.Empty, SlotErrorCategory.RegistryConflict, ex, System.DateTime.UtcNow));
+    ///         }
     ///     }
+    /// #endif
+    ///
+    ///     public IAvatarProvider Create(ProviderConfigBase config) { /* ... */ }
     /// }
     /// </code>
-    /// Domain Reload OFF 時でも <see cref="ResetForTest"/> が SubsystemRegistration で自動実行されるため二重登録は発生しない。
+    /// <para>
+    /// 実行順序保証 (Unity が保証):
+    /// <c>SubsystemRegistration</c> (<see cref="ResetForTest"/> 自動実行) → <c>BeforeSceneLoad</c> (各 Factory の <c>RegisterRuntime()</c>)。
+    /// この順序により Domain Reload OFF (Enter Play Mode 最適化) 時でも二重登録は発生しない。
+    /// </para>
     /// </remarks>
     public static class RegistryLocator
     {
