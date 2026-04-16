@@ -13,3 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Slot-based MoCap source management architecture
 - Avatar provider abstraction layer
 - Motion pipeline for Unity
+
+### 依存パッケージ
+
+| パッケージ | バージョン | 取得元 | 備考 |
+|------------|-----------|--------|------|
+| com.neuecc.unirx | 7.1.0 | OpenUPM | 2024 年時点の最新安定版。NuGet 依存なし |
+| com.cysharp.unitask | 2.5.10 | OpenUPM | 2024 年時点の最新安定版 |
+| com.hidano.uosc | 1.0.0 | npm (hidano) | VMC OSC 受信用。MIT ライセンス。SO_REUSEADDR 有効版 |
