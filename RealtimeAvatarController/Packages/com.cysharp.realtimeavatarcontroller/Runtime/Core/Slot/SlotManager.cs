@@ -14,16 +14,13 @@ namespace RealtimeAvatarController.Core
     /// <see cref="IProviderRegistry"/> / <see cref="IMoCapSourceRegistry"/> / <see cref="ISlotErrorChannel"/>
     /// に対して Provider / MoCapSource の解決・解放・エラー発行を委譲する。
     /// <para>
-    /// 本クラスの 12.5 時点ではコア実装・weight クランプ・初期化失敗時の
+    /// 本クラスの 12.6 時点ではコア実装・weight クランプ・初期化失敗時の
     /// <c>Created → Disposed</c> 遷移に加え、<see cref="RemoveSlotAsync"/> の
-    /// 厳密順序・例外耐性リソース解放を提供する:
-    /// 正常系 Add/Remove・重複 slotId チェック・状態遷移通知・GetSlots/GetSlot・
-    /// AddSlotAsync 内の <c>Mathf.Clamp01(settings.weight)</c>・
-    /// Provider / Source Resolve・<see cref="IAvatarProvider.RequestAvatarAsync"/> 失敗時の
-    /// 例外捕捉 → 部分リソース解放 → <see cref="SlotErrorCategory.InitFailure"/> 発行 → Disposed 遷移・
-    /// RemoveSlotAsync の <c>Provider.ReleaseAvatar → Provider.Dispose → MoCapSourceRegistry.Release</c>
-    /// 順序での解放と各段階の例外 catch + <see cref="Debug.LogWarning"/> 継続処理。
-    /// ApplyFailure/フォールバック (タスク 12.6)・Dispose 全 Slot 解放 (タスク 12.7) は後続タスクで拡張する。
+    /// 厳密順序・例外耐性リソース解放、さらに <see cref="ApplyWithFallback"/> による
+    /// <see cref="SlotErrorCategory.ApplyFailure"/> 発行とフォールバック挙動
+    /// (<see cref="FallbackBehavior.HoldLastPose"/> / <see cref="FallbackBehavior.TPose"/> /
+    /// <see cref="FallbackBehavior.Hide"/>) のスケルトンを提供する。
+    /// Dispose 全 Slot 解放 (タスク 12.7) は後続タスクで拡張する。
     /// </para>
     /// <para>
     /// TODO (validation-design.md [N-2]): Inactive ⇄ Active 遷移 API は設計予約済みで未実装。
@@ -157,6 +154,54 @@ namespace RealtimeAvatarController.Core
         public SlotHandle GetSlot(string slotId) => _slotRegistry.GetSlot(slotId);
 
         /// <summary>
+        /// Slot に対してモーション/表情等の適用処理 (<paramref name="applyAction"/>) を実行し、
+        /// 例外が発生した場合は <see cref="SlotSettings.fallbackBehavior"/> に従いフォールバック処理を実行して
+        /// <see cref="ISlotErrorChannel"/> に <see cref="SlotErrorCategory.ApplyFailure"/> を発行する。
+        /// タスク 12.6 スケルトン実装。
+        /// <para>
+        /// フォールバック挙動 (Req 13.3):
+        ///   - <see cref="FallbackBehavior.HoldLastPose"/>: 何もしない (直前ポーズを維持する)。
+        ///   - <see cref="FallbackBehavior.TPose"/>: Humanoid を T ポーズへ戻す
+        ///     (具体 API は motion-pipeline 合意後に実装)。
+        ///   - <see cref="FallbackBehavior.Hide"/>: アバターに紐付く全 <see cref="Renderer"/> の
+        ///     <c>enabled</c> を <c>false</c> にする。<c>GameObject.SetActive(false)</c> は使用しない
+        ///     (validation-design.md 引き継ぎ事項 #3 / §11.2)。次フレーム正常 Apply 時の
+        ///     <c>Renderer.enabled = true</c> 自動復元は Req 13.5 未確定 (motion-pipeline 合意後)。
+        /// </para>
+        /// <para>
+        /// 未登録 slotId・未管理 slotId・<paramref name="applyAction"/> が null の場合は no-op とし、
+        /// <see cref="ISlotErrorChannel"/> にも発行しない。applyAction の例外は呼び出し側に伝播させない。
+        /// </para>
+        /// </summary>
+        internal void ApplyWithFallback(string slotId, Action applyAction)
+        {
+            if (applyAction == null) return;
+            if (_disposed) return;
+
+            var handle = _slotRegistry.GetSlot(slotId);
+            if (handle == null) return;
+            if (!_resources.TryGetValue(slotId, out var res)) return;
+
+            try
+            {
+                applyAction();
+                return;
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    ExecuteFallback(handle.Settings.fallbackBehavior, res.Avatar);
+                }
+                catch (Exception fallbackEx)
+                {
+                    Debug.LogWarning($"[SlotManager] ApplyFailure fallback 実行中に例外 ({slotId}): {fallbackEx}");
+                }
+                _errorChannel.Publish(new SlotError(slotId, SlotErrorCategory.ApplyFailure, ex, DateTime.UtcNow));
+            }
+        }
+
+        /// <summary>
         /// <see cref="OnSlotStateChanged"/> Subject を Complete する。
         /// 全 Slot の解放処理はタスク 12.7 で拡張する。
         /// </summary>
@@ -249,6 +294,41 @@ namespace RealtimeAvatarController.Core
                 {
                     Debug.LogWarning($"[SlotManager] Remove: MoCapSourceRegistry.Release 失敗 ({slotId}): {ex}");
                 }
+            }
+        }
+
+        /// <summary>
+        /// <see cref="ApplyWithFallback"/> からのフォールバック挙動ディスパッチ。
+        /// タスク 12.6 / Req 13.3 スケルトン実装。
+        /// </summary>
+        private static void ExecuteFallback(FallbackBehavior behavior, GameObject avatar)
+        {
+            switch (behavior)
+            {
+                case FallbackBehavior.HoldLastPose:
+                    // 直前フレームのポーズを維持するため何もしない (Req 13.3)。
+                    break;
+
+                case FallbackBehavior.TPose:
+                    // TODO (motion-pipeline): Humanoid リセット API 確定後に
+                    // avatar の Animator / HumanPoseHandler 等を使って T ポーズへ戻す実装に差し替える。
+                    // Req 13.3 / validation-design.md §11.3・引き継ぎ事項 #8。
+                    break;
+
+                case FallbackBehavior.Hide:
+                    // Hide は Renderer.enabled = false を使用する。
+                    // GameObject.SetActive(false) は使用しない (validation-design.md 引き継ぎ事項 #3 / §11.2)。
+                    // 次フレーム正常 Apply 時に Renderer.enabled = true に復元する自動回復挙動は
+                    // Req 13.5 未確定 (motion-pipeline 合意後に実装予定)。
+                    if (avatar != null)
+                    {
+                        var renderers = avatar.GetComponentsInChildren<Renderer>(true);
+                        for (var i = 0; i < renderers.Length; i++)
+                        {
+                            renderers[i].enabled = false;
+                        }
+                    }
+                    break;
             }
         }
 

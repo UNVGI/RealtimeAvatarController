@@ -31,13 +31,19 @@ namespace RealtimeAvatarController.Core.Tests.Mocks
         public Exception DisposeException { get; set; }
         public List<string> CallOrderRecorder { get; set; }
 
+        /// <summary>
+        /// タスク 12.6 対応: Hide フォールバック等で特定の GameObject (Renderer 付き) を
+        /// アバターとして返したい場合に設定する。未指定時は既定の <c>new GameObject("MockAvatar")</c>。
+        /// </summary>
+        public Func<GameObject> AvatarFactory { get; set; }
+
         public GameObject RequestAvatar(ProviderConfigBase config)
         {
             RequestAvatarCallCount++;
             if (RequestAvatarException != null) throw RequestAvatarException;
-            return RequestAvatarFunc != null
-                ? RequestAvatarFunc(config)
-                : new GameObject("MockAvatar");
+            if (RequestAvatarFunc != null) return RequestAvatarFunc(config);
+            if (AvatarFactory != null) return AvatarFactory();
+            return new GameObject("MockAvatar");
         }
 
         public UniTask<GameObject> RequestAvatarAsync(ProviderConfigBase config, CancellationToken cancellationToken = default)
@@ -45,6 +51,7 @@ namespace RealtimeAvatarController.Core.Tests.Mocks
             RequestAvatarAsyncCallCount++;
             if (RequestAvatarException != null) throw RequestAvatarException;
             if (RequestAvatarAsyncFunc != null) return RequestAvatarAsyncFunc(config, cancellationToken);
+            if (AvatarFactory != null) return UniTask.FromResult(AvatarFactory());
             return UniTask.FromResult(new GameObject("MockAvatar"));
         }
 

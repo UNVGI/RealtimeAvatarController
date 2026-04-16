@@ -511,6 +511,165 @@ namespace RealtimeAvatarController.Core.Tests
             Assert.That(mockRegistry.ReleaseCallCount, Is.EqualTo(1));
         }
 
+        // --- ApplyWithFallback / ApplyFailure フォールバック (タスク 12.6 / Req 13.3, 13.4, 12.4) ---
+
+        [Test]
+        public async Task ApplyWithFallback_ActionSucceeds_ExecutesActionAndPublishesNoError()
+        {
+            var settings = CreateSettings("slot-1", "Slot 1");
+            await _manager.AddSlotAsync(settings).ToTask();
+
+            var invoked = 0;
+            var errors = new List<SlotError>();
+            using (_errorChannel.Errors.Subscribe(errors.Add))
+            {
+                _manager.ApplyWithFallback("slot-1", () => invoked++);
+            }
+
+            Assert.That(invoked, Is.EqualTo(1));
+            Assert.That(errors, Is.Empty);
+        }
+
+        [Test]
+        public async Task ApplyWithFallback_HoldLastPoseOnException_PublishesApplyFailureAndDoesNotModifyAvatar()
+        {
+            // Req 13.3: HoldLastPose は直前フレームのポーズを維持し続ける (アバターを変更しない)。
+            // Req 13.4 / 12.4: フォールバック後に SlotErrorCategory.ApplyFailure を ErrorChannel に発行する。
+            var avatar = new GameObject("TestAvatar");
+            try
+            {
+                var renderer = avatar.AddComponent<MeshRenderer>();
+                _providerFactory.CreateFunc = _ =>
+                    new MockAvatarProvider { AvatarFactory = () => avatar };
+
+                var settings = CreateSettings("slot-1", "Slot 1");
+                settings.fallbackBehavior = FallbackBehavior.HoldLastPose;
+                await _manager.AddSlotAsync(settings).ToTask();
+
+                var boom = new InvalidOperationException("apply boom");
+                var errors = new List<SlotError>();
+                using (_errorChannel.Errors.Subscribe(errors.Add))
+                {
+                    LogAssert.Expect(LogType.Error,
+                        new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*ApplyFailure"));
+                    _manager.ApplyWithFallback("slot-1", () => throw boom);
+                }
+
+                Assert.That(renderer.enabled, Is.True, "HoldLastPose はアバターの Renderer を無効化してはならない");
+                Assert.That(avatar.activeSelf, Is.True);
+                Assert.That(errors, Has.Count.EqualTo(1));
+                Assert.That(errors[0].SlotId, Is.EqualTo("slot-1"));
+                Assert.That(errors[0].Category, Is.EqualTo(SlotErrorCategory.ApplyFailure));
+                Assert.That(errors[0].Exception, Is.SameAs(boom));
+                Assert.That(errors[0].Timestamp.Kind, Is.EqualTo(DateTimeKind.Utc));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(avatar);
+            }
+        }
+
+        [Test]
+        public async Task ApplyWithFallback_HideOnException_DisablesAllRenderersAndKeepsGameObjectActive()
+        {
+            // Req 13.3 (Hide) / validation-design.md 引き継ぎ事項 #3:
+            // Hide は Renderer.enabled = false で実装する。GameObject.SetActive(false) は使用しない。
+            // 子階層の Renderer (SkinnedMeshRenderer / MeshRenderer 等) も網羅的に無効化する。
+            var avatar = new GameObject("TestAvatar");
+            try
+            {
+                var rootRenderer = avatar.AddComponent<MeshRenderer>();
+                var child = new GameObject("child");
+                child.transform.SetParent(avatar.transform);
+                var childRenderer = child.AddComponent<MeshRenderer>();
+
+                _providerFactory.CreateFunc = _ =>
+                    new MockAvatarProvider { AvatarFactory = () => avatar };
+
+                var settings = CreateSettings("slot-1", "Slot 1");
+                settings.fallbackBehavior = FallbackBehavior.Hide;
+                await _manager.AddSlotAsync(settings).ToTask();
+
+                var boom = new InvalidOperationException("apply boom");
+                var errors = new List<SlotError>();
+                using (_errorChannel.Errors.Subscribe(errors.Add))
+                {
+                    LogAssert.Expect(LogType.Error,
+                        new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*ApplyFailure"));
+                    _manager.ApplyWithFallback("slot-1", () => throw boom);
+                }
+
+                Assert.That(rootRenderer.enabled, Is.False);
+                Assert.That(childRenderer.enabled, Is.False);
+                Assert.That(avatar.activeSelf, Is.True,
+                    "Hide フォールバックは GameObject.SetActive(false) を使ってはならない (validation-design.md 引き継ぎ事項 #3)");
+                Assert.That(errors, Has.Count.EqualTo(1));
+                Assert.That(errors[0].Category, Is.EqualTo(SlotErrorCategory.ApplyFailure));
+                Assert.That(errors[0].Exception, Is.SameAs(boom));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(avatar);
+            }
+        }
+
+        [Test]
+        public async Task ApplyWithFallback_TPoseOnException_PublishesApplyFailure()
+        {
+            // Req 13.3 (TPose): 具体 API (Humanoid リセット) は motion-pipeline 合意後に実装予定。
+            // 12.6 の段階ではスケルトン実装 (例外を飲み込み ApplyFailure を発行する) を検証する。
+            var settings = CreateSettings("slot-1", "Slot 1");
+            settings.fallbackBehavior = FallbackBehavior.TPose;
+            await _manager.AddSlotAsync(settings).ToTask();
+
+            var boom = new InvalidOperationException("apply boom");
+            var errors = new List<SlotError>();
+            using (_errorChannel.Errors.Subscribe(errors.Add))
+            {
+                LogAssert.Expect(LogType.Error,
+                    new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*ApplyFailure"));
+                _manager.ApplyWithFallback("slot-1", () => throw boom);
+            }
+
+            Assert.That(errors, Has.Count.EqualTo(1));
+            Assert.That(errors[0].Category, Is.EqualTo(SlotErrorCategory.ApplyFailure));
+            Assert.That(errors[0].Exception, Is.SameAs(boom));
+        }
+
+        [Test]
+        public async Task ApplyWithFallback_UnknownSlotId_DoesNothingAndPublishesNoError()
+        {
+            // 未登録 slotId が渡された場合は安全に no-op とし、ErrorChannel にも発行しない。
+            // (想定外の呼び出しに対して SlotManager を安定させる)
+            var settings = CreateSettings("slot-1", "Slot 1");
+            await _manager.AddSlotAsync(settings).ToTask();
+
+            var invoked = 0;
+            var errors = new List<SlotError>();
+            using (_errorChannel.Errors.Subscribe(errors.Add))
+            {
+                _manager.ApplyWithFallback("unknown", () => invoked++);
+            }
+
+            Assert.That(invoked, Is.EqualTo(0));
+            Assert.That(errors, Is.Empty);
+        }
+
+        [Test]
+        public async Task ApplyWithFallback_ExceptionDoesNotPropagateToCaller()
+        {
+            // ApplyWithFallback は applyAction の例外を呼び出し側に伝播させず、
+            // フォールバックと ErrorChannel 発行で処理を完結させる。
+            var settings = CreateSettings("slot-1", "Slot 1");
+            settings.fallbackBehavior = FallbackBehavior.HoldLastPose;
+            await _manager.AddSlotAsync(settings).ToTask();
+
+            LogAssert.Expect(LogType.Error,
+                new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*ApplyFailure"));
+            Assert.DoesNotThrow(
+                () => _manager.ApplyWithFallback("slot-1", () => throw new InvalidOperationException("boom")));
+        }
+
         // --- コンストラクタ引数 null チェック ---
 
         [Test]
