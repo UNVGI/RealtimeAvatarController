@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UniRx;
 
 namespace RealtimeAvatarController.Core.Tests.Mocks
@@ -7,6 +8,7 @@ namespace RealtimeAvatarController.Core.Tests.Mocks
     /// Test double for <see cref="IMoCapSource"/>.
     /// Exposes a <see cref="Subject{T}"/> so tests can push frames into
     /// <see cref="MotionStream"/>, and counts Initialize / Shutdown / Dispose calls.
+    /// タスク 12.5 対応: <see cref="CallOrderRecorder"/> で Dispose の呼び出し順を検証できる。
     /// </summary>
     internal sealed class MockMoCapSource : IMoCapSource
     {
@@ -18,6 +20,7 @@ namespace RealtimeAvatarController.Core.Tests.Mocks
         public int ShutdownCallCount { get; private set; }
         public int DisposeCallCount { get; private set; }
         public MoCapSourceConfigBase LastInitializedConfig { get; private set; }
+        public List<string> CallOrderRecorder { get; set; }
 
         public IObservable<MotionFrame> MotionStream => _subject;
 
@@ -32,6 +35,7 @@ namespace RealtimeAvatarController.Core.Tests.Mocks
         public void Dispose()
         {
             DisposeCallCount++;
+            CallOrderRecorder?.Add("MoCapSource.Dispose");
             _subject.OnCompleted();
             _subject.Dispose();
         }

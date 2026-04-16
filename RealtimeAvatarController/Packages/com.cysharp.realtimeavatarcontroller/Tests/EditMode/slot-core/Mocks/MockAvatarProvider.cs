@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
@@ -9,6 +10,8 @@ namespace RealtimeAvatarController.Core.Tests.Mocks
     /// Test double for <see cref="IAvatarProvider"/>.
     /// Counts Dispose / RequestAvatar / RequestAvatarAsync / ReleaseAvatar invocations so SlotManager
     /// tests can verify the correct call order without a real provider implementation.
+    /// タスク 12.5 対応: <see cref="CallOrderRecorder"/> による順序検証、
+    /// <see cref="DisposeException"/> / <see cref="ReleaseAvatarException"/> による例外発生を許容する。
     /// </summary>
     internal sealed class MockAvatarProvider : IAvatarProvider
     {
@@ -24,6 +27,9 @@ namespace RealtimeAvatarController.Core.Tests.Mocks
         public Func<ProviderConfigBase, CancellationToken, UniTask<GameObject>> RequestAvatarAsyncFunc { get; set; }
         public Action<GameObject> OnReleaseAvatar { get; set; }
         public Exception RequestAvatarException { get; set; }
+        public Exception ReleaseAvatarException { get; set; }
+        public Exception DisposeException { get; set; }
+        public List<string> CallOrderRecorder { get; set; }
 
         public GameObject RequestAvatar(ProviderConfigBase config)
         {
@@ -46,9 +52,16 @@ namespace RealtimeAvatarController.Core.Tests.Mocks
         {
             ReleaseAvatarCallCount++;
             LastReleasedAvatar = avatar;
+            CallOrderRecorder?.Add("Provider.ReleaseAvatar");
             OnReleaseAvatar?.Invoke(avatar);
+            if (ReleaseAvatarException != null) throw ReleaseAvatarException;
         }
 
-        public void Dispose() => DisposeCallCount++;
+        public void Dispose()
+        {
+            DisposeCallCount++;
+            CallOrderRecorder?.Add("Provider.Dispose");
+            if (DisposeException != null) throw DisposeException;
+        }
     }
 }

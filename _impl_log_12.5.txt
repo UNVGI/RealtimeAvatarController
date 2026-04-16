@@ -1,0 +1,55 @@
+Task: 12.5 RemoveSlotAsync のリソース解放を TDD で実装する
+Requirements: 3.2, 3.5, 3.6, 10.2
+Design refs: design.md §6.2 (Slot 破棄フロー), design.md §11 (公開 API)
+
+## TDD サイクル
+
+### RED (テスト先行)
+- Tests/EditMode/slot-core/Mocks/MockAvatarProvider.cs に以下を追加:
+  - DisposeException / ReleaseAvatarException (throw 注入)
+  - CallOrderRecorder (List<string>) による呼び出し順記録
+- Tests/EditMode/slot-core/Mocks/MockMoCapSource.cs に CallOrderRecorder を追加
+- Tests/EditMode/slot-core/Mocks/MockMoCapSourceRegistry.cs を新規作成
+  - DefaultMoCapSourceRegistry を内部保持する薄いデコレータ
+  - ReleaseException による throw 注入
+  - CallOrderRecorder による呼び出し順記録
+- Tests/EditMode/slot-core/SlotManagerTests.cs に以下 4 テスト追加:
+  1. RemoveSlotAsync_ReleasesResourcesInOrder_ReleaseAvatarThenProviderDisposeThenRegistryRelease
+     → Provider.ReleaseAvatar → Provider.Dispose → Registry.Release → MoCapSource.Dispose の厳密順序検証
+  2. RemoveSlotAsync_DoesNotCallMoCapSourceDisposeDirectly_RegistryControlsLifecycle
+     → 同一 MoCapSourceDescriptor を 2 Slot で共有、1 Slot 削除で Dispose 未呼び出し、2 Slot 削除で 1 回のみ呼ばれる
+     → SlotManager が IMoCapSource.Dispose を直接呼び出さないことを保証 (Req 3.6/10.2)
+  3. RemoveSlotAsync_ReleaseAvatarThrows_ContinuesToProviderDisposeAndRegistryRelease
+     → ReleaseAvatar 失敗後も Provider.Dispose と Registry.Release が実行される (Req 3.5)
+  4. RemoveSlotAsync_ProviderDisposeThrows_ContinuesToRegistryRelease
+     → Provider.Dispose 失敗後も Registry.Release が実行される (Req 3.5)
+  5. RemoveSlotAsync_RegistryReleaseThrows_StillEmitsDisposedAndRemovesSlot
+     → Registry.Release 失敗時も SlotRegistry 除去と Disposed 状態通知は継続 (Req 3.5)
+- 追加ヘルパー CreateSharedSettings (Provider Config/MoCap Descriptor 共有用)
+
+### GREEN (最小実装)
+- Runtime/Core/Slot/SlotManager.cs の RemoveSlotAsync を再構成:
+  - _resources から先にエントリを除去し、SlotResources スナップショットを確保
+  - 新規 private ReleaseSlotResources(slotId, res) メソッドで厳密順序リリース:
+    * Provider.ReleaseAvatar (avatar が非 null の時のみ) → try/catch + Debug.LogWarning
+    * Provider.Dispose → try/catch + Debug.LogWarning
+    * MoCapSourceRegistry.Release → try/catch + Debug.LogWarning
+  - 各ステップの例外は握り潰し、残余リソースの解放を継続 (Req 3.5)
+  - IMoCapSource.Dispose は直接呼ばず Registry 経由のみ (Req 3.6/10.2)
+  - 最後に SlotRegistry.RemoveSlot と Disposed 状態通知を実行
+- クラス XML コメントも 12.5 範囲に更新
+
+### 検証観点
+- Req 3.2: Slot 破棄で IAvatarProvider.ReleaseAvatar + Dispose、IMoCapSourceRegistry.Release を実行 ✓
+- Req 3.5: 破棄中の例外を catch してログ記録、残余解放継続 ✓
+- Req 3.6: IMoCapSource のライフサイクル所有は Registry。SlotManager は Dispose を直接呼ばない ✓
+- Req 10.2: 参照カウントが 0 の時のみ MoCapSourceRegistry が Dispose を呼ぶ ✓
+
+### 既存テストへの影響
+- 既存の RemoveSlotAsync_* テストは挙動互換 (順序・例外なしの正常系はそのまま動作)
+- AddSlotAsync 系 / weight / InitFailure 系 / コンストラクタ null チェックは無変更
+
+### Deferred (後続タスク)
+- 12.6 ApplyFailure + Fallback (HoldLastPose / TPose / Hide)
+- 12.7 SlotManager.Dispose で全 Slot 解放
+- 12.8 EditMode テスト総仕上げ

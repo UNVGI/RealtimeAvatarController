@@ -14,14 +14,16 @@ namespace RealtimeAvatarController.Core
     /// <see cref="IProviderRegistry"/> / <see cref="IMoCapSourceRegistry"/> / <see cref="ISlotErrorChannel"/>
     /// に対して Provider / MoCapSource の解決・解放・エラー発行を委譲する。
     /// <para>
-    /// 本クラスの 12.4 時点ではコア実装・weight クランプに加え、初期化失敗時の
-    /// <c>Created → Disposed</c> 遷移を提供する:
+    /// 本クラスの 12.5 時点ではコア実装・weight クランプ・初期化失敗時の
+    /// <c>Created → Disposed</c> 遷移に加え、<see cref="RemoveSlotAsync"/> の
+    /// 厳密順序・例外耐性リソース解放を提供する:
     /// 正常系 Add/Remove・重複 slotId チェック・状態遷移通知・GetSlots/GetSlot・
     /// AddSlotAsync 内の <c>Mathf.Clamp01(settings.weight)</c>・
     /// Provider / Source Resolve・<see cref="IAvatarProvider.RequestAvatarAsync"/> 失敗時の
-    /// 例外捕捉 → 部分リソース解放 → <see cref="SlotErrorCategory.InitFailure"/> 発行 → Disposed 遷移。
-    /// RemoveSlotAsync の詳細リソース解放 (タスク 12.5)・ApplyFailure/フォールバック (タスク 12.6)・
-    /// Dispose 全 Slot 解放 (タスク 12.7) は後続タスクで拡張する。
+    /// 例外捕捉 → 部分リソース解放 → <see cref="SlotErrorCategory.InitFailure"/> 発行 → Disposed 遷移・
+    /// RemoveSlotAsync の <c>Provider.ReleaseAvatar → Provider.Dispose → MoCapSourceRegistry.Release</c>
+    /// 順序での解放と各段階の例外 catch + <see cref="Debug.LogWarning"/> 継続処理。
+    /// ApplyFailure/フォールバック (タスク 12.6)・Dispose 全 Slot 解放 (タスク 12.7) は後続タスクで拡張する。
     /// </para>
     /// <para>
     /// TODO (validation-design.md [N-2]): Inactive ⇄ Active 遷移 API は設計予約済みで未実装。
@@ -119,9 +121,14 @@ namespace RealtimeAvatarController.Core
 
         /// <summary>
         /// 指定した slotId の Slot を削除する。
-        /// Provider のアバター解放・Dispose、MoCapSourceRegistry.Release を順に実行し、
+        /// <c>Provider.ReleaseAvatar → Provider.Dispose → MoCapSourceRegistry.Release</c> の順で解放し、
         /// <see cref="SlotRegistry"/> から除去して Disposed 状態に遷移させる。
         /// 存在しない slotId の場合は <see cref="InvalidOperationException"/> をスローする。
+        /// <para>
+        /// Req 3.5: 各解放ステップで発生した例外は catch して <see cref="Debug.LogWarning"/> に記録し、
+        /// 残余リソースの解放を継続する。Req 3.6 / 10.2: <see cref="IMoCapSource.Dispose"/> を直接呼ばず、
+        /// 必ず <see cref="IMoCapSourceRegistry.Release"/> 経由で参照カウントをデクリメントする。
+        /// </para>
         /// </summary>
         public UniTask RemoveSlotAsync(string slotId, CancellationToken cancellationToken = default)
         {
@@ -133,17 +140,10 @@ namespace RealtimeAvatarController.Core
                     $"slotId '{slotId}' は登録されていないため削除できません。");
 
             var previous = handle.State;
+            _resources.TryGetValue(slotId, out var res);
+            _resources.Remove(slotId);
 
-            if (_resources.TryGetValue(slotId, out var res))
-            {
-                if (res.Provider != null)
-                {
-                    if (res.Avatar != null) res.Provider.ReleaseAvatar(res.Avatar);
-                    res.Provider.Dispose();
-                }
-                if (res.Source != null) _moCapSourceRegistry.Release(res.Source);
-                _resources.Remove(slotId);
-            }
+            ReleaseSlotResources(slotId, res);
 
             _slotRegistry.RemoveSlot(slotId);
             _stateChanged.OnNext(new SlotStateChangedEvent(slotId, previous, SlotState.Disposed));
@@ -215,6 +215,40 @@ namespace RealtimeAvatarController.Core
                 }
                 _stateChanged.OnNext(new SlotStateChangedEvent(slotId, previous, SlotState.Disposed));
                 _errorChannel.Publish(new SlotError(slotId, SlotErrorCategory.InitFailure, initException, DateTime.UtcNow));
+            }
+        }
+
+        /// <summary>
+        /// <see cref="RemoveSlotAsync"/> からの共通リソース解放処理。
+        /// 厳密順序: <c>Provider.ReleaseAvatar → Provider.Dispose → MoCapSourceRegistry.Release</c>。
+        /// 各ステップの例外は catch して <see cref="Debug.LogWarning"/> に記録し、残余リソースの解放を継続する (Req 3.5)。
+        /// <see cref="IMoCapSource.Dispose"/> は直接呼び出さず、必ず Registry 経由で参照カウントを管理する (Req 3.6 / 10.2)。
+        /// </summary>
+        private void ReleaseSlotResources(string slotId, SlotResources res)
+        {
+            if (res.Provider != null && res.Avatar != null)
+            {
+                try { res.Provider.ReleaseAvatar(res.Avatar); }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[SlotManager] Remove: Provider.ReleaseAvatar 失敗 ({slotId}): {ex}");
+                }
+            }
+            if (res.Provider != null)
+            {
+                try { res.Provider.Dispose(); }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[SlotManager] Remove: Provider.Dispose 失敗 ({slotId}): {ex}");
+                }
+            }
+            if (res.Source != null)
+            {
+                try { _moCapSourceRegistry.Release(res.Source); }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[SlotManager] Remove: MoCapSourceRegistry.Release 失敗 ({slotId}): {ex}");
+                }
             }
         }
 

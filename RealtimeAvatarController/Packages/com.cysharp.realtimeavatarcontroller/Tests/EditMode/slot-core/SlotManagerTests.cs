@@ -363,6 +363,154 @@ namespace RealtimeAvatarController.Core.Tests
             Assert.That(handle.DisplayName, Is.EqualTo("Slot 1 retry"));
         }
 
+        // --- RemoveSlotAsync リソース解放順序 / 例外耐性 (タスク 12.5 / Req 3.2, 3.5, 3.6, 10.2) ---
+
+        [Test]
+        public async Task RemoveSlotAsync_ReleasesResourcesInOrder_ReleaseAvatarThenProviderDisposeThenRegistryRelease()
+        {
+            // タスク 12.5 / Req 3.2, 10.2:
+            // Provider.ReleaseAvatar → Provider.Dispose → MoCapSourceRegistry.Release の順で解放する。
+            // Registry.Release 経由で MoCapSource.Dispose が呼ばれる (SlotManager が直接呼ばない)。
+            var order = new List<string>();
+            var mockRegistry = new MockMoCapSourceRegistry { CallOrderRecorder = order };
+            mockRegistry.Register(SourceTypeId, _moCapSourceFactory);
+
+            _manager.Dispose();
+            _manager = new SlotManager(_providerRegistry, mockRegistry, _errorChannel);
+
+            var settings = CreateSettings("slot-1", "Slot 1");
+            await _manager.AddSlotAsync(settings).ToTask();
+
+            _providerFactory.LastCreatedProvider.CallOrderRecorder = order;
+            _moCapSourceFactory.LastCreatedSource.CallOrderRecorder = order;
+
+            await _manager.RemoveSlotAsync("slot-1").ToTask();
+
+            Assert.That(order, Is.EqualTo(new[]
+            {
+                "Provider.ReleaseAvatar",
+                "Provider.Dispose",
+                "Registry.Release",
+                "MoCapSource.Dispose",
+            }));
+        }
+
+        [Test]
+        public async Task RemoveSlotAsync_DoesNotCallMoCapSourceDisposeDirectly_RegistryControlsLifecycle()
+        {
+            // Req 3.6 / 10.2: 複数 Slot が同一 MoCapSource を共有している場合、
+            // 参照カウント > 0 の間は Dispose が呼ばれない。SlotManager が直接 Dispose を呼ばないことを保証する。
+            var providerConfig = ScriptableObject.CreateInstance<TestProviderConfig>();
+            _createdAssets.Add(providerConfig);
+            var sourceConfig = ScriptableObject.CreateInstance<TestMoCapSourceConfig>();
+            _createdAssets.Add(sourceConfig);
+
+            var sharedSourceDescriptor = new MoCapSourceDescriptor
+            {
+                SourceTypeId = SourceTypeId,
+                Config = sourceConfig,
+            };
+
+            var settings1 = CreateSharedSettings("slot-1", "Slot 1", providerConfig, sharedSourceDescriptor);
+            var settings2 = CreateSharedSettings("slot-2", "Slot 2", providerConfig, sharedSourceDescriptor);
+
+            await _manager.AddSlotAsync(settings1).ToTask();
+            await _manager.AddSlotAsync(settings2).ToTask();
+
+            var sharedSource = _moCapSourceFactory.LastCreatedSource;
+            Assert.That(_moCapSourceFactory.CreateCallCount, Is.EqualTo(1),
+                "同一 Descriptor の 2 Slot は MoCapSource インスタンスを共有すること");
+
+            await _manager.RemoveSlotAsync("slot-1").ToTask();
+            Assert.That(sharedSource.DisposeCallCount, Is.EqualTo(0),
+                "参照カウント > 0 の間は MoCapSource.Dispose は呼ばれてはならない");
+
+            await _manager.RemoveSlotAsync("slot-2").ToTask();
+            Assert.That(sharedSource.DisposeCallCount, Is.EqualTo(1),
+                "最後の Slot 削除で Registry が MoCapSource.Dispose を 1 回だけ呼ぶこと");
+        }
+
+        [Test]
+        public async Task RemoveSlotAsync_ReleaseAvatarThrows_ContinuesToProviderDisposeAndRegistryRelease()
+        {
+            // Req 3.5: 破棄中の例外を catch してログに記録し、残余リソースの解放を継続する。
+            var settings = CreateSettings("slot-1", "Slot 1");
+            await _manager.AddSlotAsync(settings).ToTask();
+
+            _providerFactory.LastCreatedProvider.ReleaseAvatarException =
+                new InvalidOperationException("release avatar boom");
+
+            LogAssert.Expect(LogType.Warning,
+                new System.Text.RegularExpressions.Regex(@"\[SlotManager\].*ReleaseAvatar"));
+
+            var events = new List<SlotStateChangedEvent>();
+            using (_manager.OnSlotStateChanged.Subscribe(events.Add))
+            {
+                await _manager.RemoveSlotAsync("slot-1").ToTask();
+            }
+
+            Assert.That(_providerFactory.LastCreatedProvider.DisposeCallCount, Is.EqualTo(1),
+                "ReleaseAvatar 失敗後も Provider.Dispose は実行されること");
+            Assert.That(_moCapSourceFactory.LastCreatedSource.DisposeCallCount, Is.EqualTo(1),
+                "ReleaseAvatar 失敗後も Registry.Release 経由で MoCapSource.Dispose が呼ばれること");
+            Assert.That(_manager.GetSlot("slot-1"), Is.Null);
+            Assert.That(events, Has.Count.EqualTo(1));
+            Assert.That(events[0].NewState, Is.EqualTo(SlotState.Disposed));
+        }
+
+        [Test]
+        public async Task RemoveSlotAsync_ProviderDisposeThrows_ContinuesToRegistryRelease()
+        {
+            // Req 3.5: Provider.Dispose で例外が発生しても MoCapSourceRegistry.Release を継続実行する。
+            var settings = CreateSettings("slot-1", "Slot 1");
+            await _manager.AddSlotAsync(settings).ToTask();
+
+            _providerFactory.LastCreatedProvider.DisposeException =
+                new InvalidOperationException("provider dispose boom");
+
+            LogAssert.Expect(LogType.Warning,
+                new System.Text.RegularExpressions.Regex(@"\[SlotManager\].*Provider\.Dispose"));
+
+            await _manager.RemoveSlotAsync("slot-1").ToTask();
+
+            Assert.That(_moCapSourceFactory.LastCreatedSource.DisposeCallCount, Is.EqualTo(1),
+                "Provider.Dispose 失敗後も Registry.Release 経由で MoCapSource.Dispose が呼ばれること");
+            Assert.That(_manager.GetSlot("slot-1"), Is.Null);
+        }
+
+        [Test]
+        public async Task RemoveSlotAsync_RegistryReleaseThrows_StillEmitsDisposedAndRemovesSlot()
+        {
+            // Req 3.5: MoCapSourceRegistry.Release で例外が発生しても
+            // SlotRegistry からの除去と Disposed 状態通知は継続する。
+            var mockRegistry = new MockMoCapSourceRegistry
+            {
+                ReleaseException = new InvalidOperationException("registry release boom"),
+            };
+            mockRegistry.Register(SourceTypeId, _moCapSourceFactory);
+
+            _manager.Dispose();
+            _manager = new SlotManager(_providerRegistry, mockRegistry, _errorChannel);
+
+            var settings = CreateSettings("slot-1", "Slot 1");
+            await _manager.AddSlotAsync(settings).ToTask();
+
+            LogAssert.Expect(LogType.Warning,
+                new System.Text.RegularExpressions.Regex(@"\[SlotManager\].*Release"));
+
+            var events = new List<SlotStateChangedEvent>();
+            using (_manager.OnSlotStateChanged.Subscribe(events.Add))
+            {
+                await _manager.RemoveSlotAsync("slot-1").ToTask();
+            }
+
+            Assert.That(_manager.GetSlot("slot-1"), Is.Null,
+                "Registry.Release 失敗時も Slot は SlotRegistry から除去されること");
+            Assert.That(events, Has.Count.EqualTo(1));
+            Assert.That(events[0].NewState, Is.EqualTo(SlotState.Disposed));
+            Assert.That(mockRegistry.ReleaseCallCount, Is.EqualTo(1));
+        }
+
         // --- コンストラクタ引数 null チェック ---
 
         [Test]
@@ -411,6 +559,30 @@ namespace RealtimeAvatarController.Core.Tests
                 SourceTypeId = SourceTypeId,
                 Config = sourceConfig,
             };
+            return settings;
+        }
+
+        /// <summary>
+        /// 2 つ以上の Slot で同一 Provider Config と同一 MoCapSource Descriptor を共有するための
+        /// SlotSettings を生成する。タスク 12.5 の参照共有テスト専用。
+        /// </summary>
+        private SlotSettings CreateSharedSettings(
+            string slotId,
+            string displayName,
+            ProviderConfigBase sharedProviderConfig,
+            MoCapSourceDescriptor sharedSourceDescriptor)
+        {
+            var settings = ScriptableObject.CreateInstance<SlotSettings>();
+            _createdAssets.Add(settings);
+
+            settings.slotId = slotId;
+            settings.displayName = displayName;
+            settings.avatarProviderDescriptor = new AvatarProviderDescriptor
+            {
+                ProviderTypeId = ProviderTypeId,
+                Config = sharedProviderConfig,
+            };
+            settings.moCapSourceDescriptor = sharedSourceDescriptor;
             return settings;
         }
 
