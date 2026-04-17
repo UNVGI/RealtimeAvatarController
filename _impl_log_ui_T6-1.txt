@@ -1,0 +1,20 @@
+## ui-sample T6-1: DrawWeightToggle() の実装
+
+### 実装内容
+- `Samples~/UI/Editor/SlotSettingsEditor.cs` の `DrawWeightToggle()` メソッドを実装。
+- design.md §4.4 / tasks.md T6-1 のコードスニペットに準拠。
+
+### 実装詳細
+- 閾値 `0.5f` で `_weightProp.floatValue` を二値判定 (>= 0.5f → ON)。
+- `EditorGUILayout.Toggle("Weight 有効 (1.0 / 0.0)", isActive)` でトグル UI を描画。
+- トグル変更時は `1.0f` / `0.0f` に丸めて `_weightProp.floatValue` に書き戻し。
+- `EditorGUILayout.LabelField` (miniLabel) で現在の weight 値を `F1` 桁表示。
+
+### コメント方針
+- validation-design.md OI-8 対応として、0.5f 閾値の意図 (二値丸め用閾値・将来の中間値定義予定) を 3 行コメントで明示。
+
+### 完了条件確認
+- トグル ON → `weight = 1.0f`: ✔
+- トグル OFF → `weight = 0.0f`: ✔
+- 「現在の Weight: X.X」ラベル表示: ✔
+- 0.5f 閾値コメント付与: ✔

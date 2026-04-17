@@ -147,7 +147,14 @@ namespace RealtimeAvatarController.Samples.UI.Editor
 
         private void DrawWeightToggle()
         {
-            // T6-1 で実装予定
+            // 閾値 0.5f: 初期版は 0.0 (skip) / 1.0 (full apply) の二値のみ有効。
+            // 0.5f 境界は「どちらに近いか」で二値に丸める変換用閾値であり、
+            // 中間値セマンティクスは将来の複数ソース混合シナリオで定義予定。
+            bool isActive = _weightProp.floatValue >= 0.5f;
+            bool newActive = EditorGUILayout.Toggle("Weight 有効 (1.0 / 0.0)", isActive);
+            if (newActive != isActive)
+                _weightProp.floatValue = newActive ? 1.0f : 0.0f;
+            EditorGUILayout.LabelField($"現在の Weight: {_weightProp.floatValue:F1}", EditorStyles.miniLabel);
         }
     }
 }
