@@ -1,0 +1,17 @@
+mocap-vmc タスク 1-1 com.hidano.uosc の Packages/manifest.json 導入確認
+
+対象ファイル: RealtimeAvatarController/Packages/manifest.json
+
+確認結果:
+- scopedRegistries:
+  - OpenUPM (scopes: com.neuecc, com.cysharp) — 既存。 com.neuecc.unirx / com.cysharp.unitask を包含するため要件を満たす
+  - npm (hidano) (scopes: com.hidano) — 既存。 com.hidano.uosc を包含
+- dependencies:
+  - com.hidano.uosc 1.0.0 — 未追加 → 追加
+  - com.neuecc.unirx 7.1.0 — 未追加 → 追加
+
+変更内容:
+- dependencies セクションに com.hidano.uosc: "1.0.0" と com.neuecc.unirx: "7.1.0" を追記
+- scopedRegistries は既存設定が要求スコープを包含しているため変更不要
+
+要件: 8-6 (design.md §4 Unity 6 互換性注記 — PlayMode テスト (タスク 11-2) で uOSC 受信コールバック呼び出し確認を予定)
