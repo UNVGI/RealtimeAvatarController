@@ -153,3 +153,4 @@ Wave 5: mocap-vmc
 
 Wave 6: ui-sample
 T1-1 OK (ef0222c) [commit message deviates from convention but 4 required dirs exist]
+T1-2 OK (c8fda78)
