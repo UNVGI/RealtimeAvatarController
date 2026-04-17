@@ -1,0 +1,21 @@
+{
+  "name": "RealtimeAvatarController.Avatar.Builtin.Tests.PlayMode",
+  "rootNamespace": "RealtimeAvatarController.Avatar.Builtin.Tests.PlayMode",
+  "references": [
+    "RealtimeAvatarController.Core",
+    "RealtimeAvatarController.Avatar.Builtin",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

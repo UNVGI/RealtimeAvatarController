@@ -1,0 +1,9 @@
+T-1-4 PlayMode テスト asmdef 作成
+
+- 作成ファイル: Packages/com.cysharp.realtimeavatarcontroller/Tests/PlayMode/Avatar/Builtin/RealtimeAvatarController.Avatar.Builtin.Tests.PlayMode.asmdef
+- name: RealtimeAvatarController.Avatar.Builtin.Tests.PlayMode
+- references: RealtimeAvatarController.Core, RealtimeAvatarController.Avatar.Builtin, UnityEngine.TestRunner
+- optionalUnityReferences: TestAssemblies
+- includePlatforms: [] (PlayMode は全プラットフォーム対象)
+- autoReferenced: false
+- _Requirements: Req 9 AC 1, Req 9 AC 5_
