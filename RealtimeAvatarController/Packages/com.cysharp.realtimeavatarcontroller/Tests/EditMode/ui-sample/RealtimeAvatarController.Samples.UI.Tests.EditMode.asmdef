@@ -1,0 +1,29 @@
+{
+  "name": "RealtimeAvatarController.Samples.UI.Tests.EditMode",
+  "rootNamespace": "RealtimeAvatarController.Samples.UI.Tests",
+  "references": [
+    "RealtimeAvatarController.Samples.UI",
+    "RealtimeAvatarController.Samples.UI.Editor",
+    "RealtimeAvatarController.Core",
+    "UnityEditor.TestRunner",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
