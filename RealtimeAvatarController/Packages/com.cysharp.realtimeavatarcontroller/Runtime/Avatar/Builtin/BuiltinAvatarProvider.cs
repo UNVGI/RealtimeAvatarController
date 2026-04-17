@@ -68,7 +68,14 @@ namespace RealtimeAvatarController.Avatar.Builtin
 
         public void ReleaseAvatar(GameObject avatar)
         {
-            throw new NotImplementedException();
+            if (!_managedAvatars.Contains(avatar))
+            {
+                Debug.LogError("[BuiltinAvatarProvider] ReleaseAvatar: 未管理の GameObject が渡されました。破棄しません。");
+                return;
+            }
+
+            _managedAvatars.Remove(avatar);
+            UnityEngine.Object.Destroy(avatar);
         }
 
         public void Dispose()
