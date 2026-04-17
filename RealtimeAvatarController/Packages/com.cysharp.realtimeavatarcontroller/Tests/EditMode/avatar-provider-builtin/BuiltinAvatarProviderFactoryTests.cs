@@ -17,6 +17,9 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
     ///   - キャスト失敗時に <see cref="ArgumentException"/> をスローし
     ///     <see cref="ISlotErrorChannel"/> へ <see cref="SlotErrorCategory.InitFailure"/> を発行する
     ///     (T-6-2 キャスト失敗・ErrorChannel 発行テスト / validation-design.md Minor #1)
+    ///   - 同一 Factory インスタンスに対する複数回の <see cref="BuiltinAvatarProviderFactory.Create"/>
+    ///     呼び出しが互いに干渉せず、独立した <see cref="BuiltinAvatarProvider"/> インスタンスを返す
+    ///     (T-6-3 ステートレス設計テスト)
     /// </para>
     ///
     /// <para>
@@ -27,7 +30,7 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
     ///     <see cref="BuiltinAvatarProviderFactory"/> のコンストラクタに注入して発行内容を検証する。
     /// </para>
     ///
-    /// Requirements: Req 8 AC 2, Req 8 AC 3, Req 9 AC 2
+    /// Requirements: Req 8 AC 2, Req 8 AC 3, Req 8 AC 5, Req 9 AC 2
     /// </summary>
     [TestFixture]
     public class BuiltinAvatarProviderFactoryTests
@@ -111,6 +114,24 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
             {
                 Object.DestroyImmediate(invalidConfig2);
             }
+        }
+
+        [Test]
+        public void Create_IsStateless_MultipleCalls_DoNotInterfere()
+        {
+            // tasks.md T-6-3 / design.md §3.5 ステートレス設計:
+            //   Factory は _errorChannel のみを読み取り専用参照として保持し、
+            //   Create() 呼び出し間で状態を共有しない。複数回の呼び出しはそれぞれ
+            //   独立した BuiltinAvatarProvider インスタンスを生成し、参照が異なることを確認する。
+            var factory = new BuiltinAvatarProviderFactory(_fakeChannel);
+
+            var provider1 = factory.Create(_config);
+            var provider2 = factory.Create(_config);
+
+            Assert.IsInstanceOf<BuiltinAvatarProvider>(provider1);
+            Assert.IsInstanceOf<BuiltinAvatarProvider>(provider2);
+            Assert.AreNotSame(provider1, provider2,
+                "同一 Factory に対する複数回の Create() 呼び出しは互いに独立した Provider インスタンスを返すべき。");
         }
 
         // --- テストヘルパー ---
