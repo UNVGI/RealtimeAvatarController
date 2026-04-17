@@ -28,8 +28,14 @@ namespace RealtimeAvatarController.MoCap.VMC
     /// <para>
     /// <b>Shutdown / Dispose (タスク 7-4)</b>: <see cref="VmcOscAdapter.Shutdown"/> でソケット閉鎖・
     /// 受信停止を行い、<see cref="_rawSubject"/> に対して <c>OnCompleted()</c> / <c>Dispose()</c> を
-    /// 呼び出すことで購読者を終端させる (design.md §9.3)。冪等に実装されており、
-    /// <c>PublishError</c> (タスク 7-5) は後続タスクで実装する。
+    /// 呼び出すことで購読者を終端させる (design.md §9.3)。冪等に実装される。
+    /// </para>
+    /// <para>
+    /// <b>PublishError (タスク 7-5)</b>: <see cref="PublishError"/> ヘルパーで
+    /// <see cref="ISlotErrorChannel.Publish"/> に <see cref="SlotError"/> を発行する
+    /// (design.md §8.2)。<c>Debug.LogError</c> の抑制は <c>DefaultSlotErrorChannel</c> 側が担うため
+    /// 本クラスでは持たない。<see cref="MotionStream"/> の <c>OnError()</c> は一切発行しない
+    /// (design.md §8.3)。
     /// </para>
     /// <para>
     /// <b>ライフサイクル (design.md §9.1)</b>:
@@ -165,14 +171,12 @@ namespace RealtimeAvatarController.MoCap.VMC
             _frameBuilder = new VmcFrameBuilder();
             _router = new VmcMessageRouter(
                 _frameBuilder,
-                onError: ex => _errorChannel.Publish(
-                    new SlotError(_slotId, SlotErrorCategory.VmcReceive, ex, DateTime.UtcNow)));
+                onError: ex => PublishError(SlotErrorCategory.VmcReceive, ex));
             _adapter = new VmcOscAdapter(
                 _router,
                 _frameBuilder,
                 _subject,
-                errorHandler: (category, ex) => _errorChannel.Publish(
-                    new SlotError(_slotId, category, ex, DateTime.UtcNow)));
+                errorHandler: PublishError);
 
             _adapter.Initialize(vmcConfig.bindAddress, vmcConfig.port);
 
@@ -230,6 +234,29 @@ namespace RealtimeAvatarController.MoCap.VMC
         public void Dispose()
         {
             Shutdown();
+        }
+
+        /// <summary>
+        /// <see cref="ISlotErrorChannel"/> へ <see cref="SlotError"/> を発行する内部ヘルパー
+        /// (design.md §8.2 / タスク 7-5)。
+        /// </summary>
+        /// <param name="category">発行するエラーのカテゴリ。</param>
+        /// <param name="ex">発行する例外。</param>
+        /// <remarks>
+        /// <para>
+        /// <c>Debug.LogError</c> の抑制制御は <c>DefaultSlotErrorChannel</c> 側 (同一 Slot/Category に
+        /// 対する 1 フレーム 1 回のログ抑制) が担うため、本メソッドは単に
+        /// <see cref="ISlotErrorChannel.Publish"/> に委譲する (design.md §8.2 の注記)。
+        /// </para>
+        /// <para>
+        /// <see cref="MotionStream"/> の <c>OnError()</c> は本メソッドからも呼び出し元からも
+        /// 一切発行しない (design.md §8.3)。ワーカー側の例外はすべてエラーチャネル経由で通知し、
+        /// ストリームはライフサイクル完了時の <c>OnCompleted()</c> でのみ終端する。
+        /// </para>
+        /// </remarks>
+        private void PublishError(SlotErrorCategory category, Exception ex)
+        {
+            _errorChannel.Publish(new SlotError(_slotId, category, ex, DateTime.UtcNow));
         }
     }
 }
