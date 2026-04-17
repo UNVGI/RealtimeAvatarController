@@ -112,3 +112,6 @@ T-7-4 OK (673d176)
 T-7-5 OK (a137a98)
 T-7-6 OK (fc3747f)
 T-7-7 OK (98fc21c)
+T-7-8 OK (93e4750)
+
+=== Wave 4: avatar-provider-builtin 完了 (26/26 OK) ===
