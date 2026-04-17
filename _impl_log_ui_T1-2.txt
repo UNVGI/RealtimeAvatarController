@@ -1,0 +1,23 @@
+ui-sample T1-2 Runtime asmdef の作成
+
+## 実施内容
+- `Samples~/UI/Runtime/RealtimeAvatarController.Samples.UI.asmdef` を作成
+- tasks.md §T1-2 記載の references を反映
+  - RealtimeAvatarController.Core
+  - RealtimeAvatarController.Motion
+  - RealtimeAvatarController.MoCap.VMC
+  - RealtimeAvatarController.Avatar.Builtin
+  - UniRx (SlotErrorPanel の ObserveOnMainThread 直接参照のため — contracts.md §6.1 例外条項)
+- `includePlatforms: []`, `autoReferenced: false` を設定
+- asmdef.meta を併設 (GUID: e5f6a7b8c9d0e1f2a3b4c5d6a7b8c9d0)
+
+## 注意点 (スコープ外)
+- `Samples~/UI/RealtimeAvatarController.Samples.UI.asmdef` に従来ワーク (T05/T09) で配置された同名 asmdef が残存している。
+  環境制約により本セッションからは削除できなかったため、後続タスクまたは手動での整理が必要。
+  Unity コンパイル時は同名 asmdef 競合が発生する可能性があるため、レビュー時に要確認。
+
+## 完了条件
+- [x] asmdef が spec 指定パスに作成されたこと
+- [x] references が tasks.md §T1-2 と一致
+- [x] UniRx 直接参照を含むこと
+- [x] UniTask の直接参照を含まないこと (技術的に不要)
