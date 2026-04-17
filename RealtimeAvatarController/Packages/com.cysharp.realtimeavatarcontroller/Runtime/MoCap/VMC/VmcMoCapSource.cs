@@ -24,7 +24,11 @@ namespace RealtimeAvatarController.MoCap.VMC
     /// <b>Initialize (タスク 7-3)</b>: config の型・ポート範囲・状態遷移をバリデートし、
     /// <see cref="VmcFrameBuilder"/> / <see cref="VmcMessageRouter"/> / <see cref="VmcOscAdapter"/>
     /// を組み立てて uOSC 受信を開始する (design.md §9.2)。
-    /// <see cref="Shutdown"/> / <see cref="Dispose"/> (タスク 7-4)・
+    /// </para>
+    /// <para>
+    /// <b>Shutdown / Dispose (タスク 7-4)</b>: <see cref="VmcOscAdapter.Shutdown"/> でソケット閉鎖・
+    /// 受信停止を行い、<see cref="_rawSubject"/> に対して <c>OnCompleted()</c> / <c>Dispose()</c> を
+    /// 呼び出すことで購読者を終端させる (design.md §9.3)。冪等に実装されており、
     /// <c>PublishError</c> (タスク 7-5) は後続タスクで実装する。
     /// </para>
     /// <para>
@@ -77,7 +81,7 @@ namespace RealtimeAvatarController.MoCap.VMC
 
         /// <summary>
         /// <see cref="Initialize"/> で組み立てられる VMC 受信パイプライン構成要素。
-        /// <see cref="Shutdown"/> (タスク 7-4) までは生存し、再使用 (再 <see cref="Initialize"/>) は許容しない。
+        /// <see cref="Shutdown"/> までは生存し、再使用 (再 <see cref="Initialize"/>) は許容しない。
         /// </summary>
         private VmcFrameBuilder _frameBuilder;
         private VmcMessageRouter _router;
@@ -184,17 +188,48 @@ namespace RealtimeAvatarController.MoCap.VMC
         public IObservable<MotionFrame> MotionStream => _stream;
 
         /// <inheritdoc />
-        /// <remarks>タスク 7-4 で実装する。</remarks>
+        /// <remarks>
+        /// <para>
+        /// 処理フロー (design.md §9.3 / タスク 7-4):
+        /// <list type="number">
+        ///   <item>状態が <see cref="State.Disposed"/> ならば即時 return (冪等)</item>
+        ///   <item><see cref="VmcOscAdapter.Shutdown"/> でソケット閉鎖・受信コールバック解除</item>
+        ///   <item><see cref="_rawSubject"/>.OnCompleted() で購読者へ終端通知</item>
+        ///   <item><see cref="_rawSubject"/>.Dispose() でリソース解放</item>
+        ///   <item>内部状態を <see cref="State.Disposed"/> に遷移</item>
+        /// </list>
+        /// </para>
+        /// <para>
+        /// <see cref="State.Uninitialized"/> 状態での呼び出しも冪等に扱い、
+        /// <see cref="_adapter"/> が未構築であれば skip する。
+        /// </para>
+        /// </remarks>
         public void Shutdown()
         {
-            throw new NotImplementedException("VmcMoCapSource.Shutdown はタスク 7-4 で実装される予定です。");
+            if (_state == State.Disposed)
+            {
+                return;
+            }
+
+            if (_adapter != null)
+            {
+                _adapter.Shutdown();
+            }
+
+            _rawSubject.OnCompleted();
+            _rawSubject.Dispose();
+
+            _state = State.Disposed;
         }
 
         /// <inheritdoc />
-        /// <remarks><see cref="Shutdown"/> と等価。タスク 7-4 で実装する。</remarks>
+        /// <remarks>
+        /// <see cref="Shutdown"/> と等価 (design.md §9.3 / タスク 7-4)。
+        /// <c>IDisposable</c> 経由での解放と <see cref="IMoCapSource.Shutdown"/> を同一処理に集約する。
+        /// </remarks>
         public void Dispose()
         {
-            throw new NotImplementedException("VmcMoCapSource.Dispose はタスク 7-4 で実装される予定です。");
+            Shutdown();
         }
     }
 }
