@@ -179,9 +179,14 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 
             for (int i = 1; i < _recorder.Frames.Count; i++)
             {
+                // _recorder.Frames は IObservable<Core.MotionFrame> ベースのため
+                // Core.MotionFrame 型で保持されるが、実インスタンスは Motion.HumanoidMotionFrame。
+                // Timestamp は Motion.MotionFrame が保持しているためそちらへキャストして読む。
+                var prev = (RealtimeAvatarController.Motion.MotionFrame)_recorder.Frames[i - 1];
+                var curr = (RealtimeAvatarController.Motion.MotionFrame)_recorder.Frames[i];
                 Assert.That(
-                    _recorder.Frames[i].Timestamp,
-                    Is.GreaterThan(_recorder.Frames[i - 1].Timestamp),
+                    curr.Timestamp,
+                    Is.GreaterThan(prev.Timestamp),
                     $"Frames[{i}].Timestamp は Frames[{i - 1}].Timestamp より大きくなるべき (要件 2-7)。");
             }
         }
