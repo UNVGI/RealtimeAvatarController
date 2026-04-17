@@ -7,16 +7,8 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 {
     /// <summary>
     /// VMCMoCapSourceFactory.Create() のキャスト検証 EditMode テスト
-    /// (tasks.md タスク 2-1 / design.md §5.3, §10.1 / requirements.md 要件 9-3, 9-4, 9-11, 9-12, 10-2)。
-    ///
-    /// <para>
-    /// TDD 先行作成: 本テストファイル作成時点では以下の型は未実装である。
-    ///   - <c>RealtimeAvatarController.MoCap.VMC.VMCMoCapSourceConfig</c>
-    ///   - <c>RealtimeAvatarController.MoCap.VMC.VMCMoCapSourceFactory</c>
-    ///   - <c>RealtimeAvatarController.MoCap.VMC.VmcMoCapSource</c>
-    /// したがって本ファイルはタスク 2-2・タスク 8-2 の実装完了までコンパイルエラーとなってよい
-    /// (tasks.md タスク 2-1 注記および tasks.md タスク 10-2 で最終完成)。
-    /// </para>
+    /// (tasks.md タスク 2-1 / タスク 10-2 最終完成 / design.md §5.3, §10.1 /
+    /// requirements.md 要件 9-3, 9-4, 9-11, 9-12, 10-2)。
     ///
     /// <para>
     /// 検証対象:
@@ -27,6 +19,13 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
     ///   - null を渡した場合、ArgumentException がスローされる (要件 9-4)
     ///   - ScriptableObject.CreateInstance&lt;VMCMoCapSourceConfig&gt;() で動的生成した Config を
     ///     渡した場合、VmcMoCapSource が正常に生成される (要件 9-11, 9-12 / シナリオ Y)
+    /// </para>
+    ///
+    /// <para>
+    /// テスト独立性: <c>RegistryLocator.ResetForTest()</c> を <c>[SetUp]</c> / <c>[TearDown]</c>
+    /// の両方で呼び出し、<see cref="VMCMoCapSourceFactory"/> の
+    /// <c>[RuntimeInitializeOnLoadMethod]</c> 自己登録による他テストへの副作用を排除する
+    /// (tasks.md タスク 10-2)。
     /// </para>
     /// </summary>
     [TestFixture]
