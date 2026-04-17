@@ -1,7 +1,6 @@
 using System;
 using System.Net.Sockets;
 using RealtimeAvatarController.Core;
-using RealtimeAvatarController.Motion;
 using UniRx;
 using UnityEngine;
 using UnityEngine.Events;

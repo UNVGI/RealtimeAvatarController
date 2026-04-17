@@ -212,9 +212,8 @@ namespace RealtimeAvatarController.Motion.Tests.Cache
 
             public void Emit(MotionMotionFrame frame)
             {
-                // 参照型の再解釈: ランタイムオブジェクトの実体は MotionMotionFrame のまま。
-                // Subject<CoreMotionFrame> の静的型チェックのみを回避する。
-                _subject.OnNext(Unsafe.As<CoreMotionFrame>(frame));
+                // Motion.MotionFrame は Core.MotionFrame を継承するため暗黙キャスト可。
+                _subject.OnNext(frame);
             }
         }
     }

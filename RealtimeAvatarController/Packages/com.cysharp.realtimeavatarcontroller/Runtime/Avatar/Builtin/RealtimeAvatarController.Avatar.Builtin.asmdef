@@ -2,7 +2,8 @@
   "name": "RealtimeAvatarController.Avatar.Builtin",
   "rootNamespace": "RealtimeAvatarController.Avatar.Builtin",
   "references": [
-    "RealtimeAvatarController.Core"
+    "RealtimeAvatarController.Core",
+    "UniTask"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

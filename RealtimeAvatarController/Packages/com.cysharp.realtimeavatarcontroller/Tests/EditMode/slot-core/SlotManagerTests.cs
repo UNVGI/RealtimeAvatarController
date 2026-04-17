@@ -92,7 +92,7 @@ namespace RealtimeAvatarController.Core.Tests
         {
             var settings = CreateSettings("slot-1", "Slot 1");
 
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             var handle = _manager.GetSlot("slot-1");
             Assert.That(handle, Is.Not.Null);
@@ -106,7 +106,7 @@ namespace RealtimeAvatarController.Core.Tests
         {
             var settings = CreateSettings("slot-1", "Slot 1");
 
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             Assert.That(_providerFactory.CreateCallCount, Is.EqualTo(1));
             Assert.That(_moCapSourceFactory.CreateCallCount, Is.EqualTo(1));
@@ -121,7 +121,7 @@ namespace RealtimeAvatarController.Core.Tests
             SlotStateChangedEvent received = null;
             using (_manager.OnSlotStateChanged.Subscribe(e => received = e))
             {
-                await _manager.AddSlotAsync(settings).ToTask();
+                await _manager.AddSlotAsync(settings).AsTask();
             }
 
             Assert.That(received, Is.Not.Null);
@@ -138,12 +138,12 @@ namespace RealtimeAvatarController.Core.Tests
             var settings1 = CreateSettings("slot-1", "Slot 1");
             var settings2 = CreateSettings("slot-1", "Slot 1 duplicate");
 
-            await _manager.AddSlotAsync(settings1).ToTask();
+            await _manager.AddSlotAsync(settings1).AsTask();
 
             InvalidOperationException caught = null;
             try
             {
-                await _manager.AddSlotAsync(settings2).ToTask();
+                await _manager.AddSlotAsync(settings2).AsTask();
             }
             catch (InvalidOperationException ex)
             {
@@ -164,9 +164,9 @@ namespace RealtimeAvatarController.Core.Tests
         public async Task RemoveSlotAsync_ExistingSlot_TransitionsToDisposedAndRemovesFromRegistry()
         {
             var settings = CreateSettings("slot-1", "Slot 1");
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
-            await _manager.RemoveSlotAsync("slot-1").ToTask();
+            await _manager.RemoveSlotAsync("slot-1").AsTask();
 
             Assert.That(_manager.GetSlot("slot-1"), Is.Null);
             Assert.That(_manager.GetSlots(), Is.Empty);
@@ -176,12 +176,12 @@ namespace RealtimeAvatarController.Core.Tests
         public async Task RemoveSlotAsync_EmitsStateChangedEvent_ActiveToDisposed()
         {
             var settings = CreateSettings("slot-1", "Slot 1");
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             var events = new List<SlotStateChangedEvent>();
             using (_manager.OnSlotStateChanged.Subscribe(events.Add))
             {
-                await _manager.RemoveSlotAsync("slot-1").ToTask();
+                await _manager.RemoveSlotAsync("slot-1").AsTask();
             }
 
             Assert.That(events, Has.Count.EqualTo(1));
@@ -207,8 +207,8 @@ namespace RealtimeAvatarController.Core.Tests
             var settings1 = CreateSettings("slot-1", "Slot 1");
             var settings2 = CreateSettings("slot-2", "Slot 2");
 
-            await _manager.AddSlotAsync(settings1).ToTask();
-            await _manager.AddSlotAsync(settings2).ToTask();
+            await _manager.AddSlotAsync(settings1).AsTask();
+            await _manager.AddSlotAsync(settings2).AsTask();
 
             var slots = _manager.GetSlots();
             Assert.That(slots, Has.Count.EqualTo(2));
@@ -228,7 +228,7 @@ namespace RealtimeAvatarController.Core.Tests
         public async Task GetSlot_ExistingSlot_ReturnsHandleWithActiveState()
         {
             var settings = CreateSettings("slot-1", "Slot 1");
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             var handle = _manager.GetSlot("slot-1");
             Assert.That(handle, Is.Not.Null);
@@ -244,7 +244,7 @@ namespace RealtimeAvatarController.Core.Tests
             var settings = CreateSettings("slot-1", "Slot 1");
             settings.weight = 1.5f;
 
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             Assert.That(settings.weight, Is.EqualTo(1.0f));
             Assert.That(_manager.GetSlot("slot-1").Settings.weight, Is.EqualTo(1.0f));
@@ -256,7 +256,7 @@ namespace RealtimeAvatarController.Core.Tests
             var settings = CreateSettings("slot-1", "Slot 1");
             settings.weight = -0.25f;
 
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             Assert.That(settings.weight, Is.EqualTo(0.0f));
             Assert.That(_manager.GetSlot("slot-1").Settings.weight, Is.EqualTo(0.0f));
@@ -268,7 +268,7 @@ namespace RealtimeAvatarController.Core.Tests
             var settings = CreateSettings("slot-1", "Slot 1");
             settings.weight = 0.5f;
 
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             Assert.That(settings.weight, Is.EqualTo(0.5f));
         }
@@ -288,7 +288,7 @@ namespace RealtimeAvatarController.Core.Tests
             using (_errorChannel.Errors.Subscribe(errors.Add))
             {
                 LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*InitFailure"));
-                await _manager.AddSlotAsync(settings).ToTask();
+                await _manager.AddSlotAsync(settings).AsTask();
             }
 
             Assert.That(_manager.GetSlot("slot-1"), Is.Null, "初期化失敗 Slot は Registry から除去されること");
@@ -315,7 +315,7 @@ namespace RealtimeAvatarController.Core.Tests
             using (_errorChannel.Errors.Subscribe(errors.Add))
             {
                 LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*InitFailure"));
-                await _manager.AddSlotAsync(settings).ToTask();
+                await _manager.AddSlotAsync(settings).AsTask();
             }
 
             Assert.That(_manager.GetSlot("slot-1"), Is.Null);
@@ -343,7 +343,7 @@ namespace RealtimeAvatarController.Core.Tests
             using (_errorChannel.Errors.Subscribe(errors.Add))
             {
                 LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*InitFailure"));
-                await _manager.AddSlotAsync(settings).ToTask();
+                await _manager.AddSlotAsync(settings).AsTask();
             }
 
             Assert.That(_manager.GetSlot("slot-1"), Is.Null);
@@ -362,12 +362,12 @@ namespace RealtimeAvatarController.Core.Tests
 
             var first = CreateSettings("slot-1", "Slot 1");
             LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*InitFailure"));
-            await _manager.AddSlotAsync(first).ToTask();
+            await _manager.AddSlotAsync(first).AsTask();
 
             _providerFactory.CreateException = null;
 
             var second = CreateSettings("slot-1", "Slot 1 retry");
-            await _manager.AddSlotAsync(second).ToTask();
+            await _manager.AddSlotAsync(second).AsTask();
 
             var handle = _manager.GetSlot("slot-1");
             Assert.That(handle, Is.Not.Null);
@@ -391,12 +391,12 @@ namespace RealtimeAvatarController.Core.Tests
             _manager = new SlotManager(_providerRegistry, mockRegistry, _errorChannel);
 
             var settings = CreateSettings("slot-1", "Slot 1");
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             _providerFactory.LastCreatedProvider.CallOrderRecorder = order;
             _moCapSourceFactory.LastCreatedSource.CallOrderRecorder = order;
 
-            await _manager.RemoveSlotAsync("slot-1").ToTask();
+            await _manager.RemoveSlotAsync("slot-1").AsTask();
 
             Assert.That(order, Is.EqualTo(new[]
             {
@@ -426,18 +426,18 @@ namespace RealtimeAvatarController.Core.Tests
             var settings1 = CreateSharedSettings("slot-1", "Slot 1", providerConfig, sharedSourceDescriptor);
             var settings2 = CreateSharedSettings("slot-2", "Slot 2", providerConfig, sharedSourceDescriptor);
 
-            await _manager.AddSlotAsync(settings1).ToTask();
-            await _manager.AddSlotAsync(settings2).ToTask();
+            await _manager.AddSlotAsync(settings1).AsTask();
+            await _manager.AddSlotAsync(settings2).AsTask();
 
             var sharedSource = _moCapSourceFactory.LastCreatedSource;
             Assert.That(_moCapSourceFactory.CreateCallCount, Is.EqualTo(1),
                 "同一 Descriptor の 2 Slot は MoCapSource インスタンスを共有すること");
 
-            await _manager.RemoveSlotAsync("slot-1").ToTask();
+            await _manager.RemoveSlotAsync("slot-1").AsTask();
             Assert.That(sharedSource.DisposeCallCount, Is.EqualTo(0),
                 "参照カウント > 0 の間は MoCapSource.Dispose は呼ばれてはならない");
 
-            await _manager.RemoveSlotAsync("slot-2").ToTask();
+            await _manager.RemoveSlotAsync("slot-2").AsTask();
             Assert.That(sharedSource.DisposeCallCount, Is.EqualTo(1),
                 "最後の Slot 削除で Registry が MoCapSource.Dispose を 1 回だけ呼ぶこと");
         }
@@ -447,7 +447,7 @@ namespace RealtimeAvatarController.Core.Tests
         {
             // Req 3.5: 破棄中の例外を catch してログに記録し、残余リソースの解放を継続する。
             var settings = CreateSettings("slot-1", "Slot 1");
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             _providerFactory.LastCreatedProvider.ReleaseAvatarException =
                 new InvalidOperationException("release avatar boom");
@@ -458,7 +458,7 @@ namespace RealtimeAvatarController.Core.Tests
             var events = new List<SlotStateChangedEvent>();
             using (_manager.OnSlotStateChanged.Subscribe(events.Add))
             {
-                await _manager.RemoveSlotAsync("slot-1").ToTask();
+                await _manager.RemoveSlotAsync("slot-1").AsTask();
             }
 
             Assert.That(_providerFactory.LastCreatedProvider.DisposeCallCount, Is.EqualTo(1),
@@ -475,7 +475,7 @@ namespace RealtimeAvatarController.Core.Tests
         {
             // Req 3.5: Provider.Dispose で例外が発生しても MoCapSourceRegistry.Release を継続実行する。
             var settings = CreateSettings("slot-1", "Slot 1");
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             _providerFactory.LastCreatedProvider.DisposeException =
                 new InvalidOperationException("provider dispose boom");
@@ -483,7 +483,7 @@ namespace RealtimeAvatarController.Core.Tests
             LogAssert.Expect(LogType.Warning,
                 new System.Text.RegularExpressions.Regex(@"\[SlotManager\].*Provider\.Dispose"));
 
-            await _manager.RemoveSlotAsync("slot-1").ToTask();
+            await _manager.RemoveSlotAsync("slot-1").AsTask();
 
             Assert.That(_moCapSourceFactory.LastCreatedSource.DisposeCallCount, Is.EqualTo(1),
                 "Provider.Dispose 失敗後も Registry.Release 経由で MoCapSource.Dispose が呼ばれること");
@@ -505,7 +505,7 @@ namespace RealtimeAvatarController.Core.Tests
             _manager = new SlotManager(_providerRegistry, mockRegistry, _errorChannel);
 
             var settings = CreateSettings("slot-1", "Slot 1");
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             LogAssert.Expect(LogType.Warning,
                 new System.Text.RegularExpressions.Regex(@"\[SlotManager\].*Release"));
@@ -513,7 +513,7 @@ namespace RealtimeAvatarController.Core.Tests
             var events = new List<SlotStateChangedEvent>();
             using (_manager.OnSlotStateChanged.Subscribe(events.Add))
             {
-                await _manager.RemoveSlotAsync("slot-1").ToTask();
+                await _manager.RemoveSlotAsync("slot-1").AsTask();
             }
 
             Assert.That(_manager.GetSlot("slot-1"), Is.Null,
@@ -529,7 +529,7 @@ namespace RealtimeAvatarController.Core.Tests
         public async Task ApplyWithFallback_ActionSucceeds_ExecutesActionAndPublishesNoError()
         {
             var settings = CreateSettings("slot-1", "Slot 1");
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             var invoked = 0;
             var errors = new List<SlotError>();
@@ -556,7 +556,7 @@ namespace RealtimeAvatarController.Core.Tests
 
                 var settings = CreateSettings("slot-1", "Slot 1");
                 settings.fallbackBehavior = FallbackBehavior.HoldLastPose;
-                await _manager.AddSlotAsync(settings).ToTask();
+                await _manager.AddSlotAsync(settings).AsTask();
 
                 var boom = new InvalidOperationException("apply boom");
                 var errors = new List<SlotError>();
@@ -600,7 +600,7 @@ namespace RealtimeAvatarController.Core.Tests
 
                 var settings = CreateSettings("slot-1", "Slot 1");
                 settings.fallbackBehavior = FallbackBehavior.Hide;
-                await _manager.AddSlotAsync(settings).ToTask();
+                await _manager.AddSlotAsync(settings).AsTask();
 
                 var boom = new InvalidOperationException("apply boom");
                 var errors = new List<SlotError>();
@@ -632,7 +632,7 @@ namespace RealtimeAvatarController.Core.Tests
             // 12.6 の段階ではスケルトン実装 (例外を飲み込み ApplyFailure を発行する) を検証する。
             var settings = CreateSettings("slot-1", "Slot 1");
             settings.fallbackBehavior = FallbackBehavior.TPose;
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             var boom = new InvalidOperationException("apply boom");
             var errors = new List<SlotError>();
@@ -654,7 +654,7 @@ namespace RealtimeAvatarController.Core.Tests
             // 未登録 slotId が渡された場合は安全に no-op とし、ErrorChannel にも発行しない。
             // (想定外の呼び出しに対して SlotManager を安定させる)
             var settings = CreateSettings("slot-1", "Slot 1");
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             var invoked = 0;
             var errors = new List<SlotError>();
@@ -674,7 +674,7 @@ namespace RealtimeAvatarController.Core.Tests
             // フォールバックと ErrorChannel 発行で処理を完結させる。
             var settings = CreateSettings("slot-1", "Slot 1");
             settings.fallbackBehavior = FallbackBehavior.HoldLastPose;
-            await _manager.AddSlotAsync(settings).ToTask();
+            await _manager.AddSlotAsync(settings).AsTask();
 
             LogAssert.Expect(LogType.Error,
                 new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*ApplyFailure"));
@@ -705,8 +705,8 @@ namespace RealtimeAvatarController.Core.Tests
                 return s;
             };
 
-            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).ToTask();
-            await _manager.AddSlotAsync(CreateSettings("slot-2", "Slot 2")).ToTask();
+            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).AsTask();
+            await _manager.AddSlotAsync(CreateSettings("slot-2", "Slot 2")).AsTask();
 
             Assert.That(providers, Has.Count.EqualTo(2));
             Assert.That(sources, Has.Count.EqualTo(2));
@@ -734,8 +734,8 @@ namespace RealtimeAvatarController.Core.Tests
         {
             // タスク 12.7: 各 Slot の Active → Disposed 遷移を OnSlotStateChanged に通知し、
             // その後に Subject を Complete する (design.md §4.1)。
-            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).ToTask();
-            await _manager.AddSlotAsync(CreateSettings("slot-2", "Slot 2")).ToTask();
+            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).AsTask();
+            await _manager.AddSlotAsync(CreateSettings("slot-2", "Slot 2")).AsTask();
 
             var events = new List<SlotStateChangedEvent>();
             var completed = false;
@@ -773,7 +773,7 @@ namespace RealtimeAvatarController.Core.Tests
         [Test]
         public async Task Dispose_Idempotent_SecondCallDoesNotReleaseResourcesAgain()
         {
-            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).ToTask();
+            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).AsTask();
 
             var provider = _providerFactory.LastCreatedProvider;
             var source = _moCapSourceFactory.LastCreatedSource;
@@ -809,8 +809,8 @@ namespace RealtimeAvatarController.Core.Tests
                 return s;
             };
 
-            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).ToTask();
-            await _manager.AddSlotAsync(CreateSettings("slot-2", "Slot 2")).ToTask();
+            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).AsTask();
+            await _manager.AddSlotAsync(CreateSettings("slot-2", "Slot 2")).AsTask();
 
             providers[0].DisposeException =
                 new InvalidOperationException("first provider dispose boom");
@@ -835,18 +835,18 @@ namespace RealtimeAvatarController.Core.Tests
             _manager.Dispose();
 
             Assert.ThrowsAsync<ObjectDisposedException>(
-                async () => await _manager.AddSlotAsync(CreateSettings("slot-x", "x")).ToTask());
+                async () => await _manager.AddSlotAsync(CreateSettings("slot-x", "x")).AsTask());
         }
 
         [Test]
         public async Task Dispose_AfterDispose_RemoveSlotAsyncThrowsObjectDisposedException()
         {
-            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).ToTask();
+            await _manager.AddSlotAsync(CreateSettings("slot-1", "Slot 1")).AsTask();
 
             _manager.Dispose();
 
             Assert.ThrowsAsync<ObjectDisposedException>(
-                async () => await _manager.RemoveSlotAsync("slot-1").ToTask());
+                async () => await _manager.RemoveSlotAsync("slot-1").AsTask());
         }
 
         // --- コンストラクタ引数 null チェック ---
