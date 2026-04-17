@@ -26,6 +26,10 @@ namespace RealtimeAvatarController.Core.Tests
         {
             RegistryLocator.ResetForTest();
             _channel = new DefaultSlotErrorChannel();
+            // LogAssert.Expect を明示していないテストは Publish 内部の Debug.LogError で
+            // 失敗扱いになるため一律で無効化する。.Expect() を書くテストは引き続き
+            // パターン一致を検証する (Unity 仕様)。
+            LogAssert.ignoreFailingMessages = true;
         }
 
         [TearDown]

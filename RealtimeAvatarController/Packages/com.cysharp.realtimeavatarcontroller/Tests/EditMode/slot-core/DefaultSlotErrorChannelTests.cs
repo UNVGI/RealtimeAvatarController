@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using RealtimeAvatarController.Core;
 using UniRx;
+using UnityEngine.TestTools;
 
 namespace RealtimeAvatarController.Core.Tests
 {
@@ -16,6 +17,9 @@ namespace RealtimeAvatarController.Core.Tests
         {
             RegistryLocator.ResetForTest();
             _channel = new DefaultSlotErrorChannel();
+            // Publish() 内部の Debug.LogError は本テストの検証対象ではない
+            // (抑制ロジックの検証は SlotErrorChannelTests で LogAssert.Expect により行う)。
+            LogAssert.ignoreFailingMessages = true;
         }
 
         [TearDown]
