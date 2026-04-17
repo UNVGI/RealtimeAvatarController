@@ -50,5 +50,45 @@ namespace RealtimeAvatarController.Samples.UI.Editor
                 _moCapSourceTypeIds = System.Array.Empty<string>();
             }
         }
+
+        public override void OnInspectorGUI()
+        {
+            serializedObject.Update();
+
+            EditorGUILayout.LabelField("基本設定", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(_slotIdProp,      new GUIContent("Slot ID"));
+            EditorGUILayout.PropertyField(_displayNameProp, new GUIContent("表示名"));
+
+            EditorGUILayout.Space();
+            DrawAvatarProviderSection();
+
+            EditorGUILayout.Space();
+            DrawMoCapSourceSection();
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("モーション設定", EditorStyles.boldLabel);
+            DrawWeightToggle();
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("フォールバック設定", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(_fallbackBehaviorProp, new GUIContent("フォールバック挙動"));
+
+            serializedObject.ApplyModifiedProperties();
+        }
+
+        private void DrawAvatarProviderSection()
+        {
+            // T3-1 で実装予定
+        }
+
+        private void DrawMoCapSourceSection()
+        {
+            // T4-1 で実装予定
+        }
+
+        private void DrawWeightToggle()
+        {
+            // T6-1 で実装予定
+        }
     }
 }
