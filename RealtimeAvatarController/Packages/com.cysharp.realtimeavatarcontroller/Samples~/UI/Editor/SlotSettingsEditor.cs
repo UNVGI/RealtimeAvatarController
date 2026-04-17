@@ -106,7 +106,41 @@ namespace RealtimeAvatarController.Samples.UI.Editor
 
         private void DrawMoCapSourceSection()
         {
-            // T4-1 で実装予定
+            EditorGUILayout.LabelField("MoCap ソース", EditorStyles.boldLabel);
+
+            var typeIdProp = _moCapSourceDescriptorProp.FindPropertyRelative("SourceTypeId");
+            var configProp = _moCapSourceDescriptorProp.FindPropertyRelative("Config");
+
+            string[] options = _moCapSourceTypeIds.Length > 0
+                ? new[] { "(未割り当て)" }.Concat(_moCapSourceTypeIds).ToArray()
+                : null;
+
+            if (options == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "Registry に MoCapSource が未登録です。\n[InitializeOnLoadMethod] が実行されているか確認してください。",
+                    MessageType.Warning);
+                EditorGUILayout.PropertyField(typeIdProp, new GUIContent("Source Type ID (手入力)"));
+            }
+            else
+            {
+                int currentIndex = string.IsNullOrEmpty(typeIdProp.stringValue)
+                    ? 0
+                    : System.Array.IndexOf(_moCapSourceTypeIds, typeIdProp.stringValue) + 1;
+                if (currentIndex < 0) currentIndex = 0;
+
+                int newIndex = EditorGUILayout.Popup("MoCap Source Type", currentIndex, options);
+
+                if (newIndex == 0)
+                    typeIdProp.stringValue = string.Empty;
+                else
+                    typeIdProp.stringValue = _moCapSourceTypeIds[newIndex - 1];
+            }
+
+            EditorGUILayout.PropertyField(configProp, new GUIContent("MoCap Source Config (SO)"));
+
+            if (GUILayout.Button("候補を更新"))
+                RefreshTypeIds();
         }
 
         private void DrawWeightToggle()
