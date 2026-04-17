@@ -145,3 +145,4 @@ Wave 5: mocap-vmc
 10-4 OK (e7578a8)
 11-1 OK (97eb553)
 11-2 OK (c64a3b2)
+12-1 OK (確認のみ - 全 asmdef が design.md §14 と一致、循環依存なし)

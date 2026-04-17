@@ -1,0 +1,53 @@
+mocap-vmc タスク 12-1 asmdef 依存関係の最終確認
+
+## 確認対象
+design.md §14 の「asmdef 依存関係」テーブルと実ファイルの照合。
+
+## 照合結果
+
+### 1. RealtimeAvatarController.MoCap.VMC (Runtime)
+path: Packages/com.cysharp.realtimeavatarcontroller/Runtime/MoCap/VMC/RealtimeAvatarController.MoCap.VMC.asmdef
+- design 要求: RealtimeAvatarController.Core・RealtimeAvatarController.Motion・com.hidano.uosc・UniRx
+- 実値 references: RealtimeAvatarController.Core, RealtimeAvatarController.Motion, uOSC.Runtime, UniRx
+- 判定: 一致 (uOSC.Runtime は com.hidano.uosc パッケージ提供の Runtime asmdef 名)
+  検証: Library/PackageCache/com.hidano.uosc@f7a52f0c524d/Runtime/uOSC.Runtime.asmdef
+
+### 2. RealtimeAvatarController.MoCap.VMC.Editor
+path: Packages/com.cysharp.realtimeavatarcontroller/Editor/MoCap/VMC/RealtimeAvatarController.MoCap.VMC.Editor.asmdef
+- design 要求: RealtimeAvatarController.MoCap.VMC・RealtimeAvatarController.Core
+- 実値 references: RealtimeAvatarController.MoCap.VMC, RealtimeAvatarController.Core
+- includePlatforms: ["Editor"]
+- 判定: 一致
+
+### 3. RealtimeAvatarController.MoCap.VMC.Tests.EditMode
+path: Packages/com.cysharp.realtimeavatarcontroller/Tests/EditMode/mocap-vmc/RealtimeAvatarController.MoCap.VMC.Tests.EditMode.asmdef
+- design 要求: RealtimeAvatarController.MoCap.VMC・RealtimeAvatarController.Core・UnityEngine.TestRunner・UnityEditor.TestRunner
+- 実値 references: UnityEngine.TestRunner, UnityEditor.TestRunner, RealtimeAvatarController.MoCap.VMC, RealtimeAvatarController.Core
+- includePlatforms: ["Editor"], precompiledReferences: ["nunit.framework.dll"]
+- 判定: 一致
+
+### 4. RealtimeAvatarController.MoCap.VMC.Tests.PlayMode
+path: Packages/com.cysharp.realtimeavatarcontroller/Tests/PlayMode/mocap-vmc/RealtimeAvatarController.MoCap.VMC.Tests.PlayMode.asmdef
+- design 要求: RealtimeAvatarController.MoCap.VMC・RealtimeAvatarController.Core・RealtimeAvatarController.Motion・UnityEngine.TestRunner
+- 実値 references: UnityEngine.TestRunner, UnityEditor.TestRunner, RealtimeAvatarController.MoCap.VMC, RealtimeAvatarController.Core, RealtimeAvatarController.Motion
+- 判定: 一致 (UnityEditor.TestRunner の追加参照は PlayMode テスト実行に無害で一般的な設定)
+
+## 循環依存チェック
+依存グラフ (外部パッケージ/Unity 組み込みを除く):
+- Core → (UniRx, UniTask)
+- Motion → Core
+- MoCap.VMC → Core, Motion, uOSC.Runtime, UniRx
+- MoCap.VMC.Editor → MoCap.VMC, Core
+- MoCap.VMC.Tests.EditMode → MoCap.VMC, Core
+- MoCap.VMC.Tests.PlayMode → MoCap.VMC, Core, Motion
+
+トポロジカル順序 (下位 → 上位):
+  Core < Motion < MoCap.VMC < (MoCap.VMC.Editor, Tests.EditMode, Tests.PlayMode)
+
+循環依存なし。DAG として成立。
+
+## 結論
+全 4 つの asmdef ファイルは design.md §14 のテーブルと整合し、循環依存もない。
+ファイル修正は不要。
+
+_Requirements: 8-1, 8-2, 8-3_
