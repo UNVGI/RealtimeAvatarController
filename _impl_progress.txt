@@ -81,3 +81,5 @@ Wave 3: motion-pipeline
 8-2 OK (0024bd1)
 8-3 OK (accc05c)
 8-4 OK (no changes - contracts.md §1.7 verified consistent with design.md §9.1)
+
+=== Wave 3: motion-pipeline 完了 (22/22 OK) ===
