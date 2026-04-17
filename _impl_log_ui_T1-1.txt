@@ -1,0 +1,21 @@
+# ui-sample T1-1 ディレクトリ骨格の作成
+
+## 実行日
+2026-04-17
+
+## 概要
+`Packages/com.cysharp.realtimeavatarcontroller/Samples~/UI/` 配下に design.md §8.1 / §13.1 で定義された 4 ディレクトリ (Runtime / Editor / Scenes / Prefabs) を整備した。
+
+## 作業内容
+- 既存: `Editor/` (Editor asmdef 済), `Scenes/` (.gitkeep 済), `Scripts/` (旧配置・T1-1 スコープ外のため保持)
+- 新規作成: `Runtime/.gitkeep`, `Prefabs/.gitkeep`
+
+## 完了条件チェック
+- [x] `Samples~/UI/Runtime/` が存在
+- [x] `Samples~/UI/Editor/` が存在
+- [x] `Samples~/UI/Scenes/` が存在
+- [x] `Samples~/UI/Prefabs/` が存在
+
+## 備考
+- 実パッケージ名は `com.cysharp.realtimeavatarcontroller` (design.md / project-foundation 準拠)。spec 本文の `com.realtimeavatarcontroller` はリネーム前の表記。
+- 既存 `Scripts/` ディレクトリおよび `Samples~/UI/` 直下の asmdef 配置見直しは T1-2 以降のスコープ。
