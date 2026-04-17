@@ -10,9 +10,9 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
 {
     /// <summary>
     /// BuiltinAvatarProvider のライフサイクル PlayMode テスト
-    /// (tasks.md T-7-4 / T-7-5 / T-7-6 / T-7-7 / design.md §5 Dispose・§5 RequestAvatarAsync・
-    /// §2 1 Slot 1 インスタンス原則・§11.2 テストケース一覧 /
-    /// Req 4 AC 1・Req 4 AC 2・Req 4 AC 3・Req 4 AC 6・Req 5 AC 4・
+    /// (tasks.md T-7-4 / T-7-5 / T-7-6 / T-7-7 / T-7-8 / design.md §5 Dispose・§5 RequestAvatarAsync・
+    /// §2 1 Slot 1 インスタンス原則・§8 エラーパターン表・§11.2 テストケース一覧 /
+    /// Req 4 AC 1・Req 4 AC 2・Req 4 AC 3・Req 4 AC 5・Req 4 AC 6・Req 5 AC 4・
     /// Req 6 AC 1・Req 6 AC 2・Req 9 AC 3)。
     ///
     /// <para>
@@ -98,6 +98,28 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
     /// </para>
     ///
     /// <para>
+    /// 検証対象 (T-7-8 AfterDispose_RequestAvatar_ThrowsObjectDisposedException):
+    ///   - <see cref="BuiltinAvatarProvider.Dispose"/> 後に
+    ///     <see cref="BuiltinAvatarProvider.RequestAvatar"/> を呼び出した場合に
+    ///     <see cref="System.ObjectDisposedException"/> がスローされること
+    ///     (Req 4 AC 5 / design.md §5 Dispose の状態遷移仕様 / §8 エラーパターン表) を
+    ///     実 Unity ランタイム環境 (PlayMode) で検証する。EditMode 単体検証 (T-6-5) との
+    ///     対になる統合検証であり、Dispose 時の <c>_disposed = true</c> フラグ遷移と
+    ///     後続呼び出しに対する <c>ThrowIfDisposed()</c> ガードが PlayMode 環境下でも
+    ///     確定的に機能することを確認する。
+    ///   - <see cref="BuiltinAvatarProvider.Dispose"/> 実装は追跡中の全 <see cref="GameObject"/> を
+    ///     <see cref="UnityEngine.Object.Destroy(UnityEngine.Object)"/> で破棄するため、
+    ///     end-of-frame 遅延を挟むべく <c>yield return null</c> で 1 フレーム経過させた上で
+    ///     後続 <see cref="BuiltinAvatarProvider.RequestAvatar"/> の例外送出を観測する
+    ///     (T-7-4 / T-7-5 と同一のフレーム遅延パターン)。
+    ///   - <see cref="System.ObjectDisposedException.ObjectName"/> が
+    ///     <c>nameof(BuiltinAvatarProvider)</c> と一致することを確認し、
+    ///     <c>ThrowIfDisposed()</c> ヘルパー契約 (design.md §5 /
+    ///     <c>throw new ObjectDisposedException(nameof(BuiltinAvatarProvider))</c>) に
+    ///     準拠していることを間接的に検証する。
+    /// </para>
+    ///
+    /// <para>
     /// テストダブル戦略 (tasks.md T-7 前提):
     ///   - 各テスト開始・終了時に <see cref="RegistryLocator.ResetForTest"/> を呼び出し
     ///     Registry 汚染を防ぐ。
@@ -106,7 +128,7 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
     ///   - <see cref="BuiltinAvatarProviderConfig"/> は
     ///     <see cref="ScriptableObject.CreateInstance{T}"/> で生成し、AssetDatabase 非依存と
     ///     することで PlayMode / Player ビルドの双方で安定動作させる。
-    ///   - T-7-4 / T-7-5 / T-7-6 / T-7-7 では <see cref="ISlotErrorChannel"/> を検証対象としないため、
+    ///   - T-7-4 / T-7-5 / T-7-6 / T-7-7 / T-7-8 では <see cref="ISlotErrorChannel"/> を検証対象としないため、
     ///     コンストラクタ引数に null を渡して
     ///     <see cref="RegistryLocator.ErrorChannel"/> フォールバック経路を通す
     ///     (design.md §5 コンストラクタ仕様)。
@@ -116,7 +138,7 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
     ///     Unity Test Runner の PlayMode 環境で UniTask を正しくハンドリングする。
     /// </para>
     ///
-    /// Requirements: Req 4 AC 1, Req 4 AC 2, Req 4 AC 3, Req 4 AC 6, Req 5 AC 4,
+    /// Requirements: Req 4 AC 1, Req 4 AC 2, Req 4 AC 3, Req 4 AC 5, Req 4 AC 6, Req 5 AC 4,
     /// Req 6 AC 1, Req 6 AC 2, Req 9 AC 3
     /// </summary>
     [TestFixture]
@@ -404,6 +426,44 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
             // Cleanup: providerB を Dispose し、追跡中の avatarB を破棄する。
             //          providerA / avatarA は TearDown の _provider.Dispose() 経路が処理する。
             providerB.Dispose();
+        }
+
+        [UnityTest]
+        public IEnumerator AfterDispose_RequestAvatar_ThrowsObjectDisposedException()
+        {
+            // Arrange: Provider を構築し、直ちに Dispose() して _disposed = true 状態へ遷移させる
+            //          (design.md §5 Dispose の状態遷移仕様 / Req 4 AC 5)。
+            //          errorChannel は null 指定で RegistryLocator.ErrorChannel フォールバック経路を
+            //          通し、T-7-4 / T-7-5 / T-7-6 / T-7-7 と一貫したコンストラクタ構成を維持する。
+            _provider = new BuiltinAvatarProvider(_config, errorChannel: null);
+            _provider.Dispose();
+
+            // Dispose() 内の Object.Destroy は end-of-frame 反映のため 1 フレーム経過させ、
+            // PlayMode 環境で Dispose 完了後のフレーム境界を越えた状態を検証する
+            // (T-7-4 / T-7-5 と同一のフレーム遅延パターン)。
+            yield return null;
+
+            // Act + Assert: Dispose 済み Provider への RequestAvatar は
+            //              ObjectDisposedException をスローする
+            //              (design.md §5 / §8 エラーパターン表 / Req 4 AC 5)。
+            //              同期版と同じく RequestAvatarAsync も ThrowIfDisposed() 経由で
+            //              同例外を送出するが、本テストは tasks.md T-7-8 の仕様に従い
+            //              同期版 RequestAvatar に焦点を絞る。
+            var ex = Assert.Throws<System.ObjectDisposedException>(
+                () => _provider.RequestAvatar(_config),
+                "Dispose() 後の RequestAvatar() 呼び出しは ObjectDisposedException をスローするべき (Req 4 AC 5)。");
+
+            // ObjectName が BuiltinAvatarProvider であることを確認する —
+            // ThrowIfDisposed() は nameof(BuiltinAvatarProvider) を渡して例外を生成するため
+            // (design.md §5 / BuiltinAvatarProvider.ThrowIfDisposed)。
+            Assert.AreEqual(nameof(BuiltinAvatarProvider), ex.ObjectName,
+                "ObjectDisposedException.ObjectName は BuiltinAvatarProvider であるべき (ThrowIfDisposed ヘルパーの契約)。");
+
+            // Dispose() のべき等性 (design.md §5: if (_disposed) return) を
+            // 副次的に確認するため、後続の Dispose() 再呼び出しが例外を投げないことを検証する。
+            // これにより TearDown での _provider.Dispose() も安全に実行できることが保証される。
+            Assert.DoesNotThrow(() => _provider.Dispose(),
+                "Dispose() は複数回呼び出されても例外を投げずにべき等であるべき (design.md §5)。");
         }
     }
 }
