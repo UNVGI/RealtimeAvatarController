@@ -137,4 +137,4 @@ Wave 5: mocap-vmc
 7-5 OK (06ce6c1)
 8-1 OK (59e18c1)
 8-2 OK (d9c1414)
-8-3 OK
+8-3 OK (7c6aaff)
