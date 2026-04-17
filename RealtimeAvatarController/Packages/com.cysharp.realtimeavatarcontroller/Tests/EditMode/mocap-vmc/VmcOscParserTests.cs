@@ -10,18 +10,18 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 {
     /// <summary>
     /// VmcMessageRouter の OSC アドレスディスパッチ EditMode 単体テスト
-    /// (tasks.md タスク 4-1 / design.md §6.2 / requirements.md 要件 5-1, 5-2, 7-2, 10-2)。
+    /// (tasks.md タスク 4-1 / 10-1, design.md §6.2 / requirements.md 要件 5-1, 5-2, 7-2, 10-2)。
     ///
     /// <para>
-    /// TDD 先行作成: 本テストファイル作成時点では以下の型は未実装である。
-    ///   - <c>RealtimeAvatarController.MoCap.VMC.Internal.VmcMessageRouter</c> (タスク 4-2)
-    ///   - <c>RealtimeAvatarController.MoCap.VMC.Internal.VmcFrameBuilder</c> (タスク 5-1)
-    /// したがって本ファイルはタスク 4-2・タスク 5-1 の実装完了までコンパイルエラーとなってよい
-    /// (tasks.md タスク 4-1 の TDD 方針)。最終的なモック/スタブ整備はタスク 10-1 で行う。
+    /// タスク 4-1 で先行作成したテストをタスク 4-2 (<see cref="VmcMessageRouter"/>) および
+    /// タスク 5-1 (<see cref="VmcFrameBuilder"/>) 実装完了後に完成させたもの (tasks.md タスク 10-1)。
+    /// <see cref="VmcFrameBuilder"/> は <c>internal sealed</c> のため振る舞いの代替となるモックは作成せず、
+    /// 実インスタンスをスタブとして使用し、<see cref="VmcFrameBuilder.TryFlush"/> の結果および
+    /// <c>HumanoidMotionFrame.RootPosition</c> を通じて Router → FrameBuilder 協調動作を観測する。
     /// </para>
     ///
     /// <para>
-    /// 検証対象 (tasks.md タスク 4-1):
+    /// 検証対象 (tasks.md タスク 4-1 / 10-1):
     /// <list type="bullet">
     ///   <item>正常な <c>/VMC/Ext/Bone/Pos</c> アドレスのルーティング
     ///     → <c>VmcFrameBuilder.SetBone</c> が呼ばれる (design.md §6.2)</item>
@@ -31,20 +31,17 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
     ///     → 例外をスローせず、フレームビルダへの呼び出しなし (design.md §7.4)</item>
     ///   <item>未知アドレス (<c>/VMC/Ext/Unknown</c>)
     ///     → 例外をスローせず無視される (design.md §6.2)</item>
-    ///   <item>uOSC の <c>OscDataHandle</c> (uOSC.Message) に引数が不足している場合
+    ///   <item>uOSC の <c>Message</c> に引数が不足している場合
     ///     → 例外をスローせず、<c>PublishError</c> 相当の通知 (errorHandler コールバック) が行われる
     ///     (design.md §8.1, §8.2)</item>
     /// </list>
     /// </para>
     ///
     /// <para>
-    /// 本テストでは <c>VmcMessageRouter</c> を以下のシグネチャで構築することを前提とする
-    /// (タスク 4-2 実装で確定):
-    /// <code>
-    /// new VmcMessageRouter(VmcFrameBuilder frameBuilder, Action&lt;Exception&gt; onError);
-    /// </code>
-    /// また VMC プロトコル上 OSC データは <c>uOSC.Message</c> (address + values) として表現される
-    /// (design.md §6.2: uOSC が OSC パースまで担い、router は address と引数リストを解釈する)。
+    /// <c>VmcMessageRouter</c> は <c>(VmcFrameBuilder frameBuilder, Action&lt;Exception&gt; onError)</c>
+    /// シグネチャで構築する (タスク 4-2 実装で確定)。VMC プロトコル上 OSC データは <c>uOSC.Message</c>
+    /// (address + values) として表現され、uOSC が OSC パースを担い、Router は address と引数リストを
+    /// 解釈する薄いディスパッチャとして機能する (design.md §6.2)。
     /// </para>
     /// </summary>
     [TestFixture]

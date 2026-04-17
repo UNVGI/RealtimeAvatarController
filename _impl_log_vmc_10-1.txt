@@ -1,0 +1,18 @@
+タスク 10-1: VmcOscParserTests.cs テスト実装完成
+
+## 実施内容
+- タスク 4-1 で先行作成済みの `VmcOscParserTests.cs` のヘッダーコメントを最終化
+  (TDD 暫定説明を削除し、タスク 10-1 完了状態に更新)
+- 5 ケース (Bone/Pos, Root/Pos, Blend/Val, Unknown, InsufficientArgs) は
+  タスク 4-1 作成時点で既に網羅済みであり、4-2 (`VmcMessageRouter`) /
+  5-1 (`VmcFrameBuilder`) 実装完了によりコンパイル可能となっている。
+
+## モック/スタブ整備方針
+- `VmcFrameBuilder` は `internal sealed` のため振る舞い差替えのモックは作成不可。
+- 実インスタンスをスタブとして使用し、`TryFlush` の戻り値および
+  `HumanoidMotionFrame.RootPosition` を通じて協調動作を観測する。
+
+## 確認事項
+- ファイル: `RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/Tests/EditMode/mocap-vmc/VmcOscParserTests.cs`
+- asmdef: `RealtimeAvatarController.MoCap.VMC.Tests.EditMode` (既存)
+- 依存: `RealtimeAvatarController.MoCap.VMC` (Router/FrameBuilder), `uOSC` (Message struct)
