@@ -4,6 +4,8 @@
   "references": [
     "RealtimeAvatarController.Samples.UI",
     "RealtimeAvatarController.Core",
+    "UniRx",
+    "UniTask",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner"
   ],
