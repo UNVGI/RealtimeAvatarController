@@ -5,7 +5,8 @@
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner",
     "RealtimeAvatarController.Core",
-    "RealtimeAvatarController.Avatar.Builtin"
+    "RealtimeAvatarController.Avatar.Builtin",
+    "UniTask"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

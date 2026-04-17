@@ -1,4 +1,5 @@
 using System.Collections;
+using Cysharp.Threading.Tasks;
 using NUnit.Framework;
 using RealtimeAvatarController.Avatar.Builtin;
 using RealtimeAvatarController.Core;
@@ -9,8 +10,9 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
 {
     /// <summary>
     /// BuiltinAvatarProvider のライフサイクル PlayMode テスト
-    /// (tasks.md T-7-4 / T-7-5 / design.md §5 Dispose・§11.2 テストケース一覧 /
-    /// Req 4 AC 1・Req 4 AC 2・Req 4 AC 3・Req 9 AC 3)。
+    /// (tasks.md T-7-4 / T-7-5 / T-7-6 / design.md §5 Dispose・§5 RequestAvatarAsync・
+    /// §11.2 テストケース一覧 /
+    /// Req 4 AC 1・Req 4 AC 2・Req 4 AC 3・Req 6 AC 1・Req 6 AC 2・Req 9 AC 3)。
     ///
     /// <para>
     /// 検証対象 (T-7-4 ReleaseAvatar_DestroysGameObject):
@@ -52,6 +54,28 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
     /// </para>
     ///
     /// <para>
+    /// 検証対象 (T-7-6 RequestAvatarAsync_ReturnsInstantiatedPrefab):
+    ///   - <see cref="BuiltinAvatarProvider.RequestAvatarAsync"/> を <c>await</c> した
+    ///     結果として、同期版 <see cref="BuiltinAvatarProvider.RequestAvatar"/> と
+    ///     同様にインスタンス化された有効な <see cref="GameObject"/> が返ること
+    ///     (Req 6 AC 1) を実 Unity ランタイム環境で検証する。
+    ///   - design.md §5 RequestAvatarAsync の実装契約
+    ///     (<c>UniTask.FromResult(RequestAvatar(config))</c>) に従い、非同期 API が
+    ///     <see cref="UniTask.FromResult{T}(T)"/> によって即時完了すること
+    ///     (Req 6 AC 2) を確認する。具体的には
+    ///     <see cref="UniTask{T}.Status"/> が
+    ///     <see cref="UniTaskStatus.Succeeded"/> 相当となり、追加フレームを消費せずに
+    ///     完了することを <c>yield return null</c> を挟まない同一フレーム完了として観測する。
+    ///   - 返却 <see cref="GameObject"/> が Prefab 参照そのものではなく
+    ///     <see cref="UnityEngine.Object.Instantiate(UnityEngine.Object)"/> による複製で
+    ///     あること・<c>_managedAvatars</c> に追跡登録されていること
+    ///     (同期版 <see cref="BuiltinAvatarProvider.RequestAvatar"/> と完全に同一の
+    ///     副作用を持つこと) を、後続の
+    ///     <see cref="BuiltinAvatarProvider.ReleaseAvatar"/> が未管理エラーを
+    ///     発生させずに破棄できることで間接的に確認する。
+    /// </para>
+    ///
+    /// <para>
     /// テストダブル戦略 (tasks.md T-7 前提):
     ///   - 各テスト開始・終了時に <see cref="RegistryLocator.ResetForTest"/> を呼び出し
     ///     Registry 汚染を防ぐ。
@@ -60,13 +84,17 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
     ///   - <see cref="BuiltinAvatarProviderConfig"/> は
     ///     <see cref="ScriptableObject.CreateInstance{T}"/> で生成し、AssetDatabase 非依存と
     ///     することで PlayMode / Player ビルドの双方で安定動作させる。
-    ///   - T-7-4 / T-7-5 では <see cref="ISlotErrorChannel"/> を検証対象としないため、
+    ///   - T-7-4 / T-7-5 / T-7-6 では <see cref="ISlotErrorChannel"/> を検証対象としないため、
     ///     コンストラクタ引数に null を渡して
     ///     <see cref="RegistryLocator.ErrorChannel"/> フォールバック経路を通す
     ///     (design.md §5 コンストラクタ仕様)。
+    ///   - T-7-6 の async / await 実行は
+    ///     <see cref="UniTask.ToCoroutine(System.Func{UniTask})"/> 経由で
+    ///     <see cref="UnityTestAttribute"/> の <see cref="IEnumerator"/> に橋渡しし、
+    ///     Unity Test Runner の PlayMode 環境で UniTask を正しくハンドリングする。
     /// </para>
     ///
-    /// Requirements: Req 4 AC 1, Req 4 AC 2, Req 4 AC 3, Req 9 AC 3
+    /// Requirements: Req 4 AC 1, Req 4 AC 2, Req 4 AC 3, Req 6 AC 1, Req 6 AC 2, Req 9 AC 3
     /// </summary>
     [TestFixture]
     public class BuiltinAvatarProviderLifecycleTests
@@ -231,5 +259,55 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
             Assert.DoesNotThrow(() => _provider.ReleaseAvatar(managedAvatar1),
                 "Dispose 後に同一 GameObject を ReleaseAvatar しても例外を投げずに早期リターンするべき (追跡セットがクリアされているため未管理扱い)。");
         }
+
+        [UnityTest]
+        public IEnumerator RequestAvatarAsync_ReturnsInstantiatedPrefab() => UniTask.ToCoroutine(async () =>
+        {
+            // Arrange: Provider を構築する。
+            // errorChannel は T-7-4 / T-7-5 と同一の null 指定 (RegistryLocator.ErrorChannel フォールバック) を用い、
+            // ライフサイクルフィクスチャ全体で一貫したコンストラクタ構成を維持する (design.md §5)。
+            _provider = new BuiltinAvatarProvider(_config, errorChannel: null);
+
+            // Act: RequestAvatarAsync を await し、同一フレーム内で即時完了することを検証する。
+            // design.md §5 RequestAvatarAsync: UniTask.FromResult(RequestAvatar(config)) による
+            // 即時完了ラップのため、async / await 境界を超えても追加フレームは消費されない (Req 6 AC 2)。
+            var task = _provider.RequestAvatarAsync(_config);
+
+            // UniTask.Status が Succeeded となっていること (即時完了の観測可能副作用: Req 6 AC 2)。
+            // UniTask.FromResult は完了済みの UniTask を返すため、await 前の時点で Succeeded となる。
+            Assert.AreEqual(UniTaskStatus.Succeeded, task.Status,
+                "RequestAvatarAsync は UniTask.FromResult で即時完了するため、Status は Succeeded であるべき (Req 6 AC 2)。");
+
+            _instantiatedAvatar = await task;
+
+            // Assert 1: 返却 GameObject が C# null / Unity null の双方で有効であること (Req 6 AC 1)。
+            Assert.IsNotNull(_instantiatedAvatar,
+                "RequestAvatarAsync は await 後に null でない GameObject を返すべき (Req 6 AC 1)。");
+            Assert.IsTrue(_instantiatedAvatar,
+                "返却された GameObject は Unity の生存判定 (operator true) で true であるべき。");
+
+            // Assert 2: 同期版と同様に Prefab 参照そのものではなく Object.Instantiate の複製であること
+            //           (design.md §5 RequestAvatarAsync は内部で RequestAvatar を呼び出す実装のため、
+            //            同期版と同一の Instantiate 経路の副作用を持つ / Req 6 AC 1)。
+            Assert.AreNotSame(_config.avatarPrefab, _instantiatedAvatar,
+                "RequestAvatarAsync は Prefab 参照そのものではなく Object.Instantiate による複製を返すべき。");
+
+            // Assert 3: Scene 上に配置されていること (Unity Instantiate のデフォルト動作 /
+            //           同期版と同一の Scene 配置副作用を持つこと)。
+            Assert.IsTrue(_instantiatedAvatar.scene.IsValid(),
+                "インスタンス化された GameObject は有効な Scene に配置されているべき。");
+
+            // Assert 4: _managedAvatars への追跡登録が行われていることの間接確認 —
+            //           ReleaseAvatar に渡した際に「未管理エラー」が発生せずに正常に破棄されること
+            //           (同期版 RequestAvatar と同一の追跡セット登録副作用: design.md §5 RequestAvatarAsync)。
+            //           LogAssert.NoUnexpectedReceived() と組み合わせることで
+            //           未管理エラーログが出力されないことを確定的に検証する。
+            Assert.DoesNotThrow(() => _provider.ReleaseAvatar(_instantiatedAvatar),
+                "RequestAvatarAsync で取得した GameObject は _managedAvatars に登録されているため ReleaseAvatar が未管理エラーを出さずに破棄できるべき (Req 6 AC 1 / 同期版と同等の副作用)。");
+
+            // 参照はローカルで破棄済みとして扱う。TearDown の DestroyImmediate は
+            // Unity の overloaded operator== で null 判定され二重破棄を発生させない。
+            // (T-7-4 TearDown と同一の安全パターン)。
+        });
     }
 }
