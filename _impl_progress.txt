@@ -117,4 +117,4 @@ T-7-8 OK (93e4750)
 === Wave 4: avatar-provider-builtin 完了 (26/26 OK) ===
 
 Wave 5: mocap-vmc
-1-1 OK
+1-1 OK (513e24c)
