@@ -1,5 +1,6 @@
 using System;
 using RealtimeAvatarController.Core;
+using UnityEngine;
 
 namespace RealtimeAvatarController.Avatar.Builtin
 {
@@ -35,6 +36,22 @@ namespace RealtimeAvatarController.Avatar.Builtin
             }
 
             return new BuiltinAvatarProvider(builtinConfig, channel);
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void RegisterRuntime()
+        {
+            try
+            {
+                RegistryLocator.ProviderRegistry.Register(
+                    BuiltinProviderTypeId,
+                    new BuiltinAvatarProviderFactory());
+            }
+            catch (RegistryConflictException ex)
+            {
+                RegistryLocator.ErrorChannel.Publish(
+                    new SlotError(string.Empty, SlotErrorCategory.RegistryConflict, ex, DateTime.UtcNow));
+            }
         }
     }
 }
