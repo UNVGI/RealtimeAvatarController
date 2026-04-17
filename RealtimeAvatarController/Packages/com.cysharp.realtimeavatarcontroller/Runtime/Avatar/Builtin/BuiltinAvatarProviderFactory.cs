@@ -53,6 +53,24 @@ namespace RealtimeAvatarController.Avatar.Builtin
                     new SlotError(string.Empty, SlotErrorCategory.RegistryConflict, ex, DateTime.UtcNow));
             }
         }
+
+#if UNITY_EDITOR
+        [UnityEditor.InitializeOnLoadMethod]
+        private static void RegisterEditor()
+        {
+            try
+            {
+                RegistryLocator.ProviderRegistry.Register(
+                    BuiltinProviderTypeId,
+                    new BuiltinAvatarProviderFactory());
+            }
+            catch (RegistryConflictException ex)
+            {
+                RegistryLocator.ErrorChannel.Publish(
+                    new SlotError(string.Empty, SlotErrorCategory.RegistryConflict, ex, DateTime.UtcNow));
+            }
+        }
+#endif
     }
 }
 </content>
