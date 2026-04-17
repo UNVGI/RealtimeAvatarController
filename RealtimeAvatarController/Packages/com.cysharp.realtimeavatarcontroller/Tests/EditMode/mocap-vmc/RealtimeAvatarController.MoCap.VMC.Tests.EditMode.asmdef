@@ -4,7 +4,8 @@
   "references": [
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner",
-    "RealtimeAvatarController.MoCap.VMC"
+    "RealtimeAvatarController.MoCap.VMC",
+    "RealtimeAvatarController.Core"
   ],
   "includePlatforms": ["Editor"],
   "excludePlatforms": [],

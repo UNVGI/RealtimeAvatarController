@@ -1,0 +1,25 @@
+## mocap-vmc タスク 1-4 EditMode テスト asmdef 配置
+
+### 対応概要
+- `Tests/EditMode/mocap-vmc/` 配下には既に `RealtimeAvatarController.MoCap.VMC.Tests.EditMode.asmdef` が配置済みだった。
+- 依存として `RealtimeAvatarController.Core` が欠落していたため追加。
+
+### 変更ファイル
+- `RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/Tests/EditMode/mocap-vmc/RealtimeAvatarController.MoCap.VMC.Tests.EditMode.asmdef`
+  - references に `RealtimeAvatarController.Core` を追加
+
+### 最終的な依存構成
+- `UnityEngine.TestRunner`
+- `UnityEditor.TestRunner`
+- `RealtimeAvatarController.MoCap.VMC`
+- `RealtimeAvatarController.Core`
+- `includePlatforms: ["Editor"]`
+- `defineConstraints: ["UNITY_INCLUDE_TESTS"]`
+- `precompiledReferences: ["nunit.framework.dll"]`
+
+### Requirements
+- 10-1 (テスト分離)
+
+### 備考
+- design.md §14 の asmdef 依存関係テーブルに準拠。
+- 実パス `Packages/com.cysharp.realtimeavatarcontroller/` は、tasks.md 記載パス `Packages/com.example.realtime-avatar-controller/` とは異なるが、Wave 2 以降の既存実装に合わせた配置を継続している。
