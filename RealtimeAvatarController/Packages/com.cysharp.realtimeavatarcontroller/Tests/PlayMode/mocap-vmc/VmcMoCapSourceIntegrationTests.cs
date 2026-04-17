@@ -5,7 +5,7 @@ using NUnit.Framework;
 using RealtimeAvatarController.Core;
 using UnityEngine;
 using UnityEngine.TestTools;
-using MotionFrame = RealtimeAvatarController.Motion.MotionFrame;
+using MotionFrame = RealtimeAvatarController.Core.MotionFrame;
 using HumanoidMotionFrame = RealtimeAvatarController.Motion.HumanoidMotionFrame;
 
 namespace RealtimeAvatarController.MoCap.VMC.Tests
