@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 using RealtimeAvatarController.Avatar.Builtin;
 using RealtimeAvatarController.Core;
@@ -53,7 +55,21 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
     ///     直接代入して構築する (design.md §4 シナリオ Y のコード例と同一経路)。
     /// </para>
     ///
-    /// Requirements: Req 2 AC 3, Req 3 AC 1, Req 3 AC 2, Req 9 AC 3
+    /// <para>
+    /// 検証対象 (T-7-3 RequestAvatar_NullPrefab_ThrowsAndPublishesError):
+    ///   - <see cref="BuiltinAvatarProviderConfig.avatarPrefab"/> が null の
+    ///     <see cref="BuiltinAvatarProviderConfig"/> を用いて
+    ///     <see cref="BuiltinAvatarProvider.RequestAvatar"/> を呼び出した場合に
+    ///     <see cref="InvalidOperationException"/> がスローされ、かつ
+    ///     <see cref="ISlotErrorChannel"/> へ <see cref="SlotErrorCategory.InitFailure"/> が
+    ///     発行されることを PlayMode 環境で確認する (Req 2 AC 5 / Req 3 AC 4 / Req 9 AC 3)。
+    ///   - PlayMode での統合動作として、try ブロック先頭の null Prefab ガードが
+    ///     実 Unity ランタイム (<see cref="UnityEngine.Object.Instantiate(UnityEngine.Object)"/>
+    ///     到達前) で機能することを検証する。EditMode 相当の単体検証は tasks.md T-6-6 で
+    ///     実施済みであり、本 T-7-3 は実ランタイム統合の補完的検証を担う。
+    /// </para>
+    ///
+    /// Requirements: Req 2 AC 3, Req 2 AC 5, Req 3 AC 1, Req 3 AC 2, Req 3 AC 4, Req 9 AC 3
     /// </summary>
     [TestFixture]
     public class BuiltinAvatarProviderInstantiateTests
@@ -62,6 +78,8 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
         private BuiltinAvatarProviderConfig _scenarioXConfig;
         private GameObject _scenarioYPrefab;
         private BuiltinAvatarProviderConfig _scenarioYConfig;
+        private BuiltinAvatarProviderConfig _nullPrefabConfig;
+        private FakeSlotErrorChannel _fakeChannel;
         private BuiltinAvatarProvider _provider;
         private GameObject _instantiatedAvatar;
 
@@ -121,6 +139,14 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
                 UnityEngine.Object.DestroyImmediate(_scenarioYConfig);
                 _scenarioYConfig = null;
             }
+
+            if (_nullPrefabConfig != null)
+            {
+                UnityEngine.Object.DestroyImmediate(_nullPrefabConfig);
+                _nullPrefabConfig = null;
+            }
+
+            _fakeChannel = null;
 
             RegistryLocator.ResetForTest();
         }
@@ -227,6 +253,102 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
             }
             Assert.IsTrue(foundInAllObjects,
                 "Resources.FindObjectsOfTypeAll でシナリオ Y 由来の GameObject を列挙できるべき。");
+        }
+
+        [Test]
+        public void RequestAvatar_NullPrefab_ThrowsAndPublishesError()
+        {
+            // design.md §5 RequestAvatar (同期 API) / §8 エラーパターン表:
+            //   try ブロック先頭の null Prefab ガードで InvalidOperationException をスロー →
+            //   catch ブロックで _errorChannel.Publish(InitFailure) → 再スロー。
+            // T-7-3 は実 Unity ランタイム (PlayMode) 環境でこの統合動作を検証する
+            // (EditMode 単体検証は T-6-6 にて実施済み)。
+            _nullPrefabConfig = ScriptableObject.CreateInstance<BuiltinAvatarProviderConfig>();
+            _nullPrefabConfig.avatarPrefab = null;
+
+            // ISlotErrorChannel はコンストラクタ引数で直接注入し、InitFailure 発行を捕捉する。
+            // RegistryLocator への Override ではなくコンストラクタ経由とすることで、
+            // BuiltinAvatarProvider が優先的に使用する _errorChannel (design.md §5) を
+            // 確定的に検証対象のモックへ束縛する。
+            _fakeChannel = new FakeSlotErrorChannel();
+            _provider = new BuiltinAvatarProvider(_nullPrefabConfig, _fakeChannel);
+
+            // 1. InvalidOperationException が呼び出し元にスローされること (Req 2 AC 5 / Req 3 AC 4)。
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => _provider.RequestAvatar(_nullPrefabConfig),
+                "avatarPrefab が null の場合は InvalidOperationException をスローするべき。");
+
+            StringAssert.Contains("avatarPrefab", ex.Message,
+                "例外メッセージには avatarPrefab が null である旨を含めるべき。");
+
+            // 2. FakeSlotErrorChannel に SlotErrorCategory.InitFailure が発行されていること
+            //    (design.md §8 エラーパターン表 / Req 3 AC 4)。
+            Assert.IsTrue(_fakeChannel.HasReceived(SlotErrorCategory.InitFailure),
+                "null Prefab 時には catch ブロックで SlotErrorCategory.InitFailure が発行されるべき。");
+
+            // 3. 発行された SlotError の Exception が元の InvalidOperationException と一致し、
+            //    catch ブロックが例外情報を正しく搬送していることを確認する。
+            var firstInitFailure = default(SlotError);
+            foreach (var received in _fakeChannel.Received)
+            {
+                if (received.Category == SlotErrorCategory.InitFailure)
+                {
+                    firstInitFailure = received;
+                    break;
+                }
+            }
+            Assert.AreSame(ex, firstInitFailure.Exception,
+                "発行された SlotError.Exception はスローされた InvalidOperationException と同一であるべき。");
+
+            // 4. null Prefab ガードは try ブロック先頭で発火するため、_managedAvatars への登録は起こらず
+            //    Scene 上に GameObject が残存しないこと。_instantiatedAvatar は null のままで
+            //    TearDown でのクリーンアップ対象となる残骸が発生しないことを PlayMode 環境で確認する。
+            Assert.IsNull(_instantiatedAvatar,
+                "null Prefab 経路では RequestAvatar は GameObject を返さず、Scene 上への残存も発生しないはず。");
+        }
+
+        // --- テストヘルパー ---
+
+        /// <summary>
+        /// <see cref="ISlotErrorChannel"/> のテスト用スタブ。発行された <see cref="SlotError"/> を
+        /// 順序付きリストに保持し、<see cref="HasReceived"/> で特定カテゴリの有無を検証する。
+        /// T-6-6 (EditMode) と同一の振る舞いを持ち、PlayMode からの
+        /// <see cref="BuiltinAvatarProvider"/> 統合検証でも再利用できる。
+        /// UniRx 非依存とするため <see cref="Errors"/> は購読されない no-op 実装を返す。
+        /// </summary>
+        private sealed class FakeSlotErrorChannel : ISlotErrorChannel
+        {
+            private readonly List<SlotError> _received = new List<SlotError>();
+
+            public IReadOnlyList<SlotError> Received => _received;
+
+            public IObservable<SlotError> Errors => NoOpObservable.Instance;
+
+            public void Publish(SlotError error)
+            {
+                _received.Add(error);
+            }
+
+            public bool HasReceived(SlotErrorCategory category)
+            {
+                foreach (var e in _received)
+                {
+                    if (e.Category == category) return true;
+                }
+                return false;
+            }
+
+            private sealed class NoOpObservable : IObservable<SlotError>
+            {
+                public static readonly NoOpObservable Instance = new NoOpObservable();
+                public IDisposable Subscribe(IObserver<SlotError> observer) => NoOpDisposable.Instance;
+            }
+
+            private sealed class NoOpDisposable : IDisposable
+            {
+                public static readonly NoOpDisposable Instance = new NoOpDisposable();
+                public void Dispose() { }
+            }
         }
     }
 }
