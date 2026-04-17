@@ -80,3 +80,4 @@ Wave 3: motion-pipeline
 8-1 OK (HumanoidMotionFrame.cs の doccomment はタスク 2-3 で OI-1 対応済み — 「許容」方針を確定)
 8-2 OK (0024bd1)
 8-3 OK (accc05c)
+8-4 OK (no changes - contracts.md §1.7 verified consistent with design.md §9.1)
