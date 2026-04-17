@@ -688,7 +688,7 @@ private void RestoreRenderers()
 }
 ```
 
-> **注記**: slot-core design.md の 11.2 章では `Hide` の実装として `GameObject.SetActive(false)` が言及されているが、motion-pipeline 側の確定仕様は **`Renderer.enabled = false`** とする。GameObject 自体は生存させることで、Slot のライフサイクルや他コンポーネントへの影響を排除する (requirements Req 12 AC4 準拠)。
+> **注記**: `Hide` の確定実装は **`Renderer.enabled = false`** とし、`GameObject.SetActive(false)` は使用しない。GameObject 自体は生存させることで、Slot のライフサイクルや他コンポーネントへの影響を排除する (requirements Req 12 AC4 準拠)。`slot-core` design.md §11.2 も同仕様に整合済み (「`Hide`: アバターに紐付く全 `Renderer` コンポーネントの `enabled = false` にする。**`GameObject.SetActive(false)` は使用しない** (motion-pipeline の確定実装と統一)」) — 両 Spec 間の Hide 実装記述は一致している (OI-4 対応)。
 
 ### 8.5 SlotSettings.fallbackBehavior への参照経路
 
