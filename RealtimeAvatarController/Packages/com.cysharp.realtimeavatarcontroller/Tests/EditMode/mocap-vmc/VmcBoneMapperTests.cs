@@ -7,22 +7,17 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 {
     /// <summary>
     /// VmcBoneMapper.TryGetBone() の VMC Bone 名 → Unity HumanBodyBones 変換 EditMode テスト
-    /// (tasks.md タスク 3-1 / design.md §7.1 / requirements.md 要件 5-1, 10-2)。
-    ///
-    /// <para>
-    /// TDD 先行作成: 本テストファイル作成時点では以下の型は未実装である。
-    ///   - <c>RealtimeAvatarController.MoCap.VMC.Internal.VmcBoneMapper</c>
-    /// したがって本ファイルはタスク 3-2 (VmcBoneMapper 実装) 完了までコンパイルエラーとなってよい
-    /// (tasks.md タスク 3-1 の TDD 方針および tasks.md タスク 10-3 で最終完成)。
-    /// </para>
+    /// (tasks.md タスク 3-1 / タスク 10-3 / design.md §7.1 / requirements.md 要件 5-1, 10-2)。
     ///
     /// <para>
     /// 検証対象:
     ///   - Unity <c>HumanBodyBones</c> の全列挙値名 (<c>LastBone</c> 除く) を <c>TryGetBone</c> に渡すと
     ///     すべて <c>true</c> を返し、対応する <c>HumanBodyBones</c> 値が得られること
     ///     (要件 5-1 / design.md §7.1 全 55 ボーン対応)
+    ///   - <c>HumanBodyBones.LastBone</c> の名前を渡すと <c>false</c> を返すこと (辞書登録対象外)
     ///   - 未知のボーン名 (例: <c>"UnknownBone"</c>) を渡すと <c>TryGetBone</c> が <c>false</c> を返すこと
     ///   - <c>null</c> または空文字を渡しても例外をスローせず <c>false</c> を返すこと
+    ///   - 大文字小文字違い (例: <c>"hips"</c>) は <c>StringComparer.Ordinal</c> 比較によりマッチしないこと
     /// </para>
     /// </summary>
     [TestFixture]
