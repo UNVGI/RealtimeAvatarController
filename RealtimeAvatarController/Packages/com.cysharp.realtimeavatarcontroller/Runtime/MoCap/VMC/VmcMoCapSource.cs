@@ -1,5 +1,6 @@
 using System;
 using RealtimeAvatarController.Core;
+using RealtimeAvatarController.MoCap.VMC.Internal;
 using UniRx;
 
 namespace RealtimeAvatarController.MoCap.VMC
@@ -20,7 +21,10 @@ namespace RealtimeAvatarController.MoCap.VMC
     /// <see cref="_stream"/> を <see cref="MotionStream"/> として公開する (design.md §6.5)。
     /// </para>
     /// <para>
-    /// <see cref="Initialize"/> (タスク 7-3)・<see cref="Shutdown"/> / <see cref="Dispose"/> (タスク 7-4)・
+    /// <b>Initialize (タスク 7-3)</b>: config の型・ポート範囲・状態遷移をバリデートし、
+    /// <see cref="VmcFrameBuilder"/> / <see cref="VmcMessageRouter"/> / <see cref="VmcOscAdapter"/>
+    /// を組み立てて uOSC 受信を開始する (design.md §9.2)。
+    /// <see cref="Shutdown"/> / <see cref="Dispose"/> (タスク 7-4)・
     /// <c>PublishError</c> (タスク 7-5) は後続タスクで実装する。
     /// </para>
     /// <para>
@@ -71,6 +75,14 @@ namespace RealtimeAvatarController.MoCap.VMC
         /// </summary>
         private readonly IObservable<MotionFrame> _stream;
 
+        /// <summary>
+        /// <see cref="Initialize"/> で組み立てられる VMC 受信パイプライン構成要素。
+        /// <see cref="Shutdown"/> (タスク 7-4) までは生存し、再使用 (再 <see cref="Initialize"/>) は許容しない。
+        /// </summary>
+        private VmcFrameBuilder _frameBuilder;
+        private VmcMessageRouter _router;
+        private VmcOscAdapter _adapter;
+
         private State _state = State.Uninitialized;
 
         /// <summary>ソース種別識別子。常に <c>"VMC"</c> を返す (requirements.md 要件 1-2)。</summary>
@@ -103,10 +115,64 @@ namespace RealtimeAvatarController.MoCap.VMC
         }
 
         /// <inheritdoc />
-        /// <remarks>タスク 7-3 で実装する。</remarks>
+        /// <remarks>
+        /// <para>
+        /// 処理フロー (design.md §9.2):
+        /// <list type="number">
+        ///   <item>状態が <see cref="State.Uninitialized"/> 以外なら <see cref="InvalidOperationException"/></item>
+        ///   <item><paramref name="config"/> を <see cref="VMCMoCapSourceConfig"/> にキャストできなければ
+        ///         <see cref="ArgumentException"/> (メッセージに実型名を含める)</item>
+        ///   <item>ポート番号が 1025〜65535 の範囲外なら <see cref="ArgumentOutOfRangeException"/></item>
+        ///   <item><see cref="VmcFrameBuilder"/> / <see cref="VmcMessageRouter"/> /
+        ///         <see cref="VmcOscAdapter"/> を組み立て、<c>bindAddress</c> / <c>port</c> で uOSC 受信を開始</item>
+        ///   <item>内部状態を <see cref="State.Running"/> に遷移</item>
+        /// </list>
+        /// </para>
+        /// <para>
+        /// ポート競合 (<see cref="System.Net.Sockets.SocketException"/>) は呼び出し元
+        /// (<c>SlotManager</c>) に伝播する (<c>InitFailure</c> カテゴリで通知される)。
+        /// </para>
+        /// </remarks>
         public void Initialize(MoCapSourceConfigBase config)
         {
-            throw new NotImplementedException("VmcMoCapSource.Initialize はタスク 7-3 で実装される予定です。");
+            if (_state != State.Uninitialized)
+            {
+                throw new InvalidOperationException(
+                    $"VmcMoCapSource.Initialize は Uninitialized 状態でのみ呼び出せます (現在の状態: {_state})。");
+            }
+
+            var vmcConfig = config as VMCMoCapSourceConfig;
+            if (vmcConfig == null)
+            {
+                var actualTypeName = config?.GetType().Name ?? "null";
+                throw new ArgumentException(
+                    $"VMCMoCapSourceConfig が必要ですが {actualTypeName} が渡されました。",
+                    nameof(config));
+            }
+
+            if (vmcConfig.port < 1025 || vmcConfig.port > 65535)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(config),
+                    vmcConfig.port,
+                    "VMCMoCapSourceConfig.port は 1025〜65535 の範囲で指定してください。");
+            }
+
+            _frameBuilder = new VmcFrameBuilder();
+            _router = new VmcMessageRouter(
+                _frameBuilder,
+                onError: ex => _errorChannel.Publish(
+                    new SlotError(_slotId, SlotErrorCategory.VmcReceive, ex, DateTime.UtcNow)));
+            _adapter = new VmcOscAdapter(
+                _router,
+                _frameBuilder,
+                _subject,
+                errorHandler: (category, ex) => _errorChannel.Publish(
+                    new SlotError(_slotId, category, ex, DateTime.UtcNow)));
+
+            _adapter.Initialize(vmcConfig.bindAddress, vmcConfig.port);
+
+            _state = State.Running;
         }
 
         /// <inheritdoc />
