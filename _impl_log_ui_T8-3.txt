@@ -1,0 +1,48 @@
+ui-sample T8-3 Canvas 階層の配置
+
+## 実装内容
+
+Samples~/UI/Scenes/SlotManagementDemo.unity に Screen Space - Overlay Canvas と EventSystem を追加し、
+design.md §3.2 および tasks.md T8-3 の GameObject 階層を配置した。
+
+## 配置した Canvas 階層
+
+Canvas (Screen Space - Overlay)
+- Canvas / CanvasScaler / GraphicRaycaster をルートに付与 (RenderMode=0 = Screen Space Overlay)
+├── SlotManagementPanel (RectTransform コンテナ)
+│   ├── Header (Text: "Slot 管理")
+│   ├── AddSlotButton (Image + Button + 子 Text "Slot を追加")
+│   └── SlotListScrollView (Image + ScrollRect)
+├── SlotDetailPanel (RectTransform コンテナ)
+│   ├── DisplayNameField (Image + InputField)
+│   ├── WeightToggle (Toggle)
+│   ├── FallbackDropdown (Image + Dropdown)
+│   └── DeleteSlotButton (Image + Button + 子 Text "Slot を削除")
+└── SlotErrorPanel (RectTransform コンテナ)
+    ├── ErrorLogScrollView (Image + ScrollRect)
+    └── ClearErrorsButton (Image + Button + 子 Text "エラーをクリア")
+
+EventSystem (EventSystem + StandaloneInputModule)
+
+## UGUI コンポーネント参照
+
+- Canvas m_RenderMode: 0 (Screen Space - Overlay)
+- CanvasScaler: UI Scale Mode = Constant Pixel Size (0), ScaleFactor=1
+- GraphicRaycaster: IgnoreReversedGraphics=true
+- 各パネルは Canvas の Anchor 分割 (0..0.33 / 0.33..0.66 / 0.66..1) でレイアウト
+- Layer 5 (UI) をすべての UI GameObject に設定
+
+## 完了条件との対応
+
+- Canvas 階層が tasks.md T8-3 記載の構成で存在 ... OK (上記ツリー参照)
+- Screen Space - Overlay Canvas ... OK (m_RenderMode: 0)
+- EventSystem 配置 ... OK (EventSystem + StandaloneInputModule)
+- UGUI コンポーネントの正しい設定 ... OK (各要素に Button/InputField/Toggle/Dropdown/ScrollRect/Text を付与)
+
+## 備考
+
+- 細部の位置/サイズ値は初期プレースホルダ。T10 で SlotManagementPanelUI / SlotDetailPanelUI などの
+  スクリプトをアタッチし、ScrollRect の Content/Viewport 参照や Dropdown の Template、
+  InputField の Text/Placeholder を Inspector で配線する予定。
+- [SlotManager] GameObject (T8-2 で配置) はそのまま保持。
+- AvatarArea / Lighting は後続 T8-4 で配置する。
