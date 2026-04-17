@@ -108,3 +108,4 @@ T-6-6 OK (423a871) [test file created; commit message deviates from convention b
 T-7-1 OK (ce6dd48)
 T-7-2 OK (44dea9a)
 T-7-3 OK (39e3657)
+T-7-4 OK (673d176)
