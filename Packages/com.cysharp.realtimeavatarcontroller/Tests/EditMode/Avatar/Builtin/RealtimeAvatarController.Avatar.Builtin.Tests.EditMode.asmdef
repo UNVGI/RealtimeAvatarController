@@ -1,0 +1,24 @@
+{
+  "name": "RealtimeAvatarController.Avatar.Builtin.Tests.EditMode",
+  "rootNamespace": "RealtimeAvatarController.Avatar.Builtin.Tests.EditMode",
+  "references": [
+    "RealtimeAvatarController.Core",
+    "RealtimeAvatarController.Avatar.Builtin",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}
