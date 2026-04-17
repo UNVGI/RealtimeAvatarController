@@ -980,7 +980,7 @@ Unity ランタイムを必要としない純粋なロジックテスト。
 
 - `MotionCacheTests` では UniRx の `Subject<MotionFrame>` をスタブとして使用し、実 `IMoCapSource` を使わずに購読ライフサイクルを検証する
 - `HumanoidMotionApplierFallbackTests` では SlotManager の catch ブロックが `RegistryLocator.ErrorChannel.Publish()` を呼び出すことを検証するため、`ISlotErrorChannel` モックを `RegistryLocator.OverrideErrorChannel()` 経由で差し込む。テスト終了時に `RegistryLocator.ResetForTest()` でリセットする。`HumanoidMotionApplier` コンストラクタへの `ISlotErrorChannel` 注入は不要 (Applier は ErrorChannel を持たない)
-- PlayMode テスト用 Humanoid Prefab は `Tests/PlayMode/Motion/Fixtures/` に配置する
+- PlayMode テスト用 Humanoid フィクスチャは `Tests/PlayMode/motion-pipeline/Applier/Fixtures/` に配置する (OI-3 確定)。なお、Unity の Humanoid `Avatar` は本来 FBX インポータが骨格パスを参照して焼成するアセットであり、Avatar アセット無しに `.prefab` を YAML 記述しても `Animator.isHuman == true` を成立できない。FBX を持ち込まずに Humanoid 適合を成立させる現実解は `AvatarBuilder.BuildHumanAvatar` によるプログラマティック生成のみであるため、フィクスチャは `.prefab` ファイルではなく `TestHumanoidAvatarBuilder` (静的ビルダー) として実装し、テスト時に都度組み立てる方式を採用する
 
 ---
 
