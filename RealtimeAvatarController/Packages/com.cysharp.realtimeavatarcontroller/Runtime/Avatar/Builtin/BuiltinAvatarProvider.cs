@@ -61,7 +61,9 @@ namespace RealtimeAvatarController.Avatar.Builtin
 
         public UniTask<GameObject> RequestAvatarAsync(ProviderConfigBase config, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            cancellationToken.ThrowIfCancellationRequested();
+            var avatar = RequestAvatar(config);
+            return UniTask.FromResult(avatar);
         }
 
         public void ReleaseAvatar(GameObject avatar)
