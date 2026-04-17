@@ -1,0 +1,30 @@
+using System;
+using RealtimeAvatarController.Core;
+
+namespace RealtimeAvatarController.Avatar.Builtin
+{
+    /// <summary>
+    /// IAvatarProviderFactory のビルトイン具象実装。
+    /// BuiltinAvatarProviderConfig を受け取り BuiltinAvatarProvider を生成する。
+    /// ステートレス設計: _errorChannel は読み取り専用参照であり、複数回の Create() 呼び出しが互いに干渉しない。
+    /// </summary>
+    public sealed class BuiltinAvatarProviderFactory : IAvatarProviderFactory
+    {
+        /// <summary>ビルトイン Provider の typeId ("Builtin")。</summary>
+        public const string BuiltinProviderTypeId = "Builtin";
+
+        private readonly ISlotErrorChannel _errorChannel;
+
+        public BuiltinAvatarProviderFactory(ISlotErrorChannel errorChannel = null)
+        {
+            _errorChannel = errorChannel;
+        }
+
+        public IAvatarProvider Create(ProviderConfigBase config)
+        {
+            throw new NotImplementedException();
+        }
+    }
+}
+</content>
+</invoke>
