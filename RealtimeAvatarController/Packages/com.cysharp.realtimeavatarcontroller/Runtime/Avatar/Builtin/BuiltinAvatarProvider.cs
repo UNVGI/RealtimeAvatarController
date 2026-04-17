@@ -29,7 +29,34 @@ namespace RealtimeAvatarController.Avatar.Builtin
 
         public GameObject RequestAvatar(ProviderConfigBase config)
         {
-            throw new NotImplementedException();
+            ThrowIfDisposed();
+
+            var builtinConfig = (config as BuiltinAvatarProviderConfig) ?? _config;
+            if (builtinConfig == null)
+            {
+                var ex = new InvalidOperationException(
+                    $"config は BuiltinAvatarProviderConfig でなければなりません。実際の型: {config?.GetType().Name ?? "null"}");
+                _errorChannel?.Publish(new SlotError(null, SlotErrorCategory.InitFailure, ex, DateTime.UtcNow));
+                throw ex;
+            }
+
+            try
+            {
+                if (builtinConfig.avatarPrefab == null)
+                {
+                    throw new InvalidOperationException(
+                        "BuiltinAvatarProviderConfig.avatarPrefab が null です。Prefab を設定してください。");
+                }
+
+                var instance = UnityEngine.Object.Instantiate(builtinConfig.avatarPrefab);
+                _managedAvatars.Add(instance);
+                return instance;
+            }
+            catch (Exception ex)
+            {
+                _errorChannel?.Publish(new SlotError(null, SlotErrorCategory.InitFailure, ex, DateTime.UtcNow));
+                throw;
+            }
         }
 
         public UniTask<GameObject> RequestAvatarAsync(ProviderConfigBase config, CancellationToken cancellationToken = default)
