@@ -146,3 +146,7 @@ Wave 5: mocap-vmc
 11-1 OK (97eb553)
 11-2 OK (c64a3b2)
 12-1 OK (確認のみ - 全 asmdef が design.md §14 と一致、循環依存なし)
+12-2 OK (no changes - 8/8 ファイルが期待配置・namespace と整合)
+12-3 OK (59a97ab)
+
+=== Wave 5: mocap-vmc 完了 (30/30 OK) ===
