@@ -22,7 +22,19 @@ namespace RealtimeAvatarController.Avatar.Builtin
 
         public IAvatarProvider Create(ProviderConfigBase config)
         {
-            throw new NotImplementedException();
+            var channel = _errorChannel ?? RegistryLocator.ErrorChannel;
+
+            var builtinConfig = config as BuiltinAvatarProviderConfig;
+            if (builtinConfig == null)
+            {
+                var ex = new ArgumentException(
+                    $"Expected BuiltinAvatarProviderConfig, got {config?.GetType().Name ?? "null"}",
+                    nameof(config));
+                channel?.Publish(new SlotError(null, SlotErrorCategory.InitFailure, ex, DateTime.UtcNow));
+                throw ex;
+            }
+
+            return new BuiltinAvatarProvider(builtinConfig, channel);
         }
     }
 }
