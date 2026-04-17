@@ -282,6 +282,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 100210001}
+  - component: {fileID: 100210002}
   m_Layer: 5
   m_Name: SlotManagementPanel
   m_TagString: Untagged
@@ -312,6 +313,24 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &100210002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100210000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  slotManagerBehaviour: {fileID: 100100002}
+  addSlotButton: {fileID: 100212004}
+  slotListScrollView: {fileID: 100213004}
+  slotListContent: {fileID: 100213001}
+  slotListItemPrefab: {fileID: 100100000, guid: e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1, type: 3}
+  addSlotTemplate: {fileID: 0}
 --- !u!1 &100211000
 GameObject:
   m_ObjectHideFlags: 0
