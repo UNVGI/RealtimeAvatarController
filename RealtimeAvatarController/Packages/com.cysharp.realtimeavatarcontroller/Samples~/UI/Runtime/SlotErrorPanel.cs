@@ -44,6 +44,17 @@ namespace RealtimeAvatarController.Samples.UI
 
         private void OnDestroy() => _disposables?.Dispose();
 
+        /// <summary>
+        /// ログコンテナ内の全エラーログ GameObject を破棄する。
+        /// ClearErrorsButton の OnClick イベントから呼び出される (T14-4)。
+        /// </summary>
+        public void ClearAllErrors()
+        {
+            if (_logContainer == null) return;
+            for (int i = _logContainer.childCount - 1; i >= 0; i--)
+                Destroy(_logContainer.GetChild(i).gameObject);
+        }
+
         private void OnSlotError(SlotError error)
         {
             if (_logContainer == null || _logItemPrefab == null) return;
