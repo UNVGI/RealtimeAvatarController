@@ -150,3 +150,6 @@ Wave 5: mocap-vmc
 12-3 OK (59a97ab)
 
 === Wave 5: mocap-vmc 完了 (30/30 OK) ===
+
+Wave 6: ui-sample
+T1-1 OK (ef0222c) [commit message deviates from convention but 4 required dirs exist]
