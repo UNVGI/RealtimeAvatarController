@@ -74,3 +74,4 @@ Wave 3: motion-pipeline
 6-3 OK (e0e8b87)
 6-4 OK (8e70130)
 6-5 OK (9708cf6)
+7-1 OK
