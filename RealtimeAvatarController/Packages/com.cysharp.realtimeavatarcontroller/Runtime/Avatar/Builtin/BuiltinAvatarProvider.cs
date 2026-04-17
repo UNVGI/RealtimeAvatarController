@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using RealtimeAvatarController.Core;
@@ -80,7 +81,18 @@ namespace RealtimeAvatarController.Avatar.Builtin
 
         public void Dispose()
         {
-            throw new NotImplementedException();
+            if (_disposed) return;
+            _disposed = true;
+
+            foreach (var avatar in _managedAvatars.ToArray())
+            {
+                if (avatar != null)
+                {
+                    UnityEngine.Object.Destroy(avatar);
+                }
+            }
+
+            _managedAvatars.Clear();
         }
 
         private void ThrowIfDisposed()
