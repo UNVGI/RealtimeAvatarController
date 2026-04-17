@@ -3,7 +3,9 @@
   "rootNamespace": "RealtimeAvatarController.MoCap.VMC",
   "references": [
     "RealtimeAvatarController.Core",
-    "RealtimeAvatarController.Motion"
+    "RealtimeAvatarController.Motion",
+    "uOSC.Runtime",
+    "UniRx"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
