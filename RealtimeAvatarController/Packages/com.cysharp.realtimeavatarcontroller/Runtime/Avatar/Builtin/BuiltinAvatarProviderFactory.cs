@@ -73,5 +73,3 @@ namespace RealtimeAvatarController.Avatar.Builtin
 #endif
     }
 }
-</content>
-</invoke>

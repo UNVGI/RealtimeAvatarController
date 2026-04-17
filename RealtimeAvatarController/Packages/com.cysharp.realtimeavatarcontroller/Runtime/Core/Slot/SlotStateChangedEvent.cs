@@ -23,5 +23,3 @@ namespace RealtimeAvatarController.Core
         }
     }
 }
-</content>
-</invoke>
