@@ -1,0 +1,12 @@
+ui-sample T2-1 SlotSettingsEditor クラス骨格の作成
+
+- ファイル: Packages/com.cysharp.realtimeavatarcontroller/Samples~/UI/Editor/SlotSettingsEditor.cs
+- namespace: RealtimeAvatarController.Samples.UI.Editor
+- [CustomEditor(typeof(SlotSettings))] 付与
+- UnityEditor.Editor 継承
+- SerializedProperty キャッシュ 6 本宣言: _slotIdProp / _displayNameProp / _weightProp /
+  _fallbackBehaviorProp / _avatarProviderDescriptorProp / _moCapSourceDescriptorProp
+- Registry キャッシュ 2 本を System.Array.Empty<string>() で初期化:
+  _providerTypeIds / _moCapSourceTypeIds
+
+T2-1 スコープは骨格のみ。OnEnable/RefreshTypeIds/OnInspectorGUI は T2-2/T2-3/T2-4 にて実装予定。
