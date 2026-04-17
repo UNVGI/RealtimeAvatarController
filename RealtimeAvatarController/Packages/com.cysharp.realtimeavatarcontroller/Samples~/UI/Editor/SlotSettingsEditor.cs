@@ -78,7 +78,30 @@ namespace RealtimeAvatarController.Samples.UI.Editor
 
         private void DrawAvatarProviderSection()
         {
-            // T3-1 で実装予定
+            EditorGUILayout.LabelField("アバター Provider", EditorStyles.boldLabel);
+
+            var typeIdProp = _avatarProviderDescriptorProp.FindPropertyRelative("ProviderTypeId");
+            var configProp = _avatarProviderDescriptorProp.FindPropertyRelative("Config");
+
+            if (_providerTypeIds.Length == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "Registry に Provider が未登録です。\n[InitializeOnLoadMethod] が実行されているか確認してください。",
+                    MessageType.Warning);
+                EditorGUILayout.PropertyField(typeIdProp, new GUIContent("Provider Type ID (手入力)"));
+            }
+            else
+            {
+                int currentIndex = System.Array.IndexOf(_providerTypeIds, typeIdProp.stringValue);
+                if (currentIndex < 0) currentIndex = 0;
+                int newIndex = EditorGUILayout.Popup("Provider Type", currentIndex, _providerTypeIds);
+                typeIdProp.stringValue = _providerTypeIds[newIndex];
+            }
+
+            EditorGUILayout.PropertyField(configProp, new GUIContent("Provider Config (SO)"));
+
+            if (GUILayout.Button("候補を更新"))
+                RefreshTypeIds();
         }
 
         private void DrawMoCapSourceSection()

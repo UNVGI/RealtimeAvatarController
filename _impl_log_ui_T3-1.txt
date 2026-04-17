@@ -1,0 +1,31 @@
+ui-sample T3-1: DrawAvatarProviderSection の実装
+
+## 対象ファイル
+- Packages/com.cysharp.realtimeavatarcontroller/Samples~/UI/Editor/SlotSettingsEditor.cs
+
+## 実装内容
+design.md §4.2 のコードスニペット、tasks.md T3-1 の手順に従い
+`DrawAvatarProviderSection()` を実装した。
+
+1. セクションラベル「アバター Provider」を `EditorGUILayout.LabelField` で表示
+2. `_avatarProviderDescriptorProp.FindPropertyRelative("ProviderTypeId")` で typeIdProp を取得
+3. `_avatarProviderDescriptorProp.FindPropertyRelative("Config")` で configProp を取得
+4. `_providerTypeIds.Length == 0` の場合: `MessageType.Warning` の HelpBox を表示し、
+   `typeIdProp` 手入力フィールドにフォールバック
+5. それ以外: 現在の typeId から `System.Array.IndexOf` で `currentIndex` を計算 (-1 の場合 0)
+   し、`EditorGUILayout.Popup("Provider Type", currentIndex, _providerTypeIds)` でドロップダウン表示
+6. `EditorGUILayout.PropertyField(configProp, new GUIContent("Provider Config (SO)"))` で
+   `ProviderConfigBase` 派生 SO のドラッグ&ドロップ参照欄を表示
+7. 「候補を更新」ボタンを `GUILayout.Button` で配置し、押下時に `RefreshTypeIds()` を呼び出す
+
+## 検証
+- `AvatarProviderDescriptor` (Runtime/Core/Descriptors/AvatarProviderDescriptor.cs) の
+  フィールド名 `ProviderTypeId` / `Config` と `FindPropertyRelative` の引数が一致することを確認
+- `ProviderConfigBase` (Runtime/Core/Configs/ProviderConfigBase.cs) 基底型の SO が
+  Inspector でドラッグ&ドロップ参照可能であることを確認
+- T2-1〜T2-4 の骨格実装と整合しコンパイル可能
+
+## 完了条件の確認
+- [x] Registry に "Builtin" が登録されている場合、ドロップダウンに表示される (Popup 経路)
+- [x] Registry 未登録の場合、HelpBox と手入力フィールドが表示される
+- [x] Config 欄に ProviderConfigBase 派生 SO をドラッグ&ドロップ参照可能
