@@ -1,4 +1,6 @@
+using System.Linq;
 using UnityEditor;
+using UnityEngine;
 using RealtimeAvatarController.Core;
 
 namespace RealtimeAvatarController.Samples.UI.Editor
@@ -32,9 +34,21 @@ namespace RealtimeAvatarController.Samples.UI.Editor
 
         private void RefreshTypeIds()
         {
-            // T2-3 で Registry 問い合わせを実装する。
-            _providerTypeIds    = System.Array.Empty<string>();
-            _moCapSourceTypeIds = System.Array.Empty<string>();
+            try
+            {
+                _providerTypeIds    = RegistryLocator.ProviderRegistry
+                                                     .GetRegisteredTypeIds()
+                                                     .ToArray();
+                _moCapSourceTypeIds = RegistryLocator.MoCapSourceRegistry
+                                                     .GetRegisteredTypeIds()
+                                                     .ToArray();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[SlotSettingsEditor] Registry 候補取得失敗: {ex.Message}");
+                _providerTypeIds    = System.Array.Empty<string>();
+                _moCapSourceTypeIds = System.Array.Empty<string>();
+            }
         }
     }
 }

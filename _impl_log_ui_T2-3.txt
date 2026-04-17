@@ -1,0 +1,24 @@
+ui-sample T2-3 RefreshTypeIds の実装
+
+対象ファイル:
+- RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/Samples~/UI/Editor/SlotSettingsEditor.cs
+
+実装内容:
+1. RefreshTypeIds() 本体を実装:
+   - RegistryLocator.ProviderRegistry.GetRegisteredTypeIds().ToArray() を _providerTypeIds に代入
+   - RegistryLocator.MoCapSourceRegistry.GetRegisteredTypeIds().ToArray() を _moCapSourceTypeIds に代入
+2. try-catch で System.Exception を捕捉し、Debug.LogWarning で
+   "[SlotSettingsEditor] Registry 候補取得失敗: {ex.Message}" を出力、
+   両配列は System.Array.Empty<string>() にフォールバック
+3. using ディレクティブを追加:
+   - using System.Linq;  (IReadOnlyList<string>.ToArray() のため)
+   - using UnityEngine;  (Debug.LogWarning のため)
+
+設計参照:
+- tasks.md T2-3 / design.md §4.2 / §5.2
+- IProviderRegistry.GetRegisteredTypeIds() / IMoCapSourceRegistry.GetRegisteredTypeIds()
+  は IReadOnlyList<string> を返すため LINQ の ToArray() で string[] に変換
+
+完了条件 (tasks.md T2-3):
+- Registry 未初期化時に例外がスローされず、空配列が設定されること
+  → try-catch によって NullReferenceException 含む全例外を捕捉し Warning + 空配列にフォールバック
