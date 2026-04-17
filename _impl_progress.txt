@@ -86,3 +86,4 @@ Wave 3: motion-pipeline
 
 Wave 4: avatar-provider-builtin
 T-1-1 OK (8de284a)
+T-1-2 OK (17929a3)
