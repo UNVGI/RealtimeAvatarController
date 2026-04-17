@@ -156,4 +156,4 @@ T1-1 OK (ef0222c) [commit message deviates from convention but 4 required dirs e
 T1-2 OK (c8fda78)
 T1-3 OK (fd633cb)
 T2-1 OK (1957624)
-T2-2 OK
+T2-2 OK (07dd8e5)
