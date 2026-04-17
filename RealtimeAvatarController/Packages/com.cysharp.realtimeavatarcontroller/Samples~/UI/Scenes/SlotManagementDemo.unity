@@ -167,7 +167,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9, type: 3}
   m_Name:
   m_EditorClassIdentifier:
-  initialSlots: []
+  initialSlots:
+  - {fileID: 11400000, guid: a07b8c9d0e1f2a3b4c5d6e7f8091a2b3, type: 2}
+  - {fileID: 11400000, guid: b18c9d0e1f2a3b4c5d6e7f8091a2b3c4, type: 2}
 --- !u!1 &100200000
 GameObject:
   m_ObjectHideFlags: 0
