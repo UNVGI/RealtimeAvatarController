@@ -1,0 +1,49 @@
+ui-sample T8-4 AvatarArea と Lighting の配置
+
+## 実装内容
+
+Samples~/UI/Scenes/SlotManagementDemo.unity に design.md §3.2 / tasks.md T8-4
+に従って AvatarArea (空 GameObject) と 3 つの AvatarSlot 子 Transform、
+および Directional Light (Lighting) をシーンルートに追加した。
+
+## 追加した GameObject 階層
+
+AvatarArea (空 GameObject, position (0,0,0))
+├── AvatarSlot_01 (空 Transform, localPosition (-1.5, 0, 0))
+├── AvatarSlot_02 (空 Transform, localPosition ( 0,   0, 0))
+└── AvatarSlot_03 (空 Transform, localPosition ( 1.5, 0, 0))
+Lighting (Directional Light, position (0, 3, 0), rotation (50, -30, 0))
+
+## 配置詳細
+
+- AvatarArea は空 GameObject (Transform のみ)。アバター配置領域として
+  3 つの子 Transform をまとめるコンテナ。
+- AvatarSlot_01/02/03 は空 Transform のみを持つ子 GameObject。
+  design.md §3.2 の「Slot N のアバター配置用 Transform」に対応。
+  各 Slot を水平方向に 1.5 ユニット間隔で整列し、視認性を確保。
+- Lighting は Unity 標準の Directional Light (m_Type: 1)。
+  Unity デフォルト光色 (r: 1, g: 0.957, b: 0.839)、Intensity 1、Soft Shadows。
+  EulerHint (50, -30, 0) で斜め上から照射する典型的なシーン照明。
+
+## Unity YAML 構造
+
+- !u!1 GameObject + !u!4 Transform で AvatarArea と 3 AvatarSlot を構成
+- !u!1 GameObject + !u!4 Transform + !u!108 Light で Lighting を構成
+- Light serializedVersion: 10 (Unity 6000.3 系の標準)
+- fileID 採番: AvatarArea=100300xxx / AvatarSlot_01..03=100301-303xxx /
+  Lighting=100400xxx (既存の Canvas 系 100200xxx / EventSystem 100240xxx と衝突しない範囲)
+
+## 完了条件との対応
+
+- AvatarArea がシーンに存在すること ... OK
+- 3 つの AvatarSlot (01/02/03) が AvatarArea の子として存在すること ... OK
+- AvatarSlot が適切な位置 (水平整列) に配置されていること ... OK
+  (localPosition: -1.5 / 0 / 1.5 で左中右にレイアウト)
+- Lighting (Directional Light) がシーンに存在すること ... OK
+
+## 備考
+
+- 既存の [SlotManager] (T8-2) / Canvas 階層 (T8-3) / EventSystem はそのまま保持。
+- アバターの具象 Prefab のインスタンス化は SlotManagerBehaviour (T9) /
+  SlotManagementPanelUI (T10) の実装で AvatarSlot_0X を親に指定する想定。
+  T8-4 ではプレースホルダ Transform の配置のみで、具象アバターは配置しない。
