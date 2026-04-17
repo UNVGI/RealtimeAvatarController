@@ -29,7 +29,7 @@
   "samples": [
     {
       "displayName": "UI Sample",
-      "description": "Sample scene demonstrating Slot management and avatar control via UI.",
+      "description": "Editor Inspector extensions and demo scene for Slot management UI.",
       "path": "Samples~/UI"
     }
   ],
