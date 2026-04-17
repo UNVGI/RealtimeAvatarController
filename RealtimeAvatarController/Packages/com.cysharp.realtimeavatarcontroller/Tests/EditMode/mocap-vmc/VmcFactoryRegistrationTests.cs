@@ -7,14 +7,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 {
     /// <summary>
     /// VMCMoCapSourceFactory の属性ベース自己登録 EditMode 単体テスト
-    /// (tasks.md タスク 8-1 / design.md §7・§10.1 / requirements.md 要件 9-5, 9-7, 9-8, 9-9, 9-10, 10-2, 10-5)。
-    ///
-    /// <para>
-    /// TDD 先行作成: 本テストファイル作成時点では以下の型は未実装である。
-    ///   - <c>RealtimeAvatarController.MoCap.VMC.VMCMoCapSourceFactory</c>
-    /// したがって本ファイルはタスク 8-2 の実装完了までコンパイルエラーとなってよい
-    /// (tasks.md タスク 8-1 注記および tasks.md タスク 10-4 で最終完成)。
-    /// </para>
+    /// (tasks.md タスク 8-1 / 10-4 / design.md §7・§10.1 / requirements.md 要件 9-5, 9-7, 9-8, 9-9, 9-10, 10-2, 10-5)。
     ///
     /// <para>
     /// 検証対象:
@@ -30,13 +23,13 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
     /// </para>
     ///
     /// <para>
-    /// スタブ・モック戦略 (tasks.md タスク 8-1 / 10-4 前提):
+    /// テスト独立性:
     ///   - EditMode では <c>[RuntimeInitializeOnLoadMethod]</c> が自動実行されないため、
     ///     Reflection で private static <c>RegisterRuntime()</c> を直接呼び出して登録タイミングを代替する
     ///     (<see cref="InvokeRegisterRuntime"/>)。
-    ///   - 各テスト開始・終了時に <see cref="RegistryLocator.ResetForTest"/> を呼び出し、
-    ///     静的 <see cref="RegistryLocator.MoCapSourceRegistry"/> の登録状態汚染を防ぐ
-    ///     (要件 10-5)。
+    ///   - <c>[SetUp]</c> / <c>[TearDown]</c> 双方で <see cref="RegistryLocator.ResetForTest"/> を呼び出し、
+    ///     <see cref="VMCMoCapSourceFactory"/> の <c>[RuntimeInitializeOnLoadMethod]</c> 自己登録および
+    ///     他テストからの登録状態汚染を排除する (要件 10-5 / テスト独立性)。
     /// </para>
     /// </summary>
     [TestFixture]

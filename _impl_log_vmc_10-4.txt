@@ -1,0 +1,26 @@
+mocap-vmc タスク 10-4 VmcFactoryRegistrationTests.cs テスト実装完成
+
+タスク 8-1 で先行作成した VmcFactoryRegistrationTests.cs を、タスク 8-2
+(VMCMoCapSourceFactory) およびタスク 8-3 (VmcMoCapSourceFactoryEditorRegistrar)
+実装完了状態に合わせて最終化する (tasks.md タスク 10-4)。
+
+主な変更:
+- ヘッダー XML コメントから TDD 暫定説明 (「TDD 先行作成: 本テストファイル
+  作成時点では以下の型は未実装である」「タスク 8-2 の実装完了までコンパイル
+  エラーとなってよい」「タスク 10-4 で最終完成」) を削除。
+- ヘッダー summary タイトル行にタスク 10-4 の対応関係を併記。
+- 「スタブ・モック戦略」節を「テスト独立性」節に改題し、
+  RegistryLocator.ResetForTest() を [SetUp]/[TearDown] 両方で呼び出して
+  VMCMoCapSourceFactory の [RuntimeInitializeOnLoadMethod] 自己登録による
+  副作用および他テストからの登録状態汚染を排除する方針を明記。
+- 4 ケース (RegisterRuntime による typeId='VMC' 登録確認 / 二重登録時の
+  RegistryConflictException スロー / ResetForTest 後の再登録成功 /
+  TearDown 後のレジストリクリーン) はタスク 8-1 で網羅済みのため、
+  テストロジック本体は維持。
+- Reflection による private static RegisterRuntime() 呼び出しヘルパー
+  (InvokeRegisterRuntime) は EditMode テストで [RuntimeInitializeOnLoad
+  Method] が自動実行されないための代替手段として維持。
+
+Requirements: 9-5, 9-7, 9-8, 9-9, 9-10, 10-2, 10-5
+
+結果: OK
