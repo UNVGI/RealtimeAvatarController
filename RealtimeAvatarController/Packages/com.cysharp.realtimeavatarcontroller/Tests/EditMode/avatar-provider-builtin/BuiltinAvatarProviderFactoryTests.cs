@@ -4,6 +4,7 @@ using NUnit.Framework;
 using RealtimeAvatarController.Avatar.Builtin;
 using RealtimeAvatarController.Core;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace RealtimeAvatarController.Avatar.Builtin.Tests
 {

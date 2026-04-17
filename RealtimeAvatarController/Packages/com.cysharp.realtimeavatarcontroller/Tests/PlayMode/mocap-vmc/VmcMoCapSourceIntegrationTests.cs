@@ -3,9 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using NUnit.Framework;
 using RealtimeAvatarController.Core;
-using RealtimeAvatarController.Motion;
 using UnityEngine;
 using UnityEngine.TestTools;
+using MotionFrame = RealtimeAvatarController.Motion.MotionFrame;
+using HumanoidMotionFrame = RealtimeAvatarController.Motion.HumanoidMotionFrame;
 
 namespace RealtimeAvatarController.MoCap.VMC.Tests
 {

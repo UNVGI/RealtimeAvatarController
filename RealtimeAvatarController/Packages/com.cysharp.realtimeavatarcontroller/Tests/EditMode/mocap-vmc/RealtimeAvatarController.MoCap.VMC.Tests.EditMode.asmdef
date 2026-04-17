@@ -5,7 +5,9 @@
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner",
     "RealtimeAvatarController.MoCap.VMC",
-    "RealtimeAvatarController.Core"
+    "RealtimeAvatarController.Core",
+    "RealtimeAvatarController.Motion",
+    "uOSC"
   ],
   "includePlatforms": ["Editor"],
   "excludePlatforms": [],
