@@ -104,3 +104,4 @@ T-6-2 OK (e678f77)
 T-6-3 OK (0ca3413)
 T-6-4 OK (617cb80)
 T-6-5 OK (f5fbce4)
+T-6-6 OK (423a871) [test file created; commit message deviates from convention but content valid]
