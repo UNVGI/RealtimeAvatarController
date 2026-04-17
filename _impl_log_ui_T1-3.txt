@@ -1,0 +1,21 @@
+ui-sample T1-3 Editor asmdef の作成
+
+## 実施内容
+- `Samples~/UI/Editor/RealtimeAvatarController.Samples.UI.Editor.asmdef` を tasks.md §T1-3 指定仕様に更新
+  - 既存 (T06 commit 71131a9 由来) の asmdef は `references` が `RealtimeAvatarController.Samples.UI` のみであった
+  - tasks.md §T1-3 指定の 3 件に合わせて更新:
+    - RealtimeAvatarController.Samples.UI
+    - RealtimeAvatarController.Core
+    - RealtimeAvatarController.Core.Editor
+- `includePlatforms: ["Editor"]`, `autoReferenced: false` を保持
+- UniRx / UniTask の直接参照なし (T1-3 完了条件に適合)
+- asmdef.meta を併設 (GUID: f6a7b8c9d0e1f2a3b4c5d6a7b8c9d0e1) — 既存ファイルは .meta を持っていなかったため新規作成
+
+## 注意点 (スコープ外)
+- `Samples~/UI/RealtimeAvatarController.Samples.UI.asmdef` に従来ワーク (T05/T09) で配置された同名 asmdef が UI ルート直下に残存している (T1-2 ログでも指摘済み)。本タスク T1-3 のスコープ外のため未対応。
+
+## 完了条件
+- [x] asmdef が spec 指定パスに存在すること
+- [x] `includePlatforms: ["Editor"]` であること
+- [x] references が tasks.md §T1-3 と一致すること
+- [x] UniRx / UniTask の直接参照を持たないこと
