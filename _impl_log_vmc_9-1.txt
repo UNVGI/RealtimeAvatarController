@@ -1,0 +1,79 @@
+mocap-vmc タスク 9-1: IMoCapSourceRegistry.Resolve() 参照共有挙動の理解確認
+
+本タスクは mocap-vmc 側の使用方法が設計 (design.md §10.1 / §11) と整合していることを
+確認する「理解確認」タスクであり、MoCapSourceRegistry 自体の実装 (slot-core Spec 責務) は
+対象外である。
+
+
+確認事項 1: VmcMoCapSource.Dispose() は public だが Slot 側から直接呼ばれない
+----------------------------------------------------------------------
+
+- Runtime/MoCap/VMC/VmcMoCapSource.cs:234 で public void Dispose() を公開
+  (IDisposable.Dispose() = Shutdown() 等価、冪等、design.md §9.3)
+- VmcMoCapSource のクラス XML ドキュメント (line 44-46) で
+  「Slot 側から直接 Dispose を呼び出してはならない」旨を明記済み
+- IMoCapSource インターフェース (Runtime/Core/Interfaces/IMoCapSource.cs:9-11) でも
+  同趣旨を明記: 「インスタンスのライフサイクルは MoCapSourceRegistry が管理する。
+  Slot 側から直接 Dispose() を呼び出してはならない。」
+- 実際の Slot 解放経路 (Runtime/Core/Slot/SlotManager.cs:325) は
+  _moCapSourceRegistry.Release(res.Source) 経由であり、source.Dispose() を
+  直接呼び出していない (Req 3-6 / Req 10-2 / design.md §9.4 に整合)
+- DefaultMoCapSourceRegistry.Release (Runtime/Core/Registry/DefaultMoCapSourceRegistry.cs:51)
+  は参照カウントが 0 になった時点でのみ Source.Dispose() を呼ぶ参照共有設計
+  (design.md §11.2)
+
+→ 確認 OK。追加対応なし。
+
+
+確認事項 2: Factory は slotId: string.Empty で生成し Registry が後設定する設計
+------------------------------------------------------------------------
+
+- Runtime/MoCap/VMC/VMCMoCapSourceFactory.cs:64-66 で
+    return new VmcMoCapSource(
+        slotId: string.Empty,
+        errorChannel: RegistryLocator.ErrorChannel);
+  を実装済み
+- XML ドキュメント (line 42-48) で design.md §10.1 の
+  「Registry が後から設定する設計」方針を明記
+- design.md §10.1 サンプルコードと一致する構造
+
+→ 確認 OK。追加対応なし。
+
+
+確認事項 3: コンストラクタの slotId パラメータは Registry 後設定を許容するか
+------------------------------------------------------------------------
+
+現状:
+- VmcMoCapSource.cs:65 で _slotId は `private readonly string` として保持
+- 生成後の値変更は不可
+
+分析:
+- 「Registry による後設定」を実現するには、Registry 側 (slot-core の
+  DefaultMoCapSourceRegistry) が VmcMoCapSource インスタンスの slotId を
+  設定できる経路が必要だが、以下の構造的制約がある:
+  (a) IMoCapSource インターフェースには SlotId プロパティが存在しない
+      (Runtime/Core/Interfaces/IMoCapSource.cs) → Registry は抽象経由で
+      設定できない
+  (b) 依存方向は mocap-vmc → slot-core の片方向 (design.md §1)。
+      slot-core 側からは VmcMoCapSource の internal メンバに
+      InternalsVisibleTo 無しではアクセスできない
+  (c) 仮に internal setter を追加しても、現行の DefaultMoCapSourceRegistry.Resolve
+      (Runtime/Core/Registry/DefaultMoCapSourceRegistry.cs:32-48) は
+      factory.Create(descriptor.Config) の戻り値に対して slotId を後設定する
+      コードパスを一切持たない
+
+結論:
+- 現行の空文字列 slotId は SlotError のメタデータとして機能上許容される
+  (エラー追跡の粒度は Registry 側 / SlotManager 側で Slot を特定可能な
+  文脈で追補される設計)
+- 「必要に応じて internal setter を追加する」の「必要」は現状満たしていないため
+  internal setter は追加しない (YAGNI / CLAUDE.md「hypothetical future
+  requirements 禁止」に準拠)
+- slotId 由来のエラー追跡強化が求められた時点で、slot-core 側の IMoCapSource
+  インターフェース拡張 (SlotId プロパティ追加) または Registry 側の設計変更と
+  併せて、本クラスにも internal setter を追加することで整合させる方針とする
+
+→ 確認 OK。現時点ではコード変更不要。
+
+
+要件カバレッジ: 4-1, 4-2, 4-3, 4-4 (参照共有モデル / Registry 経由解放)
