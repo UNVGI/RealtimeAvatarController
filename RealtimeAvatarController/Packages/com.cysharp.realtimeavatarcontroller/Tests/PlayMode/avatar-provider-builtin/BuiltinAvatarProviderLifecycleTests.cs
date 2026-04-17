@@ -10,9 +10,10 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
 {
     /// <summary>
     /// BuiltinAvatarProvider のライフサイクル PlayMode テスト
-    /// (tasks.md T-7-4 / T-7-5 / T-7-6 / design.md §5 Dispose・§5 RequestAvatarAsync・
-    /// §11.2 テストケース一覧 /
-    /// Req 4 AC 1・Req 4 AC 2・Req 4 AC 3・Req 6 AC 1・Req 6 AC 2・Req 9 AC 3)。
+    /// (tasks.md T-7-4 / T-7-5 / T-7-6 / T-7-7 / design.md §5 Dispose・§5 RequestAvatarAsync・
+    /// §2 1 Slot 1 インスタンス原則・§11.2 テストケース一覧 /
+    /// Req 4 AC 1・Req 4 AC 2・Req 4 AC 3・Req 4 AC 6・Req 5 AC 4・
+    /// Req 6 AC 1・Req 6 AC 2・Req 9 AC 3)。
     ///
     /// <para>
     /// 検証対象 (T-7-4 ReleaseAvatar_DestroysGameObject):
@@ -76,6 +77,27 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
     /// </para>
     ///
     /// <para>
+    /// 検証対象 (T-7-7 MultipleSlots_ReceiveIndependentInstances):
+    ///   - 2 つの独立した <see cref="BuiltinAvatarProvider"/> インスタンスを構築し、
+    ///     それぞれから <see cref="BuiltinAvatarProvider.RequestAvatar"/> を呼び出した場合に、
+    ///     返却される <see cref="GameObject"/> が互いに異なる参照となる
+    ///     (<see cref="Assert.AreNotSame(object, object)"/>) ことを検証する
+    ///     (design.md §2 / Req 4 AC 6 / Req 5 AC 4: 1 Slot 1 インスタンス原則)。
+    ///   - 各 Slot が独立した <see cref="BuiltinAvatarProvider"/> インスタンスを保有する
+    ///     アーキテクチャ (<c>IMoCapSource</c> の参照共有モデルを採用しない設計)
+    ///     において、各 Provider の <c>_managedAvatars</c> 追跡セットが独立している
+    ///     ことを間接的に検証する — 他 Provider が生成したアバターを
+    ///     <see cref="BuiltinAvatarProvider.ReleaseAvatar"/> に渡した場合に
+    ///     「未管理の GameObject」エラーログが発行され、破棄されずに早期リターンする
+    ///     ことを <see cref="LogAssert.Expect(LogType, string)"/> で確認する
+    ///     (design.md §5 ReleaseAvatar 契約)。
+    ///   - 本テストは 1 Slot 1 インスタンス原則を観測可能副作用として検証する目的で、
+    ///     同一 <see cref="BuiltinAvatarProviderConfig"/> を共有する 2 Provider 構成を
+    ///     意図的に採用する (Config 共有は Provider インスタンスの独立性を損なわない
+    ///     ことを確認するため: design.md §5 コンストラクタ仕様)。
+    /// </para>
+    ///
+    /// <para>
     /// テストダブル戦略 (tasks.md T-7 前提):
     ///   - 各テスト開始・終了時に <see cref="RegistryLocator.ResetForTest"/> を呼び出し
     ///     Registry 汚染を防ぐ。
@@ -84,7 +106,7 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
     ///   - <see cref="BuiltinAvatarProviderConfig"/> は
     ///     <see cref="ScriptableObject.CreateInstance{T}"/> で生成し、AssetDatabase 非依存と
     ///     することで PlayMode / Player ビルドの双方で安定動作させる。
-    ///   - T-7-4 / T-7-5 / T-7-6 では <see cref="ISlotErrorChannel"/> を検証対象としないため、
+    ///   - T-7-4 / T-7-5 / T-7-6 / T-7-7 では <see cref="ISlotErrorChannel"/> を検証対象としないため、
     ///     コンストラクタ引数に null を渡して
     ///     <see cref="RegistryLocator.ErrorChannel"/> フォールバック経路を通す
     ///     (design.md §5 コンストラクタ仕様)。
@@ -94,7 +116,8 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
     ///     Unity Test Runner の PlayMode 環境で UniTask を正しくハンドリングする。
     /// </para>
     ///
-    /// Requirements: Req 4 AC 1, Req 4 AC 2, Req 4 AC 3, Req 6 AC 1, Req 6 AC 2, Req 9 AC 3
+    /// Requirements: Req 4 AC 1, Req 4 AC 2, Req 4 AC 3, Req 4 AC 6, Req 5 AC 4,
+    /// Req 6 AC 1, Req 6 AC 2, Req 9 AC 3
     /// </summary>
     [TestFixture]
     public class BuiltinAvatarProviderLifecycleTests
@@ -309,5 +332,78 @@ namespace RealtimeAvatarController.Avatar.Builtin.Tests
             // Unity の overloaded operator== で null 判定され二重破棄を発生させない。
             // (T-7-4 TearDown と同一の安全パターン)。
         });
+
+        [UnityTest]
+        public IEnumerator MultipleSlots_ReceiveIndependentInstances()
+        {
+            // Arrange: 2 つの独立した BuiltinAvatarProvider インスタンスを構築する。
+            // design.md §2 / Req 4 AC 6 / Req 5 AC 4 の 1 Slot 1 インスタンス原則に従い、
+            // 各 Slot は独立した Provider インスタンスを保有し、参照共有を行わない。
+            // 同一 _config を共有しても各 Provider の _managedAvatars / _disposed は独立する
+            // (design.md §5 コンストラクタ仕様)。
+            //
+            // providerA は _provider フィールドに登録して TearDown の既存クリーンアップ経路
+            // (_provider.Dispose() 呼び出し) を活用する。
+            // providerB は本テスト末尾で明示的に Dispose する。
+            var providerA = new BuiltinAvatarProvider(_config, errorChannel: null);
+            var providerB = new BuiltinAvatarProvider(_config, errorChannel: null);
+            _provider = providerA;
+
+            // Act: 各 Provider から独立に RequestAvatar を呼び出す。
+            var avatarA = providerA.RequestAvatar(_config);
+            var avatarB = providerB.RequestAvatar(_config);
+
+            // Object.Instantiate は同期完了するが、Scene 反映と後続フレーム処理の整合性のため
+            // 1 フレーム経過させる (T-7-4 / T-7-5 と同一の遅延パターン)。
+            yield return null;
+
+            // Assert 1: いずれの返却値も null でない有効な GameObject であること。
+            Assert.IsNotNull(avatarA,
+                "前提: providerA.RequestAvatar は null でない GameObject を返すべき。");
+            Assert.IsNotNull(avatarB,
+                "前提: providerB.RequestAvatar は null でない GameObject を返すべき。");
+            Assert.IsTrue(avatarA,
+                "前提: avatarA は Unity の生存判定 (operator true) で true であるべき。");
+            Assert.IsTrue(avatarB,
+                "前提: avatarB は Unity の生存判定 (operator true) で true であるべき。");
+
+            // Assert 2: Provider インスタンス自体が独立した参照であること
+            //          (design.md §2 / 参照共有モデルを採用しないことの構造的前提)。
+            Assert.AreNotSame(providerA, providerB,
+                "2 つの BuiltinAvatarProvider は独立したインスタンスでなければならない (design.md §2 1 Slot 1 Provider 原則)。");
+
+            // Assert 3: 返却された GameObject が異なるインスタンス参照であること
+            //          (Req 4 AC 6 / Req 5 AC 4: 1 Slot 1 インスタンス原則の主要観測点)。
+            //          同一 Prefab を元にしていても、Object.Instantiate は都度新規 GameObject を
+            //          生成するため、参照は必ず異なる (design.md §5 RequestAvatar 契約)。
+            Assert.AreNotSame(avatarA, avatarB,
+                "独立した BuiltinAvatarProvider は RequestAvatar で異なる GameObject インスタンスを返すべき (Req 4 AC 6 / Req 5 AC 4)。");
+
+            // Assert 4: 各 Provider の _managedAvatars 追跡セットが独立していること
+            //          (design.md §5 ReleaseAvatar 契約の未管理判定ロジックを介した観測可能副作用)。
+            //          providerA は avatarB を追跡していないため、ReleaseAvatar(avatarB) は
+            //          「未管理 GameObject」として早期リターンし、エラーログを発行する。
+            //          providerB と avatarA についても同様。
+            LogAssert.Expect(LogType.Error,
+                "[BuiltinAvatarProvider] ReleaseAvatar: 未管理の GameObject が渡されました。破棄しません。");
+            Assert.DoesNotThrow(() => providerA.ReleaseAvatar(avatarB),
+                "providerA は providerB が生成した avatarB を追跡していないため、ReleaseAvatar は未管理エラーとして早期リターンするべき (追跡セット独立性)。");
+
+            LogAssert.Expect(LogType.Error,
+                "[BuiltinAvatarProvider] ReleaseAvatar: 未管理の GameObject が渡されました。破棄しません。");
+            Assert.DoesNotThrow(() => providerB.ReleaseAvatar(avatarA),
+                "providerB は providerA が生成した avatarA を追跡していないため、ReleaseAvatar は未管理エラーとして早期リターンするべき (追跡セット独立性)。");
+
+            // Assert 5: 未管理分岐は早期リターンのため、対象 GameObject は破棄されないこと
+            //          (design.md §5 ReleaseAvatar 契約: 未管理時は Object.Destroy を呼ばない)。
+            Assert.IsTrue(avatarA,
+                "avatarA は providerB の未管理分岐では破棄されてはならない (未管理時は早期リターン)。");
+            Assert.IsTrue(avatarB,
+                "avatarB は providerA の未管理分岐では破棄されてはならない (未管理時は早期リターン)。");
+
+            // Cleanup: providerB を Dispose し、追跡中の avatarB を破棄する。
+            //          providerA / avatarA は TearDown の _provider.Dispose() 経路が処理する。
+            providerB.Dispose();
+        }
     }
 }

@@ -1,0 +1,27 @@
+avatar-provider-builtin T-7-7 BuiltinAvatarProviderLifecycleTests 複数 Slot 独立性テストを実装する
+
+編集ファイル:
+- RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/Tests/PlayMode/avatar-provider-builtin/BuiltinAvatarProviderLifecycleTests.cs
+
+追加テストケース:
+- MultipleSlots_ReceiveIndependentInstances ([UnityTest])
+  - 2 つの独立した BuiltinAvatarProvider インスタンス (providerA / providerB) を同一 _config から構築
+  - 各 Provider から RequestAvatar を呼び出し、返却された GameObject が互いに異なる参照であることを Assert.AreNotSame で検証
+  - 各 Provider インスタンス自体の独立性も Assert.AreNotSame で検証
+  - 各 Provider の _managedAvatars 追跡セット独立性を ReleaseAvatar 未管理分岐のログ発行経由で間接検証
+    (LogAssert.Expect(LogType.Error, "[BuiltinAvatarProvider] ReleaseAvatar: 未管理の GameObject ...") の 2 回観測)
+  - 未管理分岐の早期リターンにより対象 GameObject が破棄されないことを Assert.IsTrue で確認
+  - providerA は _provider フィールドに登録し TearDown の既存クリーンアップ経路を活用、providerB はテスト末尾で明示 Dispose
+
+クラス doccomment 更新:
+- 参照 tasks を T-7-4 / T-7-5 / T-7-6 / T-7-7 に拡張
+- Requirements に Req 4 AC 6 / Req 5 AC 4 を追加
+- T-7-7 の <para> セクションを追加 (1 Slot 1 インスタンス原則・追跡セット独立性の検証内容)
+- テストダブル戦略セクションで T-7-4/T-7-5/T-7-6/T-7-7 の errorChannel: null 共通パターンを明記
+
+準拠: tasks.md T-7-7 / Req 4 AC 6, Req 5 AC 4, Req 9 AC 3
+design.md: §2 1 Slot 1 インスタンス原則 / §5 コンストラクタ・RequestAvatar・ReleaseAvatar 契約
+
+備考:
+- 同一 _config を共有する構成を意図的に採用 (Config 共有は Provider 独立性を損なわないことの同時検証)
+- Object.Instantiate の end-of-frame 整合のため yield return null を配置 (T-7-4/T-7-5 と同パターン)
