@@ -1,0 +1,35 @@
+T5-1 Fallback ドロップダウン描画の確認と FallbackBehavior 表示名の検証
+
+## 検証内容
+
+### 1. SlotSettingsEditor.OnInspectorGUI() における Fallback ドロップダウン描画
+- `Samples~/UI/Editor/SlotSettingsEditor.cs` 内で `EditorGUILayout.LabelField("フォールバック設定", EditorStyles.boldLabel)` と `EditorGUILayout.PropertyField(_fallbackBehaviorProp, new GUIContent("フォールバック挙動"))` が既に記述済み (T2-4 で実装済み)
+- タスク指定のコメント 2 行を追加:
+  - `// デフォルト値: HoldLastPose (contracts.md §1.8 / SlotSettings 初期値に従う)`
+  - `// 選択肢: HoldLastPose (最後のポーズを保持) / TPose (T ポーズに戻す) / Hide (アバターを非表示)`
+
+### 2. FallbackBehavior enum の選択肢の検証
+ファイル: `Runtime/Core/Fallback/FallbackBehavior.cs`
+- `HoldLastPose` — 直前フレームのポーズを維持 (デフォルト)
+- `TPose` — T ポーズに戻す (デバッグ用途)
+- `Hide` — アバターを非表示
+3 つの選択肢がすべて定義済み。
+
+### 3. SlotSettings のデフォルト値検証
+ファイル: `Runtime/Core/Slot/SlotSettings.cs` (line 59)
+```csharp
+public FallbackBehavior fallbackBehavior = FallbackBehavior.HoldLastPose;
+```
+新規 `SlotSettings` インスタンスの `fallbackBehavior` はデフォルトで `HoldLastPose`。
+
+### 4. enum 表示名テーブル (design.md §4.3 準拠)
+Unity の既定の enum ドロップダウンが識別子を Title Case に分解して表示するため、
+- `HoldLastPose` → "Hold Last Pose"
+- `TPose` → "T Pose"
+- `Hide` → "Hide"
+と表示される。design.md §4.3 の表示文字列と整合。
+
+## 完了条件の確認
+- [x] Inspector に `FallbackBehavior` のドロップダウンが表示される (PropertyField による自動描画)
+- [x] 3 つの選択肢 (HoldLastPose / TPose / Hide) がすべて表示される (enum 定義で確認済み)
+- [x] 新規作成時のデフォルト値が `HoldLastPose` (SlotSettings の初期値で確認済み)

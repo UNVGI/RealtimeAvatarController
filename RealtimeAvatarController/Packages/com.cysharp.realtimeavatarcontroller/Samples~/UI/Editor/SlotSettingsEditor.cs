@@ -72,6 +72,8 @@ namespace RealtimeAvatarController.Samples.UI.Editor
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("フォールバック設定", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(_fallbackBehaviorProp, new GUIContent("フォールバック挙動"));
+            // デフォルト値: HoldLastPose (contracts.md §1.8 / SlotSettings 初期値に従う)
+            // 選択肢: HoldLastPose (最後のポーズを保持) / TPose (T ポーズに戻す) / Hide (アバターを非表示)
 
             serializedObject.ApplyModifiedProperties();
         }
