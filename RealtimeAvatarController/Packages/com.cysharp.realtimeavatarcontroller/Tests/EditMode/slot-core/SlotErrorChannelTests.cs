@@ -26,10 +26,6 @@ namespace RealtimeAvatarController.Core.Tests
         {
             RegistryLocator.ResetForTest();
             _channel = new DefaultSlotErrorChannel();
-            // LogAssert.Expect を明示していないテストは Publish 内部の Debug.LogError で
-            // 失敗扱いになるため一律で無効化する。.Expect() を書くテストは引き続き
-            // パターン一致を検証する (Unity 仕様)。
-            LogAssert.ignoreFailingMessages = true;
         }
 
         [TearDown]
@@ -48,6 +44,8 @@ namespace RealtimeAvatarController.Core.Tests
 
             var error = new SlotError("slot-1", SlotErrorCategory.InitFailure, null, DateTime.UtcNow);
             _channel.Publish(error);
+            // 初回 Publish の Debug.LogError を宣言
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*InitFailure"));
 
             Assert.That(received.Count, Is.EqualTo(1));
             Assert.That(received[0], Is.SameAs(error));
@@ -63,6 +61,9 @@ namespace RealtimeAvatarController.Core.Tests
             var error2 = new SlotError("slot-2", SlotErrorCategory.ApplyFailure, null, DateTime.UtcNow);
             _channel.Publish(error1);
             _channel.Publish(error2);
+            // 異なるキーの 2 件それぞれの Debug.LogError を宣言
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*InitFailure"));
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-2.*ApplyFailure"));
 
             Assert.That(received.Count, Is.EqualTo(2));
             Assert.That(received[0], Is.SameAs(error1));
@@ -83,6 +84,8 @@ namespace RealtimeAvatarController.Core.Tests
             _channel.Publish(error1);
             _channel.Publish(error2);
             _channel.Publish(error3);
+            // 同一キー 3 回 Publish するが Debug.LogError は初回 1 回のみ (抑制ロジック)
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[SlotError\].*slot-1.*InitFailure"));
 
             Assert.That(received.Count, Is.EqualTo(3), "Stream should receive all events regardless of Debug.LogError suppression");
         }
