@@ -89,3 +89,9 @@ remove_*.sh
 cleanup_*.sh
 [Uu]ser[Ss]ettings/
 
+# impl-run 進捗 / 監査系の作業ファイル
+_impl_progress.txt
+_impl_log_*.txt
+_audit_*.txt
+_gitfiles_*.txt
+
