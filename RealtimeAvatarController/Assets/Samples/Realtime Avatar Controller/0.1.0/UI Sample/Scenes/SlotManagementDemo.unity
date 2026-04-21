@@ -326,6 +326,7 @@ MonoBehaviour:
   slotListContent: {fileID: 100213001}
   slotListItemPrefab: {fileID: 300100000, guid: e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1, type: 3}
   addSlotTemplate: {fileID: 11400000, guid: a07b8c9d0e1f2a3b4c5d6e7f8091a2b3, type: 2}
+  detailPanel: {fileID: 100220002}
 --- !u!1 &100211000
 GameObject:
   m_ObjectHideFlags: 0
