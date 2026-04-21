@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UniRx;
 using RealtimeAvatarController.Core;
@@ -9,8 +10,10 @@ namespace RealtimeAvatarController.Samples.UI
     /// <summary>
     /// Slot 一覧の 1 行分の表示・操作を担う UI コンポーネント。
     /// SlotId / 表示名 / ライフサイクル状態の表示、Weight 二値トグル、削除ボタンを保持する。
+    /// 行全体のクリックは <see cref="IPointerClickHandler"/> 経由で検出し、
+    /// <see cref="OnSelectRequested"/> を発火して親 Panel に選択を通知する。
     /// </summary>
-    public class SlotListItemUI : MonoBehaviour
+    public class SlotListItemUI : MonoBehaviour, IPointerClickHandler
     {
         [SerializeField] private Text slotIdLabel;
         [SerializeField] private Text displayNameLabel;
@@ -19,11 +22,14 @@ namespace RealtimeAvatarController.Samples.UI
         [SerializeField] private Button deleteButton;
 
         private SlotManager _slotManager;
+        private SlotHandle _handle;
         private string _slotId;
         private SlotSettings _settings;
         private CompositeDisposable _disposables;
 
         public string SlotId => _slotId;
+
+        public Action<SlotHandle> OnSelectRequested { get; set; }
 
         public void Bind(SlotHandle handle, SlotManager slotManager)
         {
@@ -31,6 +37,7 @@ namespace RealtimeAvatarController.Samples.UI
             if (slotManager == null) throw new ArgumentNullException(nameof(slotManager));
 
             _slotManager = slotManager;
+            _handle      = handle;
             _slotId      = handle.SlotId;
             _settings    = handle.Settings;
 
@@ -83,6 +90,12 @@ namespace RealtimeAvatarController.Samples.UI
         {
             if (_slotManager == null || string.IsNullOrEmpty(_slotId)) return;
             _ = _slotManager.RemoveSlotAsync(_slotId);
+        }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (_handle == null) return;
+            OnSelectRequested?.Invoke(_handle);
         }
     }
 }

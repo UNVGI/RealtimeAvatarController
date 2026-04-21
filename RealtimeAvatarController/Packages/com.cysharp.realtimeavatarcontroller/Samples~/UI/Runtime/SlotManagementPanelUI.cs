@@ -22,6 +22,7 @@ namespace RealtimeAvatarController.Samples.UI
         [SerializeField] private Transform slotListContent;
         [SerializeField] private GameObject slotListItemPrefab;
         [SerializeField] private SlotSettings addSlotTemplate;
+        [SerializeField] private SlotDetailPanelUI detailPanel;
 
         private SlotManager _slotManager;
         private readonly Dictionary<string, SlotListItemUI> _items = new Dictionary<string, SlotListItemUI>();
@@ -136,6 +137,10 @@ namespace RealtimeAvatarController.Samples.UI
             }
 
             item.Bind(handle, _slotManager);
+            if (detailPanel != null)
+            {
+                item.OnSelectRequested = h => detailPanel.BindSlot(h);
+            }
             _items[handle.SlotId] = item;
         }
     }
