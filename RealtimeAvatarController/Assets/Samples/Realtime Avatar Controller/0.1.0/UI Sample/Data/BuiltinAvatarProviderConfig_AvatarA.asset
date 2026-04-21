@@ -11,5 +11,5 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d, type: 3}
   m_Name: BuiltinAvatarProviderConfig_AvatarA
-  m_EditorClassIdentifier:
-  avatarPrefab: {fileID: 0}
+  m_EditorClassIdentifier: 
+  avatarPrefab: {fileID: -1728013695380148634, guid: 548d3dbe62de76344b88df7c89bb3814, type: 3}
