@@ -156,6 +156,24 @@ namespace RealtimeAvatarController.Core
         public SlotHandle GetSlot(string slotId) => _slotRegistry.GetSlot(slotId);
 
         /// <summary>
+        /// 指定した slotId に紐付く <see cref="IMoCapSource"/> と avatar <see cref="GameObject"/> を取得する。
+        /// Sample / 上位層がモーション適用パイプライン (<c>MotionCache</c> / <c>IMotionApplier</c>) を結線する際に使用する。
+        /// </summary>
+        /// <returns>Slot が Active かつリソースが揃っている場合 true。それ以外は false。</returns>
+        public bool TryGetSlotResources(string slotId, out IMoCapSource source, out GameObject avatar)
+        {
+            if (_resources.TryGetValue(slotId, out var res))
+            {
+                source = res.Source;
+                avatar = res.Avatar;
+                return source != null && avatar != null;
+            }
+            source = null;
+            avatar = null;
+            return false;
+        }
+
+        /// <summary>
         /// Slot に対してモーション/表情等の適用処理 (<paramref name="applyAction"/>) を実行し、
         /// 例外が発生した場合は <see cref="SlotSettings.fallbackBehavior"/> に従いフォールバック処理を実行して
         /// <see cref="ISlotErrorChannel"/> に <see cref="SlotErrorCategory.ApplyFailure"/> を発行する。
@@ -175,7 +193,7 @@ namespace RealtimeAvatarController.Core
         /// <see cref="ISlotErrorChannel"/> にも発行しない。applyAction の例外は呼び出し側に伝播させない。
         /// </para>
         /// </summary>
-        internal void ApplyWithFallback(string slotId, Action applyAction)
+        public void ApplyWithFallback(string slotId, Action applyAction)
         {
             if (applyAction == null) return;
             if (_disposed) return;
