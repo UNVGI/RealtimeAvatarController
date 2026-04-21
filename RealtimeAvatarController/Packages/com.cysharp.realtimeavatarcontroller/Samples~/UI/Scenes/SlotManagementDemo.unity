@@ -332,7 +332,7 @@ MonoBehaviour:
   addSlotButton: {fileID: 100212004}
   slotListScrollView: {fileID: 100213004}
   slotListContent: {fileID: 100213001}
-  slotListItemPrefab: {fileID: 100100000, guid: e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1, type: 3}
+  slotListItemPrefab: {fileID: 300100000, guid: e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1, type: 3}
   addSlotTemplate: {fileID: 0}
 --- !u!1 &100211000
 GameObject:
