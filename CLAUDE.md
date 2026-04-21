@@ -7,6 +7,18 @@ Kiro-style Spec-Driven Development on an agentic SDLC
 ### Paths
 - Steering: `.kiro/steering/`
 - Specs: `.kiro/specs/`
+- Unity project: `D:\Personal\Repositries\RealtimeAvatarController\RealtimeAvatarController`
+- Unity Editor: `C:\Program Files\Unity\Hub\Editor\6000.3.10f1\Editor\Unity.exe` (version pinned by `ProjectSettings/ProjectVersion.txt`)
+
+### Unity Editor Launch (authorized)
+- When Unity Editor is closed, Claude is allowed to relaunch it from CLI so Unity MCP can reconnect.
+- Command (background, detached):
+  ```bash
+  "C:\Program Files\Unity\Hub\Editor\6000.3.10f1\Editor\Unity.exe" -projectPath "D:\Personal\Repositries\RealtimeAvatarController\RealtimeAvatarController"
+  ```
+- Always launch in the background (`run_in_background: true`) — the process blocks.
+- Before launching, check whether Unity is already running (`tasklist | grep -i Unity.exe` or equivalent) to avoid a duplicate instance.
+- Unity MCP reconnection takes several seconds after Editor fully loads — retry MCP calls with a short delay.
 
 ### Steering vs Specification
 
