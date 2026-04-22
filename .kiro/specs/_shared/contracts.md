@@ -935,11 +935,12 @@ namespace RealtimeAvatarController.Motion
 | プロセス間比較 | **不可** (相対値のため異なるプロセスとの比較は意味を持たない) |
 | 将来拡張 | ログ用途で wall clock が必要な場合は `WallClock: DateTime?` フィールドの追加を検討する。初期版では **未実装** とする |
 
-#### スレッド安全性の要求 (最終確定)
+#### スレッド安全性の要求 (最終確定 / M-3 追補 2026-04-22)
 
-- **書き込み**: 受信スレッドから `Interlocked.Exchange` によりアトミックに `MotionCache._latestFrame` を更新する。`Timestamp` の打刻も受信スレッド上で行い、Unity API は使用しない
+- **書き込み**: MoCap ソース実装が使用するスレッドから `Interlocked.Exchange` によりアトミックに `MotionCache._latestFrame` を更新する。`Timestamp` の打刻は書込スレッド上で行い、Unity API は使用しない
 - **読み込み**: Unity メインスレッド (`LateUpdate` 等) から `Volatile.Read` で最新フレームを読み取る
-- **選定方式**: 方式 B (受信スレッド直接書込 / `Interlocked.Exchange`) を採用。方式 A (`ObserveOnMainThread()` 経由) は高頻度フレームでキュー蓄積が生じるため不採用
+- **選定方式**: 方式 B (ソーススレッド直接書込 / `Interlocked.Exchange`) を採用。方式 A (`ObserveOnMainThread()` 経由) は高頻度フレームでキュー蓄積が生じるため不採用
+- **M-3 追補**: MoCap ソース実装が `MotionStream.OnNext` をどのスレッドから呼ぶかは実装依存である。VMC (`mocap-vmc`) は uOSC の `onDataReceived` が Unity MainThread で Invoke されるため MainThread で OnNext する。その場合でも `Interlocked.Exchange` / `Volatile.Read` の要件は過剰同期として残すだけでよく、コントラクトは変わらない
 
 ---
 

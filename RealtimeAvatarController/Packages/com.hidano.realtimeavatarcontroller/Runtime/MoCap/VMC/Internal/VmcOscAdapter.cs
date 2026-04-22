@@ -43,6 +43,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Internal
 
         private GameObject _serverObject;
         private uOscServer _server;
+        private VmcTickDriver _tickDriver;   // (M-3 改訂) LateUpdate で Tick を呼び出す駆動 MonoBehaviour
         private UnityAction<Message> _listener;
 
         /// <summary>
@@ -106,6 +107,10 @@ namespace RealtimeAvatarController.MoCap.VMC.Internal
             _listener = OnDataReceived;
             _server.onDataReceived.AddListener(_listener);
 
+            // (M-3 改訂) LateUpdate で Tick を駆動する MonoBehaviour を同 GameObject に追加
+            _tickDriver = _serverObject.AddComponent<VmcTickDriver>();
+            _tickDriver.Configure(Tick);
+
             _server.StartServer();
 
             if (!_server.isRunning)
@@ -143,6 +148,10 @@ namespace RealtimeAvatarController.MoCap.VMC.Internal
                 _listener = null;
             }
 
+            // _tickDriver は _serverObject 配下に AddComponent されているため、
+            // 以下の Destroy(_serverObject) で一緒に破棄される。参照だけクリア。
+            _tickDriver = null;
+
             if (_serverObject != null)
             {
                 if (Application.isPlaying)
@@ -159,22 +168,61 @@ namespace RealtimeAvatarController.MoCap.VMC.Internal
 
         /// <summary>
         /// <see cref="uOscServer.onDataReceived"/> から呼ばれる受信コールバック本体
-        /// (design.md §6.1 概念コード)。
+        /// (design.md §6.1 改訂版)。
         /// </summary>
         /// <remarks>
-        /// 処理フロー:
-        /// <list type="number">
-        ///   <item><see cref="VmcMessageRouter.Route"/> でアドレス振り分け</item>
-        ///   <item><see cref="VmcFrameBuilder.TryFlush"/> が成功したらフレームを <see cref="ISubject{T}"/> に発行</item>
-        ///   <item>例外は全捕捉し <see cref="_errorHandler"/> に <see cref="SlotErrorCategory.VmcReceive"/> として委譲</item>
-        /// </list>
+        /// <para>
+        /// (M-3 改訂 2026-04-22) <see cref="VmcMessageRouter.Route"/> で <see cref="VmcFrameBuilder"/> に
+        /// 受信値をキャッシュするのみ。<see cref="VmcFrameBuilder.TryFlush"/> / <see cref="ISubject{T}.OnNext"/> は
+        /// ここでは呼ばない。VMC Protocol 仕様上 OSC stream から frame 境界は検知不能なため、
+        /// flush は <see cref="Tick"/> (<c>VmcTickDriver.LateUpdate</c> 経由) に分離する。
+        /// </para>
+        /// <para>
+        /// uOSC の実装により本メソッドは Unity MainThread で Invoke される
+        /// (<c>uOscServer.Update</c> が <c>parser_</c> の Queue から dequeue して <c>onDataReceived.Invoke</c> するため)。
+        /// </para>
+        /// <para>
+        /// 例外は全捕捉し <see cref="_errorHandler"/> に <see cref="SlotErrorCategory.VmcReceive"/> として委譲する。
+        /// </para>
         /// </remarks>
         private void OnDataReceived(Message message)
         {
             try
             {
                 _router.Route(message.address, message);
+                // M-3 改訂: TryFlush / OnNext はここで呼ばない。Tick() で bundle 境界に依存しない flush を行う
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    _errorHandler(SlotErrorCategory.VmcReceive, ex);
+                }
+                catch (Exception handlerEx)
+                {
+                    Debug.LogError($"[VmcOscAdapter] errorHandler 内で例外が発生しました: {handlerEx}");
+                }
+            }
+        }
 
+        /// <summary>
+        /// MainThread (Unity LateUpdate) から定期的に呼ばれ、前回 Tick 以降に更新があれば
+        /// <see cref="VmcFrameBuilder.TryFlush"/> で <see cref="HumanoidMotionFrame"/> を組み立てて
+        /// <see cref="ISubject{T}.OnNext"/> で発行する (M-3 改訂 2026-04-22)。
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="VmcTickDriver"/> MonoBehaviour の <c>LateUpdate</c> から呼ばれる。
+        /// MainThread 前提のため lock は不要。
+        /// </para>
+        /// <para>
+        /// 例外は全捕捉し <see cref="_errorHandler"/> に <see cref="SlotErrorCategory.VmcReceive"/> として委譲する。
+        /// </para>
+        /// </remarks>
+        internal void Tick()
+        {
+            try
+            {
                 if (_frameBuilder.TryFlush(out var frame))
                 {
                     _subject.OnNext(frame);
@@ -188,7 +236,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Internal
                 }
                 catch (Exception handlerEx)
                 {
-                    Debug.LogError($"[VmcOscAdapter] errorHandler 内で例外が発生しました: {handlerEx}");
+                    Debug.LogError($"[VmcOscAdapter] Tick errorHandler 内で例外が発生しました: {handlerEx}");
                 }
             }
         }

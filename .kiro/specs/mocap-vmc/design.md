@@ -327,37 +327,43 @@ namespace RealtimeAvatarController.MoCap.VMC
 
 ## 6. 内部実装設計
 
-### 6.1 受信ワーカースレッドの起動と停止
+### 6.1 受信ループと MainThread Tick (M-3 改訂 2026-04-22)
 
-- `Initialize()` 呼び出し時、`UdpClient` を指定ポート・アドレスにバインドした後、`Thread` (または `Task.Run`) でワーカーループを起動する
-- ワーカーループは `CancellationToken` を監視し、`Shutdown()` / `Dispose()` から `CancellationTokenSource.Cancel()` を呼ぶことで停止する
-- ワーカースレッドの停止を `Thread.Join()` (タイムアウト付き) で待機し、タイムアウト超過時はログ出力して継続する
+VMC Protocol 仕様上、OSC message stream から frame 境界を検知する手段は定義されていない (VMC Protocol v2.7 §specification: "1 frame = 1 bundle" の規定なし、MTU 1500 byte 制約により 1 frame が複数 bundle に分割される可能性あり)。
+EVMC4U (`gpsnmeajp/EasyVirtualMotionCaptureForUnity`, MIT) が 5 年以上運用している構造に倣い、**"受信即キャッシュ、Tick で一括 flush"** の分離モデルを採用する。
+
+- uOSC の `uOscServer` コンポーネントを GameObject に追加し、`onDataReceived` UnityEvent で OSC メッセージを受信する
+- uOSC の実装により `onDataReceived` は **Unity MainThread** で Invoke される (`uOscServer.Update` が parser の Queue から dequeue して Invoke する実装)
+- 受信コールバックでは `VmcMessageRouter.Route` で `VmcFrameBuilder` にキャッシュを書き込むのみ。`TryFlush` / `OnNext` は呼ばない
+- 別の MonoBehaviour (`VmcTickDriver`) を同 GameObject に AddComponent し、Unity の `LateUpdate` で `VmcOscAdapter.Tick()` を呼ぶ
+- `VmcOscAdapter.Tick()` は `VmcFrameBuilder` に蓄積があれば 1 回だけ `TryFlush` → `_subject.OnNext` を実行する
 
 ```csharp
-// uOSC コールバック受信概念コード
-// uOSC は OSC パースを内部で行い、受信した OscMessage をコールバックで通知する
-// VmcOscAdapter は uOSC のコールバックを受け取り VmcMessageRouter へ転送する
-
-// uOSC が提供する受信コールバックに登録 (VmcOscAdapter 内)
-private void OnOscMessageReceived(string address, OscDataHandle data)
+// 受信コールバック (MainThread 前提、蓄積のみ)
+private void OnDataReceived(Message message)
 {
     try
     {
-        // アドレスルーティング
-        _router.Route(address, data);
-
-        // フレーム完成時に MotionFrame 組み立て・timestamp 打刻・Subject 発行
-        if (_frameBuilder.TryFlush(out var frame))
-        {
-            _subject.OnNext(frame);
-        }
+        _router.Route(message.address, message);
+        // TryFlush はここで呼ばない (frame 境界は OSC stream から検知不能)
     }
     catch (Exception ex)
     {
         PublishError(SlotErrorCategory.VmcReceive, ex);
     }
 }
+
+// MainThread Tick (VmcTickDriver の LateUpdate から呼ばれる)
+internal void Tick()
+{
+    if (_frameBuilder.TryFlush(out var frame))
+    {
+        _subject.OnNext(frame);
+    }
+}
 ```
+
+> **設計意図**: uOSC は bundle を展開して個別 Message として順次 Invoke するため「これが bundle の終端か」「同一 frame の続きか」は受信側から判定不能である。Unity の Update サイクル自体を "flush の天然のタイミング" として利用することで、VMC Protocol の任意送信周期 / 任意 bundle 分割に対してロバストな実装となる。Shutdown 時は `VmcTickDriver` も Destroy されるため特別な停止処理は不要。
 
 ### 6.2 OSC パーサ (アドレスプレフィックスルーティング)
 
@@ -387,13 +393,15 @@ switch (message.Address)
 }
 ```
 
-### 6.3 HumanoidMotionFrame への集約
+### 6.3 HumanoidMotionFrame への集約 (M-3 改訂 2026-04-22)
 
-VMC プロトコルでは 1 フレーム分のボーンデータが複数の OSC メッセージとして到着する。`VmcFrameBuilder` が以下を管理する。
+`VmcFrameBuilder` の役割:
 
 - 受信した Bone/Root データを `Dictionary<HumanBodyBones, (Vector3, Quaternion)>` に蓄積する
-- `/VMC/Ext/Bone/Pos` の最後のメッセージ受信後 (または一定時間経過後) にフレームをフラッシュして `HumanoidMotionFrame` を構築する
-- (M-3 更新) 蓄積した各ボーン回転を `HumanoidMotionFrame.BoneLocalRotations` フィールドにそのまま格納する。Muscle 変換は Applier (MainThread) 側が担うため、`VmcFrameBuilder` は Unity 非スレッドセーフ API (`HumanPoseHandler` / `HumanTrait.MuscleFromBone` 等) を呼ばない
+- (M-3 改訂) **`TryFlush` で _bones を Clear しない**。欠損 bone (同一送信周期で来なかった bone) は前回受信値を維持する (EVMC4U と同一方針)
+- `TryFlush` は「前回 Flush 以降に 1 度でも `SetBone` / `SetRoot` が呼ばれた場合のみ true を返し、その瞬間の蓄積値の snapshot を `HumanoidMotionFrame` として返す」セマンティクス。内部 `_dirty` フラグで追跡
+- 蓄積した各ボーン回転を `HumanoidMotionFrame.BoneLocalRotations` フィールドに渡す (snapshot は新規辞書にコピーして返す。Frame はイミュータブルなのでコピー後の辞書は触らない)
+- Muscle 変換は Applier (MainThread) 側が担うため、本ビルダは Unity 非スレッドセーフ API を呼ばない
 - `Muscles` 配列は空 (`Array.Empty<float>()`) を渡す。IsValid 判定は `BoneLocalRotations.Count > 0` が担う
 
 > **M-3 合意変更 (2026-04-22) で刷新された方針**: VMC プロトコルは「親ローカル座標系のクォータニオン」を送ってくる一方、Unity の Muscle 値は「ボーンごとに固有の軸で正規化された 3 DoF 値」であり、両者を直接 (`Quaternion.eulerAngles / 180f` 等で) 線形変換するのは意味的に不正確である。
@@ -768,19 +776,21 @@ sequenceDiagram
 
 ## 13. スレッドモデル
 
-### 13.1 スレッド責務分担
+### 13.1 スレッド責務分担 (M-3 改訂 2026-04-22: 実装実態に合わせて更新)
 
 | スレッド | 担当処理 |
 |---------|---------|
 | **メインスレッド** | `Initialize()` / `Shutdown()` / `Dispose()` の呼び出し |
-| **メインスレッド** | MotionCache でのフレーム受信 (`.ObserveOnMainThread()` 適用後) |
-| **メインスレッド** (M-3, 2026-04-22 修正版) | BoneLocalRotations の `Animator.GetBoneTransform(bone).localRotation` への直接書込。**Applier** の責務 (motion-pipeline §7.1.1)。HumanPoseHandler は経路 A では使用しない |
-| **ワーカースレッド** | UDP パケット受信・OSC パース (uOSC 内部処理) |
-| **ワーカースレッド** | OSC メッセージのアドレスルーティング (`VmcMessageRouter`) |
-| **ワーカースレッド** | HumanoidMotionFrame 組み立て (`VmcFrameBuilder`) — **M-3 更新**: BoneLocalRotations dict の蓄積のみ (Muscle 変換は MainThread 責務) |
-| **ワーカースレッド** | `timestamp` 打刻 (`Stopwatch.GetTimestamp()`) |
-| **ワーカースレッド** | `Subject<MotionFrame>.OnNext()` (`Subject.Synchronize()` でスレッドセーフ) |
-| **ワーカースレッド** | `ISlotErrorChannel.Publish()` 呼び出し |
+| **メインスレッド** | `VmcMessageRouter.Route` / `VmcFrameBuilder.SetBone` / `SetRoot` (uOSC の `onDataReceived` は `uOscServer.Update` 内で Invoke されるため MainThread) |
+| **メインスレッド** | `VmcOscAdapter.Tick()` (`VmcTickDriver.LateUpdate` から呼ばれる): `VmcFrameBuilder.TryFlush` → `timestamp` 打刻 → `Subject<MotionFrame>.OnNext` |
+| **メインスレッド** | MotionCache でのフレーム受信 (`MotionStream.Subscribe` のコールバック、MainThread 呼び出し) |
+| **メインスレッド** | BoneLocalRotations の `Animator.GetBoneTransform(bone).localRotation` への直接書込 (Applier の責務 / motion-pipeline §7.1.1) |
+| **ワーカースレッド** (uOSC 内部) | UDP パケット受信 (`UdpClient.Receive`) |
+| **ワーカースレッド** (uOSC 内部) | OSC パース (uOSC `Parser.Parse`, bundle 展開) |
+| **ワーカースレッド** (uOSC 内部) | 解析済み `Message` を `parser_.messages_` キューへ enqueue (lock 付き) |
+| **ワーカースレッド** (必要時) | `ISlotErrorChannel.Publish()` 呼び出し (エラーハンドラ経由。例外発生箇所のスレッドで発行するため通常 MainThread) |
+
+> **訂正**: 以前の版では `VmcMessageRouter` / `VmcFrameBuilder` / `Subject.OnNext` を「ワーカースレッド」としていたが、これは事実誤認であった。uOSC の実装では `onDataReceived` UnityEvent は `uOscServer.Update` (MonoBehaviour.Update, MainThread) 内で Invoke されるため、受信コールバック以降の処理はすべて MainThread で走る。`Subject.Synchronize()` による保護は過剰同期として残すが、実質的には MainThread 単独アクセスとなる。
 
 ### 13.2 スレッドセーフティの確保
 
