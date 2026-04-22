@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using RealtimeAvatarController.Motion;
@@ -12,25 +13,22 @@ namespace RealtimeAvatarController.MoCap.VMC.Internal
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>スレッド設計</b>: design.md §12 の通りワーカースレッド (uOSC 受信コールバック) 専用であり、
+    /// <b>スレッド設計</b>: design.md §13.1 の通りワーカースレッド (uOSC 受信コールバック) 専用であり、
     /// メインスレッドから直接アクセスしない。したがって本クラスはロックを持たない。
+    /// Unity メインスレッド専用 API (<c>HumanPoseHandler</c> 等) は使用しない。
     /// </para>
     /// <para>
-    /// <b>フラッシュ方針 (OI-1 初期版)</b>: <see cref="SetBone"/> を 1 度以上受信した状態で
-    /// <see cref="TryFlush"/> が呼ばれると、その時点までに蓄積されたボーンデータから
-    /// <see cref="HumanoidMotionFrame"/> を 1 本生成し、内部ボーン辞書をリセットする。
+    /// <b>(M-3 更新) フラッシュ方針</b>: <see cref="SetBone"/> を 1 度以上受信した状態で
+    /// <see cref="TryFlush"/> が呼ばれると、蓄積された Bone 辞書を
+    /// <see cref="HumanoidMotionFrame.BoneLocalRotations"/> にそのまま格納して発行する。
+    /// Muscle 変換は <see cref="HumanoidMotionApplier"/> が MainThread で実施するため、
+    /// 本ビルダは <see cref="HumanoidMotionFrame.Muscles"/> に空配列を渡す。
     /// Bone 未受信の場合は無効フレームを生成せず <c>false</c> を返す。
     /// </para>
     /// <para>
     /// <b>Root の永続化</b>: Root は Bone より低頻度で送られる可能性があるため、
     /// <see cref="TryFlush"/> 後も直近の値を保持する (次フレームでも同じ Root を参照可能)。
     /// 初期状態は <see cref="Vector3.zero"/> / <see cref="Quaternion.identity"/>。
-    /// </para>
-    /// <para>
-    /// <b>Muscle 変換 (初期版・簡易実装)</b>: design.md §6.3 に基づき <c>HumanPoseHandler</c> は使用せず、
-    /// 受信したボーン回転クォータニオンをオイラー角へ分解し、<see cref="HumanTrait.MuscleFromBone"/>
-    /// で解決したインデックス位置に正規化値 (度 / 180°) を格納する。未受信ボーンに対応する
-    /// muscle インデックスは <c>0.0f</c> (アイドルポーズ = ゼロ回転) のままとする (design.md §7.3)。
     /// </para>
     /// </remarks>
     internal sealed class VmcFrameBuilder
@@ -97,7 +95,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Internal
         }
 
         /// <summary>
-        /// 蓄積済みのボーン状態から <see cref="HumanoidMotionFrame"/> を 1 本構築する。
+        /// 蓄積済みのボーン状態から <see cref="HumanoidMotionFrame"/> を 1 本構築する (M-3 対応版)。
         /// </summary>
         /// <param name="frame">構築に成功した場合はフレーム、失敗時は <c>null</c>。</param>
         /// <returns>
@@ -105,7 +103,17 @@ namespace RealtimeAvatarController.MoCap.VMC.Internal
         /// (design.md §7.3 / tasks.md タスク 5-1: 無効フレーム判定)。
         /// </returns>
         /// <remarks>
-        /// 成功時は内部ボーン辞書をリセットし次フレーム受信に備える。Root 状態は保持する。
+        /// <para>
+        /// 成功時は蓄積した Bone 辞書を新しい <c>IReadOnlyDictionary&lt;HumanBodyBones, Quaternion&gt;</c> に
+        /// コピーし、<see cref="HumanoidMotionFrame.BoneLocalRotations"/> として渡す。
+        /// 内部辞書をリセットし次フレーム受信に備える。Root 状態は保持する。
+        /// </para>
+        /// <para>
+        /// <b>Muscle 変換について (M-3 更新)</b>: Unity の <c>HumanPoseHandler</c> は MainThread 専用のため、
+        /// 本ビルダ (ワーカースレッド) では Bone → Muscle 変換を行わない。
+        /// Muscle 逆変換は <see cref="HumanoidMotionApplier"/> が MainThread で実施する。
+        /// したがって <see cref="HumanoidMotionFrame.Muscles"/> には空配列を渡す。
+        /// </para>
         /// </remarks>
         public bool TryFlush(out HumanoidMotionFrame frame)
         {
@@ -115,48 +123,25 @@ namespace RealtimeAvatarController.MoCap.VMC.Internal
                 return false;
             }
 
-            var muscles = new float[HumanTrait.MuscleCount];
+            // Bone 辞書を (parent-local rotation) → IReadOnlyDictionary<HumanBodyBones, Quaternion> にコピー
+            // Frame 生成後も辞書参照が Applier 側に渡ることを考慮し、内部辞書とは別インスタンスを用意する
+            var boneRotations = new Dictionary<HumanBodyBones, Quaternion>(_bones.Count);
             foreach (var kv in _bones)
             {
-                var bone = kv.Key;
-                var rotation = kv.Value.rotation;
-                WriteBoneMuscles(muscles, bone, rotation);
+                boneRotations[kv.Key] = kv.Value.rotation;
             }
 
             // design.md §6.4: Stopwatch ベースの秒数でタイムスタンプを打刻する。
             double timestamp = Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
-            frame = new HumanoidMotionFrame(timestamp, muscles, _rootPosition, _rootRotation);
+            frame = new HumanoidMotionFrame(
+                timestamp,
+                Array.Empty<float>(),  // Muscles は使わない (Applier 側で BoneLocalRotations から逆変換)
+                _rootPosition,
+                _rootRotation,
+                boneRotations);
 
             _bones.Clear();
             return true;
-        }
-
-        /// <summary>
-        /// ボーン回転クォータニオンを Muscle 値配列の該当インデックスへ書き込む (初期版・簡易実装)。
-        /// </summary>
-        private static void WriteBoneMuscles(float[] muscles, HumanBodyBones bone, Quaternion rotation)
-        {
-            var euler = rotation.eulerAngles;
-            var boneIndex = (int)bone;
-
-            for (int dof = 0; dof < 3; dof++)
-            {
-                int muscleIndex = HumanTrait.MuscleFromBone(boneIndex, dof);
-                if (muscleIndex < 0 || muscleIndex >= muscles.Length)
-                {
-                    continue;
-                }
-                muscles[muscleIndex] = Normalize(euler[dof]) / 180f;
-            }
-        }
-
-        /// <summary>Unity の <c>Quaternion.eulerAngles</c> は 0〜360° を返すため、-180〜180° に正規化する。</summary>
-        private static float Normalize(float degrees)
-        {
-            degrees %= 360f;
-            if (degrees > 180f) degrees -= 360f;
-            else if (degrees < -180f) degrees += 360f;
-            return degrees;
         }
     }
 }

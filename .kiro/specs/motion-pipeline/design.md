@@ -146,12 +146,15 @@ namespace RealtimeAvatarController.Motion
 
 ### 3.4 HumanoidMotionFrame
 
+M-3 合意変更 (2026-04-22) により `BoneLocalRotations` フィールドが追加された。詳細は contracts.md §2.2 および §4.1 参照。
+
 ```csharp
 namespace RealtimeAvatarController.Motion
 {
     /// <summary>
     /// Humanoid 骨格向けモーションフレーム。
-    /// Unity HumanPose 相当の Muscle 配列と Root 位置・回転を保持するイミュータブルクラス。
+    /// Unity HumanPose 相当の Muscle 配列・Root 位置・回転に加え、
+    /// (M-3) 親ローカル Bone 回転辞書を保持するイミュータブルクラス。
     /// </summary>
     public sealed class HumanoidMotionFrame : MotionFrame
     {
@@ -161,7 +164,8 @@ namespace RealtimeAvatarController.Motion
         /// <summary>
         /// Humanoid 骨格の Muscle 値配列。
         /// 要素数は HumanTrait.MuscleCount (= 95) に準拠する。
-        /// 要素数が 0 の場合は「データなし / 初期化前」を示す無効フレームとして扱う。
+        /// 要素数が 0 かつ <see cref="BoneLocalRotations"/> も空の場合は「データなし / 初期化前」を示す無効フレームとして扱う。
+        /// BoneLocalRotations 経路を使う MoCap ソースは空配列または長さ 95 のゼロ埋めを渡す。
         /// </summary>
         public float[] Muscles { get; }
 
@@ -172,8 +176,17 @@ namespace RealtimeAvatarController.Motion
         public Quaternion RootRotation { get; }
 
         /// <summary>
-        /// 有効フレームを生成するコンストラクタ。
-        /// muscles の要素数は HumanTrait.MuscleCount (95) と一致していること。
+        /// (M-3) 各ボーンの親ローカル座標系での回転辞書 (任意)。
+        /// VMC など「ボーン回転クォータニオンを native 形式として emit する」MoCap ソースが使用する。
+        /// null または Count == 0 の場合は従来の Muscles 経路でのみ適用される。
+        /// 非 null かつ Count > 0 の場合、<see cref="HumanoidMotionApplier"/> は MainThread で
+        /// Transform.localRotation への書込 → HumanPoseHandler.GetHumanPose で Muscle 逆変換 → SetHumanPose
+        /// の経路で適用する (この経路では Muscles は無視される)。
+        /// </summary>
+        public IReadOnlyDictionary<HumanBodyBones, Quaternion> BoneLocalRotations { get; }
+
+        /// <summary>
+        /// 既存コンストラクタ (互換維持)。BoneLocalRotations は null。
         /// </summary>
         /// <param name="timestamp">受信スレッドで打刻した Stopwatch ベース秒数。</param>
         /// <param name="muscles">Muscle 値配列。呼び出し元から所有権を移譲する (内部コピー不要)。</param>
@@ -184,21 +197,36 @@ namespace RealtimeAvatarController.Motion
             float[] muscles,
             Vector3 rootPosition,
             Quaternion rootRotation)
+            : this(timestamp, muscles, rootPosition, rootRotation, null) { }
+
+        /// <summary>
+        /// (M-3) BoneLocalRotations 対応コンストラクタ。
+        /// </summary>
+        /// <param name="boneLocalRotations">各ボーンの親ローカル回転辞書。null 可。</param>
+        public HumanoidMotionFrame(
+            double timestamp,
+            float[] muscles,
+            Vector3 rootPosition,
+            Quaternion rootRotation,
+            IReadOnlyDictionary<HumanBodyBones, Quaternion> boneLocalRotations)
             : base(timestamp)
         {
             Muscles = muscles ?? Array.Empty<float>();
             RootPosition = rootPosition;
             RootRotation = rootRotation;
+            BoneLocalRotations = boneLocalRotations;
         }
 
         /// <summary>
-        /// 無効フレーム (Muscles.Length == 0) を生成するファクトリメソッド。
+        /// 無効フレーム (Muscles.Length == 0 かつ BoneLocalRotations null) を生成するファクトリメソッド。
         /// </summary>
         public static HumanoidMotionFrame CreateInvalid(double timestamp)
             => new HumanoidMotionFrame(timestamp, Array.Empty<float>(), Vector3.zero, Quaternion.identity);
 
         /// <summary>このフレームが有効データを持つかどうか。</summary>
-        public bool IsValid => Muscles.Length > 0;
+        public bool IsValid
+            => Muscles.Length > 0
+               || (BoneLocalRotations != null && BoneLocalRotations.Count > 0);
     }
 }
 ```
@@ -360,7 +388,8 @@ namespace RealtimeAvatarController.Motion
 | `Muscles` | プロパティ (読み取り専用) | `float[]` | Muscle 値配列 (長さ 95 or 0) |
 | `RootPosition` | プロパティ (読み取り専用) | `Vector3` | Root 位置 |
 | `RootRotation` | プロパティ (読み取り専用) | `Quaternion` | Root 回転 |
-| `IsValid` | プロパティ (読み取り専用) | `bool` | `Muscles.Length > 0` |
+| `BoneLocalRotations` | プロパティ (読み取り専用) | `IReadOnlyDictionary<HumanBodyBones, Quaternion>` | (M-3) 各ボーンの親ローカル回転辞書 (null 可) |
+| `IsValid` | プロパティ (読み取り専用) | `bool` | `Muscles.Length > 0 \|\| (BoneLocalRotations != null && BoneLocalRotations.Count > 0)` |
 
 ### 4.2 Timestamp 取得式
 
@@ -406,11 +435,12 @@ struct 採用を検討したが、以下の理由により class を選定した
 
 ### 4.6 Muscles 配列長と無効フレーム規約
 
-| 状態 | `Muscles.Length` | `IsValid` | 動作 |
-|------|:---------------:|:---------:|------|
-| 通常フレーム | 95 (`HumanTrait.MuscleCount`) | `true` | 通常適用 |
-| 無効フレーム | 0 | `false` | 適用スキップ (前フレーム維持) |
-| 未到着 (MotionCache) | — | — | `LatestFrame == null` → 適用スキップ |
+| 状態 | `Muscles.Length` | `BoneLocalRotations` | `IsValid` | 動作 |
+|------|:---------------:|:---:|:---------:|------|
+| 通常フレーム (Muscles 経路) | 95 (`HumanTrait.MuscleCount`) | null / 空 | `true` | 通常適用 (SetHumanPose で muscles 直接適用) |
+| 通常フレーム (BoneLocalRotations 経路, M-3) | 0 or 95 のゼロ埋め | 非 null かつ Count > 0 | `true` | MainThread で Transform 経由 Muscle 変換 → SetHumanPose |
+| 無効フレーム | 0 | null / 空 | `false` | 適用スキップ (前フレーム維持) |
+| 未到着 (MotionCache) | — | — | — | `LatestFrame == null` → 適用スキップ |
 
 > **無効フレームはエラーではない**: `ISlotErrorChannel` への `ApplyFailure` 発行は行わない。
 
@@ -529,6 +559,7 @@ applier.Apply(cache.LatestFrame, clampedWeight, settings);
 ```
 HumanoidMotionApplier
   ├─ _poseHandler: HumanPoseHandler   // アバター骨格操作
+  ├─ _animator: Animator              // (M-3) GetBoneTransform 用 (BoneLocalRotations 経路)
   ├─ _lastGoodPose: HumanPose         // HoldLastPose 用の直前正常ポーズ
   ├─ _renderers: Renderer[]           // Hide/復帰用 Renderer キャッシュ
   ├─ _isFallbackHiding: bool          // Hide 状態フラグ
@@ -536,6 +567,54 @@ HumanoidMotionApplier
 ```
 
 > **_errorChannel を持たない設計**: ApplyFailure の ErrorChannel 発行責務は SlotManager が担う (§9 参照)。Applier は例外を throw するだけであり、`ISlotErrorChannel` への参照を保持しない。これにより Applier の依存が最小化され、単体テストでのモック設定が不要になる。
+
+### 7.1.1 ApplyInternal 分岐 (M-3 追加)
+
+`ApplyInternal(HumanoidMotionFrame humanoidFrame)` は `humanoidFrame.BoneLocalRotations` の有無で 2 経路に分岐する。
+
+**経路 A (BoneLocalRotations 経由 / VMC 等 native bone rotation ソース)**:
+
+```csharp
+// 1. 各ボーンの親ローカル回転を Transform にそのまま書き込む
+//    (SetHumanPose より先に書くことで、直後の GetHumanPose で localRotation → muscle 値の逆変換が行える)
+foreach (var kv in humanoidFrame.BoneLocalRotations)
+{
+    var boneTf = _animator.GetBoneTransform(kv.Key);
+    if (boneTf != null) boneTf.localRotation = kv.Value;
+}
+
+// 2. Transform の現ポーズから HumanPose (muscles) を逆算
+var pose = new HumanPose();
+_poseHandler.GetHumanPose(ref pose);
+
+// 3. Root は BoneLocalRotations に含まれない直接値で上書き
+pose.bodyPosition = humanoidFrame.RootPosition;
+pose.bodyRotation = humanoidFrame.RootRotation;
+
+// 4. 最終適用 (Humanoid rig 制約に従った muscle ベースの pose 再構築)
+_poseHandler.SetHumanPose(ref pose);
+```
+
+**経路 B (従来: Muscles 直接経路)**:
+
+```csharp
+// 既存と同じ: muscles + Root を SetHumanPose に直接渡す
+var pose = new HumanPose
+{
+    bodyPosition = humanoidFrame.RootPosition,
+    bodyRotation = humanoidFrame.RootRotation,
+    muscles = humanoidFrame.Muscles,
+};
+_poseHandler.SetHumanPose(ref pose);
+```
+
+**分岐判定**:
+- `humanoidFrame.BoneLocalRotations != null && humanoidFrame.BoneLocalRotations.Count > 0` → 経路 A
+- それ以外 → 経路 B
+
+**経路 A での注意**:
+- `Transform.localRotation` への書込は一時的。直後の `SetHumanPose` で Humanoid rig constraint を通した最終 pose で上書きされる
+- よって BoneLocalRotations と Muscle システムの食い違い (例: 骨の rest pose オフセット) は Unity 側で自動補正される
 
 ### 7.2 HumanPoseHandler の初期化・破棄
 
@@ -546,6 +625,7 @@ private void InitializePoseHandler(GameObject avatarRoot)
     // 旧 PoseHandler を破棄
     _poseHandler?.Dispose();
     _poseHandler = null;
+    _animator = null;                 // (M-3) Animator 参照もクリア
     _renderers = null;
 
     if (avatarRoot == null) return;
@@ -556,6 +636,7 @@ private void InitializePoseHandler(GameObject avatarRoot)
             $"[HumanoidMotionApplier] GameObject '{avatarRoot.name}' は Humanoid アバターではありません。");
 
     _poseHandler = new HumanPoseHandler(animator.avatar, avatarRoot.transform);
+    _animator = animator;             // (M-3) BoneLocalRotations 経路で GetBoneTransform に使う
     _renderers = avatarRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
     _lastGoodPose = new HumanPose();
     _poseHandler.GetHumanPose(ref _lastGoodPose);  // 現ポーズを初期値として保持

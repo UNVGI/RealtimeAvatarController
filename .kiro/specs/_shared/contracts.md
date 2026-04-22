@@ -815,12 +815,13 @@ namespace RealtimeAvatarController.Motion
 }
 ```
 
-#### Humanoid 向け中立表現: `HumanoidMotionFrame` (最終確定)
+#### Humanoid 向け中立表現: `HumanoidMotionFrame` (最終確定 + M-3 合意変更 2026-04-22)
 
 Unity `HumanPose` 相当の構造を持つ具象型。Muscle 値配列と Root の位置・回転を保持するイミュータブル sealed class。
+M-3 合意変更で、VMC 等「ボーン回転クォータニオンを native 形式として出す」MoCap ソースの正確な変換経路を提供するため、`BoneLocalRotations` (親ローカル回転の辞書、任意) を追加した。
 
 ```csharp
-// 最終シグネチャ (motion-pipeline design フェーズ確定)
+// 最終シグネチャ (motion-pipeline design フェーズ確定 + M-3 合意変更)
 namespace RealtimeAvatarController.Motion
 {
     public sealed class HumanoidMotionFrame : MotionFrame
@@ -828,7 +829,8 @@ namespace RealtimeAvatarController.Motion
         public override SkeletonType SkeletonType => SkeletonType.Humanoid;
 
         // Unity HumanPose.muscles 相当
-        // 要素数: HumanTrait.MuscleCount = 95 (正常フレーム) / 0 (無効フレーム)
+        // 要素数: HumanTrait.MuscleCount = 95 (正常フレーム) / 0 (Muscles 未供給)
+        // BoneLocalRotations 経路を使う MoCap ソースは空配列 (長さ 95 の 0 埋めでも可) を渡す
         public float[] Muscles { get; }
 
         // Root 位置 (HumanPose.bodyPosition 相当)
@@ -837,16 +839,34 @@ namespace RealtimeAvatarController.Motion
         // Root 回転 (HumanPose.bodyRotation 相当)
         public Quaternion RootRotation { get; }
 
-        // true: 有効フレーム (Muscles.Length > 0)
-        // false: 無効フレーム (Muscles.Length == 0、データなし / 初期化前)
-        public bool IsValid => Muscles.Length > 0;
+        // M-3 追加: 各ボーンの親ローカル座標系での回転 (optional)
+        // VMC など「ボーン回転クォータニオンを native 形式として emit する」MoCap ソースが使用する。
+        // null または Count == 0 の場合は従来の Muscles 経路でのみ適用する。
+        // 非 null かつ Count > 0 の場合、Applier は MainThread で
+        //   Transform.localRotation への書込 → HumanPoseHandler.GetHumanPose で Muscle 逆変換 → SetHumanPose
+        // の経路で適用する (Muscles は無視される)。
+        public IReadOnlyDictionary<HumanBodyBones, Quaternion> BoneLocalRotations { get; }
 
+        // true: 有効フレーム (Muscles が有効 or BoneLocalRotations が有効)
+        // false: 両方とも空 (データなし / 初期化前)
+        public bool IsValid
+            => Muscles.Length > 0
+               || (BoneLocalRotations != null && BoneLocalRotations.Count > 0);
+
+        // 既存コンストラクタ (互換維持: BoneLocalRotations は null)
         public HumanoidMotionFrame(double timestamp, float[] muscles,
-            Vector3 rootPosition, Quaternion rootRotation) : base(timestamp)
+            Vector3 rootPosition, Quaternion rootRotation)
+            : this(timestamp, muscles, rootPosition, rootRotation, null) { }
+
+        // M-3 追加: BoneLocalRotations 対応コンストラクタ
+        public HumanoidMotionFrame(double timestamp, float[] muscles,
+            Vector3 rootPosition, Quaternion rootRotation,
+            IReadOnlyDictionary<HumanBodyBones, Quaternion> boneLocalRotations) : base(timestamp)
         {
             Muscles = muscles ?? Array.Empty<float>();
             RootPosition = rootPosition;
             RootRotation = rootRotation;
+            BoneLocalRotations = boneLocalRotations;
         }
 
         public static HumanoidMotionFrame CreateInvalid(double timestamp)
@@ -856,9 +876,17 @@ namespace RealtimeAvatarController.Motion
 ```
 
 **補足**:
-- `Muscles.Length == 0` は「データなし / 初期化前」を示す無効フレームとして扱う
+- `Muscles.Length == 0` かつ `BoneLocalRotations` が null / Count == 0 の場合のみ「データなし / 初期化前」を示す無効フレームとなる
 - 無効フレームは通常動作扱いであり、`ISlotErrorChannel` へのエラー発行は行わない
 - 全プロパティは readonly。コンストラクタで完全初期化するイミュータブル設計
+- `BoneLocalRotations` は読み取り専用辞書 (`IReadOnlyDictionary<HumanBodyBones, Quaternion>`) 型で渡す。呼び出し元は Frame 生成後に辞書を変更してはならない
+
+**M-3 合意変更の経緯** (2026-04-22):
+- VMC プロトコルは `/VMC/Ext/Bone/Pos` で「各ボーンの親ローカル回転クォータニオン」を送信する
+- Unity の Muscle 値は「ボーンごとに固有の軸で正規化された 3 DoF 値」であり、単純な Euler 角からの変換は意味的に不正確 (各ボーンの muscle axis / rest pose を考慮しないため)
+- 正確な変換には `HumanPoseHandler.GetHumanPose` が必要だが、これは Unity MainThread 限定 API のため、受信ワーカースレッド上では呼び出せない
+- 結果、VMC ソースから出た `HumanoidMotionFrame.Muscles` は実質的にゼロ相当となり、Applier が SetHumanPose 適用時に Hips 以外の骨がデフォルト姿勢のまま固まる実害が発生
+- 解決策として `BoneLocalRotations` フィールドを追加し、変換責務をワーカー → MainThread (Applier) に移動することで合意
 
 #### Generic 向け中立表現 (初期段階: 抽象のみ)
 

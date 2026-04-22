@@ -22,12 +22,22 @@ namespace RealtimeAvatarController.Motion
     /// <see cref="Apply"/> が正常完了した場合、内部で <see cref="Renderer.enabled"/> を <c>true</c> に
     /// 再設定して描画を復帰する。
     /// </para>
+    /// <para>
+    /// <b>(M-3) 適用経路の分岐</b>: <see cref="HumanoidMotionFrame.BoneLocalRotations"/> の有無で分岐する。
+    /// <list type="bullet">
+    ///   <item><description>BoneLocalRotations が非 null かつ Count &gt; 0: Transform.localRotation 書込 → GetHumanPose で Muscle 逆変換 → SetHumanPose</description></item>
+    ///   <item><description>それ以外: 従来の Muscles 直接経路 (SetHumanPose に muscles + Root を渡す)</description></item>
+    /// </list>
+    /// 詳細は motion-pipeline design.md §7.1.1 参照。
+    /// </para>
     /// </remarks>
     public sealed class HumanoidMotionApplier : IMotionApplier
     {
         private readonly string _slotId;
         private HumanPoseHandler _poseHandler;
+        private Animator _animator;          // (M-3) BoneLocalRotations 経路で GetBoneTransform に使用
         private HumanPose _lastGoodPose;
+        private HumanPose _workPose;         // (M-3) GetHumanPose / SetHumanPose 用の再利用バッファ
         private Renderer[] _renderers;
         private bool _isFallbackHiding;
 
@@ -59,6 +69,7 @@ namespace RealtimeAvatarController.Motion
         {
             _poseHandler?.Dispose();
             _poseHandler = null;
+            _animator = null;
             _renderers = null;
             _isFallbackHiding = false;
 
@@ -80,9 +91,11 @@ namespace RealtimeAvatarController.Motion
             }
 
             _poseHandler = new HumanPoseHandler(animator.avatar, avatarRoot.transform);
+            _animator = animator;
             _renderers = avatarRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
             _lastGoodPose = new HumanPose();
             _poseHandler.GetHumanPose(ref _lastGoodPose);
+            _workPose = new HumanPose();
         }
 
         /// <inheritdoc/>
@@ -122,13 +135,9 @@ namespace RealtimeAvatarController.Motion
 
             ApplyInternal(humanoidFrame);
 
-            _lastGoodPose.bodyPosition = humanoidFrame.RootPosition;
-            _lastGoodPose.bodyRotation = humanoidFrame.RootRotation;
-            if (_lastGoodPose.muscles == null || _lastGoodPose.muscles.Length != humanoidFrame.Muscles.Length)
-            {
-                _lastGoodPose.muscles = new float[humanoidFrame.Muscles.Length];
-            }
-            Array.Copy(humanoidFrame.Muscles, _lastGoodPose.muscles, humanoidFrame.Muscles.Length);
+            // _lastGoodPose は「直前に Apply した最終 pose (HumanPoseHandler 経由)」を保持する。
+            // BoneLocalRotations 経路では ApplyInternal 終了時の Transform 状態から取得する方が正確。
+            _poseHandler.GetHumanPose(ref _lastGoodPose);
 
             if (_isFallbackHiding)
             {
@@ -196,18 +205,54 @@ namespace RealtimeAvatarController.Motion
         {
             _poseHandler?.Dispose();
             _poseHandler = null;
+            _animator = null;
             _renderers = null;
         }
 
+        /// <summary>
+        /// フレームを Humanoid アバターへ適用する。
+        /// <see cref="HumanoidMotionFrame.BoneLocalRotations"/> の有無で経路が分岐する (M-3)。
+        /// </summary>
         private void ApplyInternal(HumanoidMotionFrame humanoidFrame)
         {
-            var pose = new HumanPose
+            var boneRotations = humanoidFrame.BoneLocalRotations;
+            bool useBoneRotationPath = boneRotations != null && boneRotations.Count > 0;
+
+            if (useBoneRotationPath && _animator != null)
             {
-                bodyPosition = humanoidFrame.RootPosition,
-                bodyRotation = humanoidFrame.RootRotation,
-                muscles = humanoidFrame.Muscles,
-            };
-            _poseHandler.SetHumanPose(ref pose);
+                // === 経路 A: BoneLocalRotations 経由 ===
+                // 1. 受信した parent-local rotation を各 bone の Transform.localRotation に書き込む
+                //    (直後の GetHumanPose が Muscle 値を逆算する前提)
+                foreach (var kv in boneRotations)
+                {
+                    var boneTf = _animator.GetBoneTransform(kv.Key);
+                    if (boneTf != null)
+                    {
+                        boneTf.localRotation = kv.Value;
+                    }
+                }
+
+                // 2. 書き換えた Transform 状態から HumanPose を逆算 (muscles が Unity 規格値になる)
+                _poseHandler.GetHumanPose(ref _workPose);
+
+                // 3. Root を上書き
+                _workPose.bodyPosition = humanoidFrame.RootPosition;
+                _workPose.bodyRotation = humanoidFrame.RootRotation;
+
+                // 4. 最終適用 (Humanoid rig 制約を通した pose 再構築)
+                _poseHandler.SetHumanPose(ref _workPose);
+            }
+            else
+            {
+                // === 経路 B: Muscles 直接経路 (従来) ===
+                var pose = new HumanPose
+                {
+                    bodyPosition = humanoidFrame.RootPosition,
+                    bodyRotation = humanoidFrame.RootRotation,
+                    muscles = humanoidFrame.Muscles,
+                };
+                _poseHandler.SetHumanPose(ref pose);
+            }
         }
 
         private void RestoreRenderers()

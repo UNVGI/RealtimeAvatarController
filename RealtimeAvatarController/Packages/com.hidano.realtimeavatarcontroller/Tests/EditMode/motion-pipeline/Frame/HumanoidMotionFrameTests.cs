@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using RealtimeAvatarController.Motion;
@@ -14,7 +15,8 @@ namespace RealtimeAvatarController.Motion.Tests.Frame
     ///   - RootPosition / RootRotation の読み取り専用性 (コンストラクタ値の保持)
     ///   - SkeletonType が Humanoid
     ///   - CreateInvalid(timestamp) が IsValid == false かつ Timestamp 保持のフレームを返す
-    /// Requirements: Req 1, Req 2, Req 3, Req 14
+    ///   - (M-3) BoneLocalRotations の保持・null フォールバック・IsValid 影響
+    /// Requirements: Req 1, Req 2, Req 3, Req 14, M-3 合意変更
     /// </summary>
     [TestFixture]
     public class HumanoidMotionFrameTests
@@ -119,6 +121,101 @@ namespace RealtimeAvatarController.Motion.Tests.Frame
             Assert.That(frame.Muscles, Is.Not.Null);
             Assert.That(frame.Muscles.Length, Is.EqualTo(0));
             Assert.That(frame.SkeletonType, Is.EqualTo(SkeletonType.Humanoid));
+        }
+
+        // ===== M-3: BoneLocalRotations 対応テスト =====
+
+        [Test]
+        public void BoneLocalRotations_LegacyConstructor_IsNull()
+        {
+            // 既存 4 引数コンストラクタは BoneLocalRotations を null にセットする (後方互換)。
+            var frame = new HumanoidMotionFrame(
+                timestamp: 1.0,
+                muscles: new float[HumanoidMuscleCount],
+                rootPosition: Vector3.zero,
+                rootRotation: Quaternion.identity);
+
+            Assert.That(frame.BoneLocalRotations, Is.Null);
+        }
+
+        [Test]
+        public void BoneLocalRotations_NewConstructor_PreservesDictionary()
+        {
+            var expected = new Dictionary<HumanBodyBones, Quaternion>
+            {
+                { HumanBodyBones.Hips, Quaternion.Euler(10f, 20f, 30f) },
+                { HumanBodyBones.Head, Quaternion.Euler(40f, 50f, 60f) },
+            };
+
+            var frame = new HumanoidMotionFrame(
+                timestamp: 2.0,
+                muscles: Array.Empty<float>(),
+                rootPosition: Vector3.zero,
+                rootRotation: Quaternion.identity,
+                boneLocalRotations: expected);
+
+            Assert.That(frame.BoneLocalRotations, Is.Not.Null);
+            Assert.That(frame.BoneLocalRotations.Count, Is.EqualTo(2));
+            Assert.That(frame.BoneLocalRotations[HumanBodyBones.Hips], Is.EqualTo(expected[HumanBodyBones.Hips]));
+            Assert.That(frame.BoneLocalRotations[HumanBodyBones.Head], Is.EqualTo(expected[HumanBodyBones.Head]));
+        }
+
+        [Test]
+        public void BoneLocalRotations_AllowsNullInNewConstructor()
+        {
+            // 新コンストラクタで null を渡しても例外を出さず、以降は BoneLocalRotations==null 扱いとなる。
+            var frame = new HumanoidMotionFrame(
+                timestamp: 3.0,
+                muscles: new float[HumanoidMuscleCount],
+                rootPosition: Vector3.zero,
+                rootRotation: Quaternion.identity,
+                boneLocalRotations: null);
+
+            Assert.That(frame.BoneLocalRotations, Is.Null);
+            Assert.That(frame.IsValid, Is.True, "Muscles が埋まっていれば BoneLocalRotations が null でも有効");
+        }
+
+        [Test]
+        public void IsValid_WhenMusclesEmptyButBoneRotationsProvided_ReturnsTrue()
+        {
+            // Muscles が空でも BoneLocalRotations が 1 件以上あれば有効フレーム扱い。
+            var bones = new Dictionary<HumanBodyBones, Quaternion>
+            {
+                { HumanBodyBones.Hips, Quaternion.identity },
+            };
+
+            var frame = new HumanoidMotionFrame(
+                timestamp: 4.0,
+                muscles: Array.Empty<float>(),
+                rootPosition: Vector3.zero,
+                rootRotation: Quaternion.identity,
+                boneLocalRotations: bones);
+
+            Assert.That(frame.IsValid, Is.True);
+        }
+
+        [Test]
+        public void IsValid_WhenBothMusclesAndBoneRotationsEmpty_ReturnsFalse()
+        {
+            var emptyBones = new Dictionary<HumanBodyBones, Quaternion>();
+
+            var frame = new HumanoidMotionFrame(
+                timestamp: 5.0,
+                muscles: Array.Empty<float>(),
+                rootPosition: Vector3.zero,
+                rootRotation: Quaternion.identity,
+                boneLocalRotations: emptyBones);
+
+            Assert.That(frame.IsValid, Is.False);
+        }
+
+        [Test]
+        public void BoneLocalRotations_IsReadOnly()
+        {
+            var property = typeof(HumanoidMotionFrame).GetProperty(nameof(HumanoidMotionFrame.BoneLocalRotations));
+            Assert.That(property, Is.Not.Null);
+            Assert.That(property.CanRead, Is.True);
+            Assert.That(property.CanWrite, Is.False, "BoneLocalRotations は読み取り専用プロパティでなければならない");
         }
     }
 }

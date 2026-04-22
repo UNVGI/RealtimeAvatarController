@@ -195,6 +195,129 @@ namespace RealtimeAvatarController.Motion.Tests.PlayMode.Applier
                 "切替後の Apply は avatarB に反映される (いずれかのボーン localRotation が変化)");
         }
 
+        // === M-3: BoneLocalRotations 経路の PlayMode 統合テスト ===
+
+        /// <summary>
+        /// <see cref="HumanoidMotionFrame.BoneLocalRotations"/> に含めた bone が
+        /// Animator の Transform.localRotation に反映されること (SetHumanPose 経由の
+        /// Muscle 逆変換パスが機能していること) を検証する。
+        /// M-3 合意変更 (contracts.md §2.2 / motion-pipeline design.md §7.1.1)。
+        /// </summary>
+        [Test]
+        public void Apply_WithBoneLocalRotations_AppliesToAvatarBones()
+        {
+            var avatar = BuildAvatar("integration-avatar-bone-rotations");
+            var leftUpperArm = FindChild(avatar.transform, "LeftUpperArm");
+            var spine = FindChild(avatar.transform, "Spine");
+            Assert.That(leftUpperArm, Is.Not.Null, "前提: LeftUpperArm ボーンが存在する");
+            Assert.That(spine, Is.Not.Null, "前提: Spine ボーンが存在する");
+
+            using var applier = new HumanoidMotionApplier(TestSlotId);
+            applier.SetAvatar(avatar);
+
+            var initialLeftArm = leftUpperArm.localRotation;
+            var initialSpine = spine.localRotation;
+
+            // VMC 経路相当のフレーム: Muscles は空、BoneLocalRotations のみ指定
+            var boneRotations = new Dictionary<HumanBodyBones, Quaternion>
+            {
+                { HumanBodyBones.LeftUpperArm, Quaternion.Euler(45f, 30f, 15f) },
+                { HumanBodyBones.Spine,        Quaternion.Euler(10f, 0f, 20f) },
+            };
+            var frame = new HumanoidMotionFrame(
+                timestamp: 1.0,
+                muscles: Array.Empty<float>(),
+                rootPosition: Vector3.zero,
+                rootRotation: Quaternion.identity,
+                boneLocalRotations: boneRotations);
+
+            Assert.DoesNotThrow(
+                () => applier.Apply(frame, 1.0f, _settings),
+                "BoneLocalRotations 経路の Apply は例外なく完了する");
+
+            // Humanoid rig の muscle constraint を経由するため元 rotation とは完全一致しないが、
+            // 初期姿勢からは有意に変化しているはず。
+            bool leftArmChanged = Quaternion.Angle(initialLeftArm, leftUpperArm.localRotation) > 0.1f;
+            bool spineChanged = Quaternion.Angle(initialSpine, spine.localRotation) > 0.1f;
+            Assert.That(leftArmChanged || spineChanged, Is.True,
+                "BoneLocalRotations 経由の Apply 後、指定ボーンのいずれかが回転していること");
+        }
+
+        /// <summary>
+        /// <see cref="HumanoidMotionFrame.BoneLocalRotations"/> が非 null かつ Count &gt; 0 の場合、
+        /// <see cref="HumanoidMotionFrame.Muscles"/> が空配列でも Apply がスキップされないこと
+        /// (IsValid 判定が BoneLocalRotations も考慮していること) を検証する。
+        /// </summary>
+        [Test]
+        public void Apply_WithBoneLocalRotationsOnly_IsNotSkippedDespiteEmptyMuscles()
+        {
+            var avatar = BuildAvatar("integration-avatar-bones-only");
+            var hips = FindChild(avatar.transform, "Hips");
+            Assert.That(hips, Is.Not.Null, "前提: Hips ボーンが存在する");
+
+            using var applier = new HumanoidMotionApplier(TestSlotId);
+            applier.SetAvatar(avatar);
+
+            var initialHipsRot = hips.localRotation;
+
+            var frame = new HumanoidMotionFrame(
+                timestamp: 2.0,
+                muscles: Array.Empty<float>(),
+                rootPosition: new Vector3(0f, 1.0f, 0f),
+                rootRotation: Quaternion.Euler(0f, 45f, 0f),
+                boneLocalRotations: new Dictionary<HumanBodyBones, Quaternion>
+                {
+                    { HumanBodyBones.Hips, Quaternion.Euler(20f, 0f, 0f) },
+                });
+
+            Assert.That(frame.IsValid, Is.True,
+                "Muscles が空でも BoneLocalRotations があれば IsValid は true");
+
+            Assert.DoesNotThrow(
+                () => applier.Apply(frame, 1.0f, _settings),
+                "Muscles 空の BoneLocalRotations フレームは Apply される (スキップされない)");
+
+            // RootRotation が反映されている (SetHumanPose の bodyRotation)
+            var worldRot = hips.rotation;
+            Assert.That(Quaternion.Angle(initialHipsRot, hips.localRotation) > 0.01f
+                        || Quaternion.Angle(Quaternion.identity, worldRot) > 0.01f,
+                Is.True,
+                "Muscles 空でも BoneLocalRotations 経由で Hips または Root に変化が反映される");
+        }
+
+        /// <summary>
+        /// <see cref="HumanoidMotionFrame.BoneLocalRotations"/> が空辞書の場合、
+        /// 従来の Muscles 経路で適用されることを検証する (後方互換性)。
+        /// </summary>
+        [Test]
+        public void Apply_WithEmptyBoneLocalRotations_FallsBackToMusclePath()
+        {
+            var avatar = BuildAvatar("integration-avatar-fallback-muscle");
+            var leftUpperArm = FindChild(avatar.transform, "LeftUpperArm");
+            Assert.That(leftUpperArm, Is.Not.Null);
+
+            using var applier = new HumanoidMotionApplier(TestSlotId);
+            applier.SetAvatar(avatar);
+            var initialRot = leftUpperArm.localRotation;
+
+            // BoneLocalRotations は空辞書。Muscles 経路が使われるべき。
+            var muscles = new float[HumanTrait.MuscleCount];
+            for (int i = 0; i < muscles.Length; i++) muscles[i] = 0.4f;
+
+            var frame = new HumanoidMotionFrame(
+                timestamp: 3.0,
+                muscles: muscles,
+                rootPosition: Vector3.zero,
+                rootRotation: Quaternion.identity,
+                boneLocalRotations: new Dictionary<HumanBodyBones, Quaternion>());  // empty
+
+            Assert.DoesNotThrow(() => applier.Apply(frame, 1.0f, _settings));
+
+            // Muscles 経路が効いていれば LeftUpperArm が変化する (従来の CreateNonTrivialFrame と同値な動作)
+            Assert.That(Quaternion.Angle(initialRot, leftUpperArm.localRotation), Is.GreaterThan(0.1f),
+                "BoneLocalRotations が空の場合は従来の Muscles 経路で Apply される");
+        }
+
         // --- helpers ---
 
         private GameObject BuildAvatar(string name)

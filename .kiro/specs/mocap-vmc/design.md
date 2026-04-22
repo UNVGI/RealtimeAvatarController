@@ -393,20 +393,29 @@ VMC プロトコルでは 1 フレーム分のボーンデータが複数の OSC
 
 - 受信した Bone/Root データを `Dictionary<HumanBodyBones, (Vector3, Quaternion)>` に蓄積する
 - `/VMC/Ext/Bone/Pos` の最後のメッセージ受信後 (または一定時間経過後) にフレームをフラッシュして `HumanoidMotionFrame` を構築する
-- `HumanoidMotionFrame` の `Muscles` 配列は `HumanPoseHandler` を使用せずに Bone の回転クォータニオンから Muscle 値へ変換する (Unity `HumanTrait.MuscleFromBone` を活用)
+- (M-3 更新) 蓄積した各ボーン回転を `HumanoidMotionFrame.BoneLocalRotations` フィールドにそのまま格納する。Muscle 変換は Applier (MainThread) 側が担うため、`VmcFrameBuilder` は Unity 非スレッドセーフ API (`HumanPoseHandler` / `HumanTrait.MuscleFromBone` 等) を呼ばない
+- `Muscles` 配列は空 (`Array.Empty<float>()`) を渡す。IsValid 判定は `BoneLocalRotations.Count > 0` が担う
 
-> **初期版の実装方針**: `HumanPoseHandler` を VmcMoCapSource 内部に持たず、受信したボーン回転クォータニオンを `HumanTrait.MuscleFromBone` 等を使って `float[] Muscles` へ変換して `HumanoidMotionFrame` に格納する。
+> **M-3 合意変更 (2026-04-22) で刷新された方針**: VMC プロトコルは「親ローカル座標系のクォータニオン」を送ってくる一方、Unity の Muscle 値は「ボーンごとに固有の軸で正規化された 3 DoF 値」であり、両者を直接 (`Quaternion.eulerAngles / 180f` 等で) 線形変換するのは意味的に不正確である。
 >
-> ⚠️ **[M-2 解決] クォータニオン直格納の拡張フィールドについて**: かつて「ボーン回転クォータニオンをそのまま格納する拡張フィールド」を検討していたが、この方針は **contracts.md 2.2 章の `HumanoidMotionFrame` 最終シグネチャ (`float[] Muscles` のみを持つ確定仕様) との変更を要する合意変更プロセスが必要** である。現設計では拡張フィールドの追加は採用しない。`HumanoidMotionFrame` の追加フィールドが必要な場合は、contracts.md 2.2 章の合意変更プロセスを経て全 Spec が同意した上で行うこと。
+> 正確な変換は `HumanPoseHandler.GetHumanPose`（MainThread 限定 API）が必要となるため、`VmcFrameBuilder` (ワーカースレッド) では行えない。そこで **contracts.md §2.2 に `BoneLocalRotations` フィールドを追加**し、変換責務を `HumanoidMotionApplier` (MainThread) に移した。
+>
+> 過去の [M-2] エントリで「拡張フィールドの追加は採用しない」と判断していたが、バグ (VMC データ適用後に Hips 以外の骨が静止する) の根本修正のため、M-3 合意変更で方針を反転した。
 
 ### 6.4 timestamp 打刻
 
 ```csharp
 // OSC パース完了後・OnNext 前に打刻
 double timestamp = Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
-// 引数順序は contracts.md 2.2 章の確定シグネチャに従う:
-// HumanoidMotionFrame(double timestamp, float[] muscles, Vector3 rootPosition, Quaternion rootRotation)
-var frame = new HumanoidMotionFrame(timestamp, muscles, rootPosition, rootRotation);
+
+// M-3: BoneLocalRotations 対応コンストラクタを使用する
+// HumanoidMotionFrame(double, float[], Vector3, Quaternion, IReadOnlyDictionary<HumanBodyBones, Quaternion>)
+var frame = new HumanoidMotionFrame(
+    timestamp,
+    Array.Empty<float>(),             // Muscles は空 (Applier 側で BoneLocalRotations から逆算する)
+    rootPosition,
+    rootRotation,
+    boneLocalRotations);              // 蓄積した bone 辞書をそのまま引き渡す
 _subject.OnNext(frame);
 ```
 
@@ -464,11 +473,12 @@ public static bool TryGetBone(string vmcBoneName, out HumanBodyBones bone)
 - 位置は `HumanoidMotionFrame.RootPosition` に、回転は `HumanoidMotionFrame.RootRotation` にそのまま格納する
 - 座標系は VMC プロトコルが Unity 座標系 (左手座標、Y-up) を使用するため変換不要
 
-### 7.3 未受信ボーンの扱い
+### 7.3 未受信ボーンの扱い (M-3 更新)
 
-- VMC メッセージに含まれないボーンについては、`Muscles` 配列のその Bone に対応するインデックスに `0.0f` (アイドルポーズ = ゼロ回転) を設定する
-- `Muscles` 配列の長さは `HumanTrait.MuscleCount` (Unity 標準: 95) に固定する
-- `Muscles.Length == 0` は無効フレームを示すため、正常フレームでは常に長さ 95 の配列を生成する
+- VMC メッセージに含まれないボーンは、`BoneLocalRotations` 辞書に**含めない** (追加しない)
+- Applier は辞書に存在しないボーンの Transform には一切書込まないため、直前の最終 pose の localRotation が保持される
+- 受信ボーンが 1 件以上ある場合 (`_bones.Count > 0`) に `HumanoidMotionFrame` を `BoneLocalRotations` 付きで生成する
+- `BoneLocalRotations.Count == 0` かつ `Muscles.Length == 0` は無効フレームを示す。VmcFrameBuilder.TryFlush は `_bones.Count == 0` で `false` を返すため、この状態のフレームは発行されない
 
 ### 7.4 BlendShape の扱い (初期版)
 
@@ -764,9 +774,10 @@ sequenceDiagram
 |---------|---------|
 | **メインスレッド** | `Initialize()` / `Shutdown()` / `Dispose()` の呼び出し |
 | **メインスレッド** | MotionCache でのフレーム受信 (`.ObserveOnMainThread()` 適用後) |
+| **メインスレッド** (M-3) | BoneLocalRotations → Muscle 逆変換 (`Animator.GetBoneTransform` / `HumanPoseHandler.GetHumanPose`)。**Applier** の責務 (motion-pipeline §7.1.1) |
 | **ワーカースレッド** | UDP パケット受信・OSC パース (uOSC 内部処理) |
 | **ワーカースレッド** | OSC メッセージのアドレスルーティング (`VmcMessageRouter`) |
-| **ワーカースレッド** | HumanoidMotionFrame 組み立て (`VmcFrameBuilder`) |
+| **ワーカースレッド** | HumanoidMotionFrame 組み立て (`VmcFrameBuilder`) — **M-3 更新**: BoneLocalRotations dict の蓄積のみ (Muscle 変換は MainThread 責務) |
 | **ワーカースレッド** | `timestamp` 打刻 (`Stopwatch.GetTimestamp()`) |
 | **ワーカースレッド** | `Subject<MotionFrame>.OnNext()` (`Subject.Synchronize()` でスレッドセーフ) |
 | **ワーカースレッド** | `ISlotErrorChannel.Publish()` 呼び出し |

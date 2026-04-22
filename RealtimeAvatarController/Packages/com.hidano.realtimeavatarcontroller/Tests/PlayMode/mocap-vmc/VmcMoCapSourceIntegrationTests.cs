@@ -123,18 +123,19 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         /// <summary>
         /// 送信した <c>/VMC/Ext/Root/Pos</c> の位置・回転が
         /// <see cref="HumanoidMotionFrame.RootPosition"/> / <see cref="HumanoidMotionFrame.RootRotation"/>
-        /// にそのまま転写されること、および <see cref="HumanoidMotionFrame.Muscles"/> 配列長が
-        /// <see cref="HumanTrait.MuscleCount"/> (= 95) に固定されること (design.md §7.2 / §7.3)。
+        /// にそのまま転写されること、および <c>/VMC/Ext/Bone/Pos</c> の rotation が
+        /// (M-3) <see cref="HumanoidMotionFrame.BoneLocalRotations"/> に保持されること (design.md §7.2 / §7.3)。
         /// </summary>
         [UnityTest]
         public IEnumerator MotionStream_DeliversRootAndBoneData_Roundtrip()
         {
             var rootPosition = new Vector3(0.5f, 1.5f, -0.25f);
             var rootRotation = Quaternion.Euler(10f, 20f, 30f);
+            var hipsRotation = Quaternion.Euler(5f, 15f, 25f);
 
             _sender.SendRootPos(rootPosition, rootRotation);
             yield return null;
-            _sender.SendBonePos("Hips", new Vector3(0f, 1f, 0f), Quaternion.identity);
+            _sender.SendBonePos("Hips", new Vector3(0f, 1f, 0f), hipsRotation);
 
             yield return WaitForFrames(_recorder, expectedCount: 1, timeoutSeconds: DefaultTimeoutSeconds);
 
@@ -148,9 +149,21 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
             AssertVector3Approximately(rootPosition, frame.RootPosition, tolerance: 1e-3f, label: "RootPosition");
             AssertQuaternionApproximately(rootRotation, frame.RootRotation, tolerance: 1e-3f, label: "RootRotation");
 
+            // M-3: Muscles は空配列 (Applier 側で BoneLocalRotations から逆変換する方針)
             Assert.That(frame.Muscles, Is.Not.Null);
-            Assert.That(frame.Muscles.Length, Is.EqualTo(HumanTrait.MuscleCount),
-                "Muscles 配列長は HumanTrait.MuscleCount に固定されるべき (design.md §7.3)。");
+            Assert.That(frame.Muscles.Length, Is.EqualTo(0),
+                "M-3: VMC ソースの Muscles は空配列で発行される (Applier 側で BoneLocalRotations → Muscle 逆変換する)。");
+
+            // M-3: BoneLocalRotations に Hips が含まれ、送信した rotation と一致する
+            Assert.That(frame.BoneLocalRotations, Is.Not.Null,
+                "M-3: VMC ソースは BoneLocalRotations を生成すべき。");
+            Assert.That(frame.BoneLocalRotations.ContainsKey(HumanBodyBones.Hips), Is.True,
+                "送信した Hips ボーンが BoneLocalRotations に含まれるべき。");
+            AssertQuaternionApproximately(
+                hipsRotation,
+                frame.BoneLocalRotations[HumanBodyBones.Hips],
+                tolerance: 1e-3f,
+                label: "BoneLocalRotations[Hips]");
         }
 
         // --- ケース 3: timestamp の単調増加 (要件 2-7) ---
