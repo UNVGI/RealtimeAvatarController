@@ -91,7 +91,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 3.1, 3.6, 8.2, 10.5_
   - _Boundary: Assets/EVMC4U/ExternalReceiver.cs_
 
-- [ ] 2.4 [Impl] `/VMC/Ext/Root/Pos` 受信時に Root を public プロパティへキャッシュ
+- [x] 2.4 [Impl] `/VMC/Ext/Root/Pos` 受信時に Root を public プロパティへキャッシュ
   - `ExternalReceiver` に `public Vector3 LatestRootLocalPosition { get; private set; }` と `public Quaternion LatestRootLocalRotation { get; private set; } = Quaternion.identity;` を追加 (design.md §6.2)。
   - `ProcessMessage` の `/VMC/Ext/Root/Pos` ケース内部 (ローカル変数 `pos` / `rot` が計算された直後) で、上記プロパティへ代入する 1 行を追加する。
   - 既存の `RootPositionTransform.localPosition = pos` / `RootRotationTransform.localRotation = rot` の書込は `RootPositionSynchronize` / `RootRotationSynchronize` ガード配下で動作するため、本 Spec ではいずれも `false` に固定される (Task 3.x 参照)。

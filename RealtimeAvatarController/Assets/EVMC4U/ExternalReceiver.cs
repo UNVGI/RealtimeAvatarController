@@ -400,6 +400,13 @@ namespace EVMC4U
 
         public bool IsShutdown => shutdown;
 
+        // [RealtimeAvatarController mocap-vmc local patch]
+        // /VMC/Ext/Root/Pos 受信時の Root 位置・回転を常にキャッシュする。
+        // RootPositionSynchronize / RootRotationSynchronize が false でも Adapter 側から参照できるようにするため。
+        // 参照: .kiro/specs/mocap-vmc/design.md §6.2
+        public Vector3 LatestRootLocalPosition { get; private set; }
+        public Quaternion LatestRootLocalRotation { get; private set; } = Quaternion.identity;
+
         //フレーム間パケットフレーム数測定
         int PacketCounterInFrame = 0;
 
@@ -848,6 +855,11 @@ namespace EVMC4U
                 rot.y = (float)message.values[5];
                 rot.z = (float)message.values[6];
                 rot.w = (float)message.values[7];
+
+                // [RealtimeAvatarController mocap-vmc local patch]
+                // Adapter (Model=null 経路) からも最新の Root 値を参照できるように常にキャッシュする。
+                LatestRootLocalPosition = pos;
+                LatestRootLocalRotation = rot;
 
                 // [RealtimeAvatarController mocap-vmc local patch]
                 // Transform 書込は Model / RootTransform が揃っている場合にのみ実施する。
