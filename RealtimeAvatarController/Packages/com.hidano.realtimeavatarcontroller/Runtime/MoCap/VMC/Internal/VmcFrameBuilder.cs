@@ -149,13 +149,10 @@ namespace RealtimeAvatarController.MoCap.VMC.Internal
             }
 
             // Bone 辞書のスナップショットコピー (Frame イミュータビリティ保持のため別インスタンスを用意)
-            // rotation と position を両方渡す (EVMC4U 準拠 / M-3 追補 2026-04-22)
             var boneRotations = new Dictionary<HumanBodyBones, Quaternion>(_bones.Count);
-            var bonePositions = new Dictionary<HumanBodyBones, UnityEngine.Vector3>(_bones.Count);
             foreach (var kv in _bones)
             {
                 boneRotations[kv.Key] = kv.Value.rotation;
-                bonePositions[kv.Key] = kv.Value.position;
             }
 
             // design.md §6.4: Stopwatch ベースの秒数でタイムスタンプを打刻する。
@@ -165,8 +162,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Internal
                 Array.Empty<float>(),
                 _rootPosition,
                 _rootRotation,
-                boneRotations,
-                bonePositions);
+                boneRotations);
 
             // NOTE (M-3 改訂): _bones.Clear() は呼ばない。欠損 bone は前回値を保持する。
             _dirty = false;

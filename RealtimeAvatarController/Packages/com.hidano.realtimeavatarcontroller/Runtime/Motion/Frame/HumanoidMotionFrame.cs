@@ -54,20 +54,10 @@ namespace RealtimeAvatarController.Motion
         /// (M-3) 各ボーンの親ローカル座標系での回転辞書 (optional)。
         /// null または <c>Count == 0</c> の場合は従来の <see cref="Muscles"/> 経路でのみ適用される。
         /// 非 null かつ <c>Count &gt; 0</c> の場合、<see cref="HumanoidMotionApplier"/> は MainThread で
-        /// <c>Animator.GetBoneTransform(bone).localRotation</c> に直接書込む経路で適用する
-        /// (この経路では <see cref="Muscles"/> は無視される)。
+        /// Transform.localRotation 書込 → <c>GetHumanPose</c> による Muscle 逆変換 → <c>SetHumanPose</c>
+        /// の経路で適用する (この経路では <see cref="Muscles"/> は無視される)。
         /// </summary>
         public IReadOnlyDictionary<HumanBodyBones, Quaternion> BoneLocalRotations { get; }
-
-        /// <summary>
-        /// (M-3 追補 2026-04-22) 各ボーンの親ローカル座標系での位置辞書 (optional)。
-        /// VRM 形式等で骨の localPosition が動的に変わるケースに対応するため、VMC 送信側が
-        /// rotation と併せて position も送る。非 null の場合、<see cref="HumanoidMotionApplier"/> は
-        /// <c>Animator.GetBoneTransform(bone).localPosition</c> にも直接書込む
-        /// (EVMC4U の <c>BonePositionSynchronize = true</c> 相当)。
-        /// null または空の場合は rest pose のまま保持される。
-        /// </summary>
-        public IReadOnlyDictionary<HumanBodyBones, Vector3> BoneLocalPositions { get; }
 
         /// <summary>
         /// このフレームが有効データを持つかどうか。
@@ -78,7 +68,7 @@ namespace RealtimeAvatarController.Motion
                || (BoneLocalRotations != null && BoneLocalRotations.Count > 0);
 
         /// <summary>
-        /// 既存コンストラクタ (互換維持)。<see cref="BoneLocalRotations"/> / <see cref="BoneLocalPositions"/> は <c>null</c>。
+        /// 既存コンストラクタ (互換維持)。<see cref="BoneLocalRotations"/> は <c>null</c>。
         /// </summary>
         /// <param name="timestamp">受信スレッドで打刻した Stopwatch ベース秒数。</param>
         /// <param name="muscles">
@@ -92,51 +82,37 @@ namespace RealtimeAvatarController.Motion
             float[] muscles,
             Vector3 rootPosition,
             Quaternion rootRotation)
-            : this(timestamp, muscles, rootPosition, rootRotation, null, null)
+            : this(timestamp, muscles, rootPosition, rootRotation, null)
         {
         }
 
         /// <summary>
-        /// (M-3) <see cref="BoneLocalRotations"/> 対応コンストラクタ (後方互換)。<see cref="BoneLocalPositions"/> は <c>null</c>。
+        /// (M-3) <see cref="BoneLocalRotations"/> 対応コンストラクタ。
+        /// VMC などボーン回転クォータニオンを native 形式として emit する MoCap ソースが使用する。
         /// </summary>
+        /// <param name="timestamp">受信スレッドで打刻した Stopwatch ベース秒数。</param>
+        /// <param name="muscles">
+        /// Muscle 値配列。呼び出し元から所有権を移譲すること (内部コピー不要)。
+        /// <paramref name="boneLocalRotations"/> 経路で適用する場合、空配列を渡すことが許容される。
+        /// </param>
+        /// <param name="rootPosition">Root 位置。</param>
+        /// <param name="rootRotation">Root 回転。</param>
+        /// <param name="boneLocalRotations">
+        /// 各ボーンの親ローカル回転辞書。null 可 (null の場合は従来の Muscles 経路で適用される)。
+        /// 呼び出し元から所有権を移譲すること (Applier 側でコピーせず参照保持する)。
+        /// </param>
         public HumanoidMotionFrame(
             double timestamp,
             float[] muscles,
             Vector3 rootPosition,
             Quaternion rootRotation,
             IReadOnlyDictionary<HumanBodyBones, Quaternion> boneLocalRotations)
-            : this(timestamp, muscles, rootPosition, rootRotation, boneLocalRotations, null)
-        {
-        }
-
-        /// <summary>
-        /// (M-3 追補 2026-04-22) <see cref="BoneLocalRotations"/> と <see cref="BoneLocalPositions"/> 両対応コンストラクタ。
-        /// VMC などボーン回転・位置を native 形式として emit する MoCap ソースが使用する。
-        /// </summary>
-        /// <param name="timestamp">受信スレッドで打刻した Stopwatch ベース秒数。</param>
-        /// <param name="muscles">Muscle 値配列。</param>
-        /// <param name="rootPosition">Root 位置。</param>
-        /// <param name="rootRotation">Root 回転。</param>
-        /// <param name="boneLocalRotations">
-        /// 各ボーンの親ローカル回転辞書。null 可 (null の場合は従来の Muscles 経路で適用される)。
-        /// </param>
-        /// <param name="boneLocalPositions">
-        /// 各ボーンの親ローカル位置辞書。null 可 (null の場合は Transform.localPosition への書込を行わず rest pose を保持する)。
-        /// </param>
-        public HumanoidMotionFrame(
-            double timestamp,
-            float[] muscles,
-            Vector3 rootPosition,
-            Quaternion rootRotation,
-            IReadOnlyDictionary<HumanBodyBones, Quaternion> boneLocalRotations,
-            IReadOnlyDictionary<HumanBodyBones, Vector3> boneLocalPositions)
             : base(timestamp)
         {
             Muscles = muscles ?? Array.Empty<float>();
             RootPosition = rootPosition;
             RootRotation = rootRotation;
             BoneLocalRotations = boneLocalRotations;
-            BoneLocalPositions = boneLocalPositions;
         }
 
         /// <summary>
