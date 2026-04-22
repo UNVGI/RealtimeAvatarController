@@ -378,7 +378,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 10.5, 11.4_
   - _Boundary: .kiro/specs/mocap-vmc/design.md_
 
-- [ ] 8.2 [Test] 全体回帰: EditMode + PlayMode 全テスト green を確認
+- [x] 8.2 [Test] 全体回帰: EditMode + PlayMode 全テスト green を確認
   - `mocap-vmc` asmdef 配下の EditMode / PlayMode テストを全て実行し、全 green を確認する。
   - 並行して `slot-core` / `motion-pipeline` の既存テストに回帰が入っていないこと (Adapter 差替で `HumanoidMotionApplier` や `MotionCache` の契約に影響が出ていないこと) を確認する。
   - 観測可能な完了条件: Unity TestRunner のレポートで `mocap-vmc` 配下 + 隣接 Spec の EditMode / PlayMode 両方がすべて green。
