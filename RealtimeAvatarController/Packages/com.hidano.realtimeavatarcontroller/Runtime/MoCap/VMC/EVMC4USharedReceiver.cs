@@ -1,9 +1,29 @@
+using System;
+using System.Collections.Generic;
 using EVMC4U;
 using UnityEngine;
 using uOSC;
 
 namespace RealtimeAvatarController.MoCap.VMC
 {
+    /// <summary>
+    /// <see cref="EVMC4USharedReceiver"/> の <c>LateUpdate</c> Tick 駆動対象となる Adapter が実装する契約
+    /// (tasks.md 3.5 / design.md §5.1)。
+    /// </summary>
+    /// <remarks>
+    /// タスク 3.5 時点では具象実装 (<c>EVMC4UMoCapSource</c>) は Phase 4 で登場するため、
+    /// 本インタフェースを介して共有 Receiver 側は具象型に依存しない形で Tick 駆動を提供する。
+    /// Phase 4 の <c>EVMC4UMoCapSource</c> は本インタフェースを実装する。
+    /// </remarks>
+    internal interface IEVMC4UMoCapAdapter
+    {
+        /// <summary>LateUpdate 毎に呼び出される Tick。内部 Dictionary を snapshot して OnNext を発行する想定。</summary>
+        void Tick();
+
+        /// <summary>Tick 実行中に発生した例外を受け取り、Adapter 自身の ErrorChannel 経由で公開させる (要件 8.3)。</summary>
+        void HandleTickException(Exception exception);
+    }
+
     /// <summary>
     /// プロセスワイド単一の EVMC4U <see cref="ExternalReceiver"/> をホストする共有コンポーネント
     /// (design.md §4.3 / requirements.md 要件 2.1, 2.2, 2.3, 2.4, 4.4)。
@@ -35,6 +55,7 @@ namespace RealtimeAvatarController.MoCap.VMC
 
         private ExternalReceiver _receiver;
         private uOscServer _server;
+        private readonly HashSet<IEVMC4UMoCapAdapter> _subscribers = new HashSet<IEVMC4UMoCapAdapter>();
 
         /// <summary>共有 <see cref="ExternalReceiver"/> への read-only アクセス (design.md §4.3)。</summary>
         public ExternalReceiver Receiver => _receiver;
@@ -119,6 +140,71 @@ namespace RealtimeAvatarController.MoCap.VMC
 
             go.SetActive(true);
             return shared;
+        }
+
+        // --- Subscribe / LateUpdate Tick 駆動 (task 3.5 / 要件 4.3, 4.4, 8.3) ---
+
+        /// <summary>
+        /// <paramref name="adapter"/> を LateUpdate Tick の駆動対象に追加する。
+        /// 重複登録は <see cref="HashSet{T}"/> によって自動的に無視される。
+        /// </summary>
+        internal void Subscribe(IEVMC4UMoCapAdapter adapter)
+        {
+            if (adapter == null)
+            {
+                return;
+            }
+            _subscribers.Add(adapter);
+        }
+
+        /// <summary>
+        /// <paramref name="adapter"/> を LateUpdate Tick の駆動対象から除外する。
+        /// 未登録でも例外は投げない (冪等)。
+        /// </summary>
+        internal void Unsubscribe(IEVMC4UMoCapAdapter adapter)
+        {
+            if (adapter == null)
+            {
+                return;
+            }
+            _subscribers.Remove(adapter);
+        }
+
+        private void LateUpdate()
+        {
+            if (_subscribers.Count == 0)
+            {
+                return;
+            }
+
+            // 列挙中に Unsubscribe されても安全なようスナップショットを取る。
+            var snapshot = new IEVMC4UMoCapAdapter[_subscribers.Count];
+            _subscribers.CopyTo(snapshot);
+
+            for (var i = 0; i < snapshot.Length; i++)
+            {
+                var adapter = snapshot[i];
+                if (adapter == null)
+                {
+                    continue;
+                }
+                try
+                {
+                    adapter.Tick();
+                }
+                catch (Exception ex)
+                {
+                    // 他の Adapter の Tick を止めないよう、該当 Adapter のみに通知して続行する (要件 8.3)。
+                    try
+                    {
+                        adapter.HandleTickException(ex);
+                    }
+                    catch
+                    {
+                        // HandleTickException 自体で更に例外が起きても LateUpdate 全体は続行する。
+                    }
+                }
+            }
         }
 
         private void OnDestroy()

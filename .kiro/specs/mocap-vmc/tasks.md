@@ -151,7 +151,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Depends: 3.3_
   - _Boundary: Runtime/MoCap/VMC/EVMC4USharedReceiver.cs, slot-core RegistryLocator (read-only)_
 
-- [ ] 3.5 [Impl] Subscribe/Unsubscribe と LateUpdate による Adapter Tick 駆動
+- [x] 3.5 [Impl] Subscribe/Unsubscribe と LateUpdate による Adapter Tick 駆動
   - `public void Subscribe(EVMC4UMoCapSource adapter)` / `public void Unsubscribe(EVMC4UMoCapSource adapter)` を追加し、内部 `HashSet<EVMC4UMoCapSource>` で管理する。
   - `LateUpdate()` で登録済み Adapter 全件の `internal void Tick()` を呼び出す (要件 4.3 / 4.4)。
   - Adapter Tick 中の例外は `try/catch` で全捕捉し、該当 Adapter の `PublishError(VmcReceive, ex)` に委譲する (要件 8.3)。他の Adapter の Tick が止まらないようにする。
