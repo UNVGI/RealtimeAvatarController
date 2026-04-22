@@ -165,8 +165,18 @@ namespace RealtimeAvatarController.MoCap.VMC
 
         /// <inheritdoc />
         /// <remarks>
-        /// 4.3 時点では最小限の状態遷移のみ行う。<see cref="_rawSubject"/> の <c>OnCompleted</c> /
-        /// SharedReceiver からの Unsubscribe / Release は task 4.7 で追加される。
+        /// 処理フロー (design.md §5.2 / task 4.7):
+        /// <list type="number">
+        ///   <item>状態が <see cref="State.Disposed"/> なら即 return (冪等 / 要件 1.2)</item>
+        ///   <item><see cref="EVMC4USharedReceiver.Unsubscribe"/> で Tick 駆動から除外 (要件 4.5)</item>
+        ///   <item><see cref="EVMC4USharedReceiver.Release"/> で refCount を戻す
+        ///         (最後の Adapter だったら Shared GameObject ごと破棄される)</item>
+        ///   <item><see cref="_rawSubject"/>.OnCompleted() で購読者へ終端通知 (要件 4.5)</item>
+        ///   <item><see cref="_rawSubject"/>.Dispose() でリソース解放</item>
+        ///   <item>状態を <see cref="State.Disposed"/> に遷移</item>
+        /// </list>
+        /// <see cref="State.Uninitialized"/> からの呼び出しも冪等に扱い、
+        /// <see cref="_sharedReceiver"/> が未確保であれば skip する。
         /// </remarks>
         public void Shutdown()
         {
@@ -174,6 +184,16 @@ namespace RealtimeAvatarController.MoCap.VMC
             {
                 return;
             }
+
+            if (_sharedReceiver != null)
+            {
+                _sharedReceiver.Unsubscribe(this);
+                _sharedReceiver.Release();
+                _sharedReceiver = null;
+            }
+
+            _rawSubject.OnCompleted();
+            _rawSubject.Dispose();
 
             _state = State.Disposed;
         }

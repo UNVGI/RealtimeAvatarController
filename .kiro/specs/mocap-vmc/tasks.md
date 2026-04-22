@@ -244,7 +244,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.3, 4.6, 8.1, 8.3_
   - _Boundary: Runtime/MoCap/VMC/EVMC4UMoCapSource.cs_
 
-- [ ] 4.7 [Impl] `Shutdown()` / `Dispose()` 実装
+- [x] 4.7 [Impl] `Shutdown()` / `Dispose()` 実装
   - 処理フロー (design.md §5.2):
     1. 状態 `Disposed` なら即 return (冪等、要件 1.2)。
     2. `sharedReceiver.Unsubscribe(this)` で Tick 駆動から除外。
