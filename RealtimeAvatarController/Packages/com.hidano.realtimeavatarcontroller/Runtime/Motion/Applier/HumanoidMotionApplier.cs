@@ -41,6 +41,9 @@ namespace RealtimeAvatarController.Motion
         private Renderer[] _renderers;
         private bool _isFallbackHiding;
 
+        // --- 一時診断用 (X/Y 軸逆転仮説の切り分け後に削除) ---
+        private int _dbgLogCounter;
+
         /// <summary>
         /// コンストラクタ。
         /// </summary>
@@ -239,6 +242,27 @@ namespace RealtimeAvatarController.Motion
                     {
                         boneTf.localRotation = kv.Value;
                     }
+                }
+
+                // --- 一時診断: VMC 受信 rotation の生値をログ ---
+                _dbgLogCounter++;
+                if (_dbgLogCounter >= 60)  // 60 フレームに 1 回
+                {
+                    _dbgLogCounter = 0;
+                    if (boneRotations.TryGetValue(HumanBodyBones.LeftUpperArm, out var lArm))
+                    {
+                        var tf = _animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+                        Debug.Log($"[VmcDbg] LArm VMC raw=({lArm.x:F4},{lArm.y:F4},{lArm.z:F4},{lArm.w:F4}) euler={lArm.eulerAngles:F2} | Tf.localRot={tf?.localRotation.eulerAngles:F2}");
+                    }
+                    if (boneRotations.TryGetValue(HumanBodyBones.Hips, out var hips))
+                    {
+                        Debug.Log($"[VmcDbg] Hips VMC raw=({hips.x:F4},{hips.y:F4},{hips.z:F4},{hips.w:F4}) euler={hips.eulerAngles:F2}");
+                    }
+                    if (boneRotations.TryGetValue(HumanBodyBones.Head, out var head))
+                    {
+                        Debug.Log($"[VmcDbg] Head VMC raw=({head.x:F4},{head.y:F4},{head.z:F4},{head.w:F4}) euler={head.eulerAngles:F2}");
+                    }
+                    Debug.Log($"[VmcDbg] boneRotations count={boneRotations.Count} rootPos={humanoidFrame.RootPosition:F3} rootRot={humanoidFrame.RootRotation.eulerAngles:F2}");
                 }
             }
             else
