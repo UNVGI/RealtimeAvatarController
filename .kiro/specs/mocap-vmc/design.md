@@ -58,7 +58,7 @@
 - `RealtimeAvatarController.Core` (slot-core)
 - `RealtimeAvatarController.Motion` (motion-pipeline)
 - `EVMC4U` asmdef (Assets/EVMC4U/ 配下)
-- `com.hidano.uosc` (EVMC4U が GUID 参照で使用。Adapter は直接参照しないのが望ましい)
+- `com.hidano.uosc` (EVMC4U が GUID 参照で使用。加えて `EVMC4USharedReceiver` が `uOscServer.StopServer()` / `StartServer()` を直接呼び出し port 再バインドを決定的に行うため、本 asmdef からも `uOSC.Runtime` を直接参照する — §7.1 / §5.2)
 - `UniRx` (Subject / Publish / RefCount のために必要)
 
 ### Revalidation Triggers
@@ -497,7 +497,7 @@ public Quaternion LatestRootLocalRotation { get; private set; } = Quaternion.ide
 | 維持 | `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/VMCMoCapSourceConfig.cs` | 既存 (要件 5.1) |
 | 改変 | `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/VMCMoCapSourceFactory.cs` | `Create` を `EVMC4UMoCapSource` 生成に差替 |
 | 維持 | `Packages/com.hidano.realtimeavatarcontroller/Editor/MoCap/VMC/VmcMoCapSourceFactoryEditorRegistrar.cs` | 既存 (要件 6.2) |
-| 改変 | `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/RealtimeAvatarController.MoCap.VMC.asmdef` | `com.hidano.uosc` 直接参照を撤去 (EVMC4U 経由に集約)。`EVMC4U` asmdef 参照を追加 |
+| 改変 | `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/RealtimeAvatarController.MoCap.VMC.asmdef` | `EVMC4U` asmdef 参照を追加。`uOSC.Runtime` 参照は**保持** — `EVMC4USharedReceiver` が `uOscServer.StopServer()` / `StartServer()` を直接呼び出して port 再バインドを決定的に行うため (§5.2 参照)。実装上の参照一覧は `RealtimeAvatarController.Core` / `RealtimeAvatarController.Motion` / `uOSC.Runtime` / `UniRx` / `EVMC4U` の 5 つ |
 | 改変 | `Assets/EVMC4U/ExternalReceiver.cs` | §6 の最小パッチ |
 
 ### 7.2 削除対象 (要件 11.1 / 11.2)
