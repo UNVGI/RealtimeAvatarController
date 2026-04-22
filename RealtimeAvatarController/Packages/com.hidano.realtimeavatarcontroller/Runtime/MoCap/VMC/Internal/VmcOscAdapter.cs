@@ -91,7 +91,9 @@ namespace RealtimeAvatarController.MoCap.VMC.Internal
             }
 
             _serverObject = new GameObject("VmcOscAdapter.uOscServer");
-            _serverObject.hideFlags = HideFlags.HideAndDontSave;
+            // Hierarchy から確認できるように Hide は外して DontSave のみ保持する。
+            // Scene には保存されないが、デバッグ時に uOscServer の Status / Messages を Inspector で確認できる。
+            _serverObject.hideFlags = HideFlags.DontSave;
             if (Application.isPlaying)
             {
                 UnityEngine.Object.DontDestroyOnLoad(_serverObject);
