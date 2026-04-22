@@ -319,7 +319,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 11.1_
   - _Boundary: Runtime/MoCap/VMC/_
 
-- [ ] 6.2 [Delete] 旧自前実装に対応する EditMode / PlayMode テストを削除・再編
+- [x] 6.2 [Delete] 旧自前実装に対応する EditMode / PlayMode テストを削除・再編
   - 以下のテストを削除する (design.md §10.3, 要件 11.2):
     - `Tests/EditMode/mocap-vmc/VmcBoneMapperTests.cs`
     - `Tests/EditMode/mocap-vmc/VmcOscParserTests.cs`
