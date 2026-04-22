@@ -425,10 +425,10 @@ sequenceDiagram
 
 ### 6.1 Model=null 時のガード (受信のみ動作可)
 
-**対象**: `ProcessMessage` (現行 812–816 行付近):
+**対象**: `ProcessMessage` (Phase 2 適用前の旧位置: 812–816 行付近 / 適用後: 848–853 行のマーカーコメントブロック):
 
 ```csharp
-// 現行: Model または RootTransform が null なら以降全て無視
+// 旧挙動: Model または RootTransform が null なら以降全て無視
 if (Model == null || Model.transform == null || RootPositionTransform == null || RootRotationTransform == null)
 {
     return;
@@ -437,18 +437,18 @@ if (Model == null || Model.transform == null || RootPositionTransform == null ||
 
 **改変**: Root 系メッセージ (`/VMC/Ext/Root/Pos`) と Bone 系メッセージ (`/VMC/Ext/Bone/Pos`) で挙動を分ける。Bone 蓄積 (`HumanBodyBonesRotationTable` / `HumanBodyBonesPositionTable` への書込) は `Model == null` でも継続できるようにガードを外す。Transform 書込 (`animator.GetBoneTransform(bone).localRotation = rot` 系、`BoneSynchronize` / `BoneSynchronizeByTable` 経由) は既に `animator != null` / `Model != null` でガード済みなので変更不要。具体的には:
 
-- 上記の early-return ブロックを削除するか、`/VMC/Ext/Bone/Pos` と `/VMC/Ext/Root/Pos` のケースを先に評価してから Model ガードに入るようにリオーダーする
-- `Update()` / `LateUpdate()` → `Process()` 内の `StatusMessage = "Model not found."` + `return` (540–547 行) は維持するが、`BoneSynchronizeByTable()` を呼ばずに return する形を保つ (Model null の場合は Transform 書込をしない)
+- 上記 early-return ブロックは削除し、ProcessMessage 内 848–853 行にローカルパッチ意図を示すマーカーコメントを配置する。`/VMC/Ext/Root/Pos` (現 855–905 行付近) の Transform 書込ブロック内部に Model / RootTransform null ガードを個別に埋め戻す。`/VMC/Ext/Bone/Pos` 分岐 (現 955–975 行付近) は Dictionary 書込のみでガード不要。
+- `Update()` / `LateUpdate()` → `Process()` 内の `StatusMessage = "Model not found."` + `return` (現 577–583 行) は維持するが、`BoneSynchronizeByTable()` を呼ばずに return する形を保つ (Model null の場合は Transform 書込をしない)
 
 結果: Adapter が使うユースケース (`Model=null` 固定、受信のみ、Transform 書込なし) が成立する。既存の Model 有モード (EVMC4U 単独利用) の挙動は変えない。
 
 ### 6.2 内部 Dictionary / shutdown フラグの読取 API 公開
 
-**対象**:
+**対象** (Phase 2 適用後の現行行番号):
 
-- `private Dictionary<HumanBodyBones, Vector3> HumanBodyBonesPositionTable` (374)
-- `private Dictionary<HumanBodyBones, Quaternion> HumanBodyBonesRotationTable` (375)
-- `bool shutdown` (388)
+- `Dictionary<HumanBodyBones, Vector3> HumanBodyBonesPositionTable` (375)
+- `Dictionary<HumanBodyBones, Quaternion> HumanBodyBonesRotationTable` (376)
+- `bool shutdown` (389)
 
 **改変**: 読取専用アクセサを追加する (代入は内部のみ、データ構造は既存のままインスタンスを再利用する):
 
@@ -470,7 +470,7 @@ public Vector3 LatestRootLocalPosition { get; private set; }
 public Quaternion LatestRootLocalRotation { get; private set; } = Quaternion.identity;
 ```
 
-`/VMC/Ext/Root/Pos` 処理部 (818–881 行付近) で `LatestRootLocalPosition` / `LatestRootLocalRotation` に代入する 1 行を追加する (既存の `pos` / `rot` ローカル変数を利用)。これにより `RootPositionSynchronize=false` でも Adapter 側から Root 情報を取得できる。
+`/VMC/Ext/Root/Pos` 処理部 (現 855–905 行付近、代入箇所は 877–878 行) で `LatestRootLocalPosition` / `LatestRootLocalRotation` に代入する 1 行を追加する (既存の `pos` / `rot` ローカル変数を利用)。これにより `RootPositionSynchronize=false` でも Adapter 側から Root 情報を取得できる。
 
 ### 6.3 フィールドアクセス修飾子
 

@@ -371,7 +371,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
 - [ ] 8. mocap-vmc Spec 内ドキュメントと Traceability の更新
   - HANDOVER.md の更新は本 Spec のスコープ外 (ユーザー指示)。
 
-- [ ] 8.1 [Docs] `mocap-vmc` Spec 内ドキュメントの微修正
+- [x] 8.1 [Docs] `mocap-vmc` Spec 内ドキュメントの微修正
   - `design.md` の §6 以降で EVMC4U ソース改変の行番号が変わったら、実際の ExternalReceiver.cs 行番号に合わせて更新する (Task 2 系列の結果に依存)。
   - Requirements Traceability (§8) 上で、Task 側との対応関係が取れていることを確認する (マッピング漏れがあれば design.md §8 を補記、または本 tasks.md 側でフォロータスクを追加)。
   - 観測可能な完了条件: `design.md` 上の行番号参照が現在のソース状態と一致し、Requirements Traceability に空欄がない。
