@@ -6,7 +6,8 @@
     "UnityEditor.TestRunner",
     "RealtimeAvatarController.MoCap.VMC",
     "RealtimeAvatarController.Core",
-    "RealtimeAvatarController.Motion"
+    "RealtimeAvatarController.Motion",
+    "EVMC4U"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

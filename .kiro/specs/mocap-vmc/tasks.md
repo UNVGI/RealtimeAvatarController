@@ -186,7 +186,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 5.3, 7.5_
   - _Boundary: Tests/EditMode/mocap-vmc/ (EVMC4UMoCapSourceTests)_
 
-- [ ] 4.2 [Test] Adapter の Dictionary 注入 → OnNext 発行を PlayMode で検証するテスト先行作成
+- [x] 4.2 [Test] Adapter の Dictionary 注入 → OnNext 発行を PlayMode で検証するテスト先行作成
   - 以下の PlayMode テストを追加する (Task 2.5 の Setter / Task 3 の Shared Receiver を利用):
     - `EVMC4USharedReceiver.EnsureInstance()` → `InjectBoneRotationForTest(HumanBodyBones.LeftHand, q)` → 1 フレーム待機 (`yield return null`) → Adapter の `MotionStream` Subscription が `HumanoidMotionFrame` を 1 件受け取り、`BoneLocalRotations[LeftHand]` が注入値と一致する。
     - 再注入なしで次フレームが進んだ場合は OnNext が発行されない (要件 3.5 `_dirty` 判定)。
