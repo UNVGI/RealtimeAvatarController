@@ -354,10 +354,13 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.6, 11.3_
   - _Boundary: Tests/PlayMode/mocap-vmc/_
 
-- [ ] 7.2 [Research] Sample Scene の `SlotManagementDemo` が無改修で動作することの目視確認
+- [x] 7.2 [Research] Sample Scene の `SlotManagementDemo` が無改修で動作することの目視確認 (**DEFERRED TO USER** — 詳細は [handover-7.2.md](./handover-7.2.md) 参照)
   - `Assets/Samples/Realtime Avatar Controller/0.1.0/UI Sample/Scenes/SlotManagementDemo.unity` および `Packages/com.hidano.realtimeavatarcontroller/Samples~/UI/Scenes/SlotManagementDemo.unity` の両方で、Play 時に `VMCMoCapSourceConfig.asset` / `SlotSettings.asset` 無改修でも Slot 追加・削除・差替が動作することを目視確認する。
   - 改修が必要な箇所があれば「本 Spec スコープ外」として別 Spec / 別 Issue 化し、本タスクはその旨を記録するのみとする (要件 7.6 / 11.3)。
   - 観測可能な完了条件: 動作確認メモ (green/red + スクリーンショットまたは手順ログ) が残り、red の場合はフォローアップ Issue が作成されている。
+  - **本タスクは Scene Play + UI 操作による目視確認を伴うため CLI/headless の自動化では実行不能**。
+    プログラマティック経路はタスク 7.1 (`SampleSceneSmokeTests.cs`) でカバー済み。
+    ユーザーによる実機 Play テストが必要であり、手順は `.kiro/specs/mocap-vmc/handover-7.2.md` に記録した。
   - _Requirements: 7.6, 11.3_
   - _Boundary: Assets/Samples/.../SlotManagementDemo.unity, Samples~/UI/Scenes/SlotManagementDemo.unity_
 
