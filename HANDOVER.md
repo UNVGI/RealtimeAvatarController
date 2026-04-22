@@ -76,7 +76,6 @@
 - **`origin/main` へ push**: 本セッションの成果 (60+ commit) を remote に反映
 
 ### 優先度: 中
-- **Finding 1 対処**: design.md §7.1 の uOSC.Runtime 記述を「撤去」→「保持 + `EVMC4USharedReceiver` が uOscServer を直接制御するため」に更新 (doc と impl の整合)
 - **EVMC4U ローカルパッチを `.patch` 化**: `Assets/EVMC4U/ExternalReceiver.cs` の 3 箇所パッチ (header L1 + accessors L391-424 + inline L848-878) を `.kiro/specs/mocap-vmc/evmc4u.patch` に artifact 化 (validate-impl R-6)
 
 ### 優先度: 低
