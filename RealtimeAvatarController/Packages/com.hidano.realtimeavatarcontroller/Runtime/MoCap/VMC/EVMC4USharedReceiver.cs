@@ -130,6 +130,32 @@ namespace RealtimeAvatarController.MoCap.VMC
             }
         }
 
+        // --- Domain Reload OFF 向け静的クリア (task 3.3 / 要件 6.4) ---
+
+        /// <summary>
+        /// Enter Play Mode 最適化 (Domain Reload OFF) 下でも static フィールドが
+        /// 持ち越されないよう、<see cref="RuntimeInitializeLoadType.SubsystemRegistration"/> 段で
+        /// <c>s_instance</c> / <c>s_refCount</c> を強制的にリセットする。
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// GameObject への参照は触らない。Unity はこの時点で旧シーン上の GameObject を既に破棄済みなので、
+        /// ここで追加の <c>Destroy</c> を呼ぶと二重破棄・null 参照の温床になるためである
+        /// (design.md §4.3 / §13)。
+        /// </para>
+        /// <para>
+        /// 本処理と <see cref="RealtimeAvatarController.Core.RegistryLocator.ResetForTest"/> は
+        /// 同じ <c>SubsystemRegistration</c> タイミングで実行されるが、いずれも static を null に戻すだけで
+        /// 相互依存が無いため実行順序は不問 (task 3.4 参照)。
+        /// </para>
+        /// </remarks>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStaticsOnSubsystemRegistration()
+        {
+            s_instance = null;
+            s_refCount = 0;
+        }
+
         // --- テスト専用 API (task 3.1 / 3.3) ---
 
         /// <summary>

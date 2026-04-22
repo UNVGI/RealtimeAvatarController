@@ -136,7 +136,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 2.1, 2.2, 2.3, 2.4_
   - _Boundary: Runtime/MoCap/VMC/EVMC4USharedReceiver.cs_
 
-- [ ] 3.3 [Impl] Domain Reload OFF 下の静的クリア処理を追加
+- [x] 3.3 [Impl] Domain Reload OFF 下の静的クリア処理を追加
   - `[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]` 属性のメソッドで `s_instance = null` / `s_refCount = 0` を強制初期化する (design.md §4.3)。
   - 同じクラス内の他の静的クリアタイミングと競合しないよう、static クリアのみを行い GameObject への参照は触らない (静的値は Unity 側が既にシーン破棄している前提)。
   - 観測可能な完了条件: PlayMode 停止 → 再開を複数回行っても `EnsureInstance()` が毎回新しい GameObject を生成でき、古い参照が漏れない (後続 PlayMode テストで検証)。
