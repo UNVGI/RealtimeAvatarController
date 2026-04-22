@@ -269,7 +269,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
 - [ ] 5. `VMCMoCapSourceFactory` を `EVMC4UMoCapSource` 生成に差し替える
   - typeId `"VMC"` 維持・属性ベース自己登録維持・`VMCMoCapSourceConfig` 保持 (design.md §4.5)。
 
-- [ ] 5.1 [Test] Factory の Adapter 生成型差替テスト先行作成
+- [x] 5.1 [Test] Factory の Adapter 生成型差替テスト先行作成
   - 既存 `VmcConfigCastTests.cs` / `VmcFactoryRegistrationTests.cs` を再利用して次をカバーする:
     - `VMCMoCapSourceFactory.Create(VMCMoCapSourceConfig)` の戻り値型が `EVMC4UMoCapSource` であること (型アサーション)。
     - 別型の `MoCapSourceConfigBase` 派生を渡すと `ArgumentException` (メッセージに実型名を含む)。

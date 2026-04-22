@@ -7,18 +7,18 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 {
     /// <summary>
     /// VMCMoCapSourceFactory.Create() のキャスト検証 EditMode テスト
-    /// (tasks.md タスク 2-1 / タスク 10-2 最終完成 / design.md §5.3, §10.1 /
-    /// requirements.md 要件 9-3, 9-4, 9-11, 9-12, 10-2)。
+    /// (tasks.md タスク 5.1 / design.md §4.5 /
+    /// requirements.md 要件 5.2, 5.4, 5.5)。
     ///
     /// <para>
     /// 検証対象:
     ///   - VMCMoCapSourceConfig を MoCapSourceConfigBase として Create() に渡した場合、
-    ///     VmcMoCapSource が正常に生成される (要件 9-3, 9-12 / シナリオ X の等価性)
+    ///     EVMC4UMoCapSource が正常に生成される (要件 5.5 / typeId "VMC" の新 Adapter 生成)
     ///   - 別の MoCapSourceConfigBase 派生型を渡した場合、ArgumentException がスローされ、
-    ///     受け取った型名が例外メッセージに含まれる (要件 9-4)
-    ///   - null を渡した場合、ArgumentException がスローされる (要件 9-4)
+    ///     受け取った型名が例外メッセージに含まれる (要件 5.4)
+    ///   - null を渡した場合、ArgumentException がスローされる (要件 5.4)
     ///   - ScriptableObject.CreateInstance&lt;VMCMoCapSourceConfig&gt;() で動的生成した Config を
-    ///     渡した場合、VmcMoCapSource が正常に生成される (要件 9-11, 9-12 / シナリオ Y)
+    ///     渡した場合、EVMC4UMoCapSource が正常に生成される (要件 5.2 / シナリオ Y)
     /// </para>
     ///
     /// <para>
@@ -58,16 +58,16 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         }
 
         [Test]
-        public void Create_WithVMCMoCapSourceConfigAsBase_ReturnsVmcMoCapSource()
+        public void Create_WithVMCMoCapSourceConfigAsBase_ReturnsEVMC4UMoCapSource()
         {
             var factory = new VMCMoCapSourceFactory();
             MoCapSourceConfigBase config = _config;
 
             var source = factory.Create(config);
 
-            Assert.IsNotNull(source, "VmcMoCapSource は null でないインスタンスが返されるべき。");
-            Assert.IsInstanceOf<VmcMoCapSource>(source,
-                "VMCMoCapSourceConfig を受け取った Factory は VmcMoCapSource を返すべき。");
+            Assert.IsNotNull(source, "EVMC4UMoCapSource は null でないインスタンスが返されるべき。");
+            Assert.IsInstanceOf<EVMC4UMoCapSource>(source,
+                "VMCMoCapSourceConfig を受け取った Factory は EVMC4UMoCapSource を返すべき (tasks.md 5.2 / 要件 5.5)。");
         }
 
         [Test]
@@ -79,7 +79,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
             var ex = Assert.Throws<ArgumentException>(() => factory.Create(_otherConfig));
 
             StringAssert.Contains(nameof(OtherMoCapSourceConfig), ex.Message,
-                "型不一致時の ArgumentException メッセージには受け取った型名が含まれるべき (要件 9-4)。");
+                "型不一致時の ArgumentException メッセージには受け取った型名が含まれるべき (要件 5.4)。");
         }
 
         [Test]
@@ -88,13 +88,13 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
             var factory = new VMCMoCapSourceFactory();
 
             Assert.Throws<ArgumentException>(() => factory.Create(null),
-                "null を渡された場合は ArgumentException をスローすべき (要件 9-4)。");
+                "null を渡された場合は ArgumentException をスローすべき (要件 5.4)。");
         }
 
         [Test]
-        public void Create_WithDynamicallyCreatedConfig_ReturnsVmcMoCapSource()
+        public void Create_WithDynamicallyCreatedConfig_ReturnsEVMC4UMoCapSource()
         {
-            // シナリオ Y (要件 9-11, 9-12): ScriptableObject.CreateInstance で動的生成した Config を
+            // シナリオ Y (要件 5.2): ScriptableObject.CreateInstance で動的生成した Config を
             // SO アセット経由のインスタンスと同一コードパスで扱えること。
             var dynamicConfig = ScriptableObject.CreateInstance<VMCMoCapSourceConfig>();
             try
@@ -103,9 +103,9 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 
                 var source = factory.Create(dynamicConfig);
 
-                Assert.IsNotNull(source, "動的生成 Config でも VmcMoCapSource が返されるべき。");
-                Assert.IsInstanceOf<VmcMoCapSource>(source,
-                    "動的生成 Config は SO アセットと同一コードパスで VmcMoCapSource を生成すべき (要件 9-12)。");
+                Assert.IsNotNull(source, "動的生成 Config でも EVMC4UMoCapSource が返されるべき。");
+                Assert.IsInstanceOf<EVMC4UMoCapSource>(source,
+                    "動的生成 Config は SO アセットと同一コードパスで EVMC4UMoCapSource を生成すべき (要件 5.2 / 5.5)。");
             }
             finally
             {
