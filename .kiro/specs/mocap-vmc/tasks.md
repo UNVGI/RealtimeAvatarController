@@ -280,7 +280,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 5.2, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 12.2_
   - _Boundary: Tests/EditMode/mocap-vmc/_
 
-- [ ] 5.2 [Impl] `VMCMoCapSourceFactory.Create` の差替
+- [x] 5.2 [Impl] `VMCMoCapSourceFactory.Create` の差替
   - `Create(MoCapSourceConfigBase)` 内の `new VmcMoCapSource(...)` を `new EVMC4UMoCapSource(slotId: string.Empty, errorChannel: RegistryLocator.ErrorChannel)` に差し替える。
   - `const string VmcSourceTypeId = "VMC"` を維持する (要件 5.4 / 11.3)。
   - `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` / Editor 側 `[InitializeOnLoadMethod]` 自己登録のコードは既存のままとし、`RegistryConflictException` の握り潰さない挙動を維持する (要件 6.1 / 6.2 / 6.3)。
