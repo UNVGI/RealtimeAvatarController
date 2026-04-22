@@ -843,8 +843,11 @@ namespace RealtimeAvatarController.Motion
         // VMC など「ボーン回転クォータニオンを native 形式として emit する」MoCap ソースが使用する。
         // null または Count == 0 の場合は従来の Muscles 経路でのみ適用する。
         // 非 null かつ Count > 0 の場合、Applier は MainThread で
-        //   Transform.localRotation への書込 → HumanPoseHandler.GetHumanPose で Muscle 逆変換 → SetHumanPose
-        // の経路で適用する (Muscles は無視される)。
+        //   Animator.GetBoneTransform(bone).localRotation = rotation の直接書込
+        // を行う (HumanPoseHandler は使用しない)。Muscles は無視される。
+        // 【M-3 途中の実装方針撤回】 初期方針では "Transform 書込 → GetHumanPose で逆算 → SetHumanPose で
+        // 再構築" の経路を想定したが、Humanoid Muscle の近似誤差でボーン角度がずれる問題が発生したため、
+        // Transform.localRotation を直接書き込む方針 (EVMC4U など業界標準) に変更した (2026-04-22)。
         public IReadOnlyDictionary<HumanBodyBones, Quaternion> BoneLocalRotations { get; }
 
         // true: 有効フレーム (Muscles が有効 or BoneLocalRotations が有効)
@@ -884,9 +887,14 @@ namespace RealtimeAvatarController.Motion
 **M-3 合意変更の経緯** (2026-04-22):
 - VMC プロトコルは `/VMC/Ext/Bone/Pos` で「各ボーンの親ローカル回転クォータニオン」を送信する
 - Unity の Muscle 値は「ボーンごとに固有の軸で正規化された 3 DoF 値」であり、単純な Euler 角からの変換は意味的に不正確 (各ボーンの muscle axis / rest pose を考慮しないため)
-- 正確な変換には `HumanPoseHandler.GetHumanPose` が必要だが、これは Unity MainThread 限定 API のため、受信ワーカースレッド上では呼び出せない
-- 結果、VMC ソースから出た `HumanoidMotionFrame.Muscles` は実質的にゼロ相当となり、Applier が SetHumanPose 適用時に Hips 以外の骨がデフォルト姿勢のまま固まる実害が発生
-- 解決策として `BoneLocalRotations` フィールドを追加し、変換責務をワーカー → MainThread (Applier) に移動することで合意
+- 既存実装 (`VmcFrameBuilder.WriteBoneMuscles`) は `Quaternion.eulerAngles / 180f` で muscle を作成しており、Hips (Root 経路) 以外のボーンが実質ほぼゼロ値となって動かない実害が発生
+- 解決策として `BoneLocalRotations` フィールドを追加し、変換責務をワーカースレッド (`VmcFrameBuilder`) → MainThread (`HumanoidMotionApplier`) に移動することで合意
+
+**M-3 実装方針の途中修正** (2026-04-22 同日):
+- 初期実装: MainThread で `Transform.localRotation` へ VMC rotation を書込 → `HumanPoseHandler.GetHumanPose` で Muscle 逆算 → `SetHumanPose` で再構築
+- 問題: GetHumanPose は Humanoid rig の constraint を通して「近似 muscle」を返すため、書き込んだ rotation と SetHumanPose 後のボーン姿勢が一致しない。さらに GetHumanPose の内部キャッシュで更新頻度が落ち、数十秒に 1 回しか反映されない現象が発生
+- 撤回後の方針: `Animator.GetBoneTransform(bone).localRotation = rotation` の直接書込。HumanPoseHandler / Muscle パスは BoneLocalRotations 経路では完全にバイパスする。EVMC4U などの業界標準実装と同じ方式
+- 将来の blending / retargeting 要求は、BoneLocalRotations 辞書のレベルで `Quaternion.Slerp` を適用する別経路で対応する (Muscle pipeline への統合にはこだわらない)
 
 #### Generic 向け中立表現 (初期段階: 抽象のみ)
 

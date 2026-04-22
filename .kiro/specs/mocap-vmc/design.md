@@ -774,7 +774,7 @@ sequenceDiagram
 |---------|---------|
 | **メインスレッド** | `Initialize()` / `Shutdown()` / `Dispose()` の呼び出し |
 | **メインスレッド** | MotionCache でのフレーム受信 (`.ObserveOnMainThread()` 適用後) |
-| **メインスレッド** (M-3) | BoneLocalRotations → Muscle 逆変換 (`Animator.GetBoneTransform` / `HumanPoseHandler.GetHumanPose`)。**Applier** の責務 (motion-pipeline §7.1.1) |
+| **メインスレッド** (M-3, 2026-04-22 修正版) | BoneLocalRotations の `Animator.GetBoneTransform(bone).localRotation` への直接書込。**Applier** の責務 (motion-pipeline §7.1.1)。HumanPoseHandler は経路 A では使用しない |
 | **ワーカースレッド** | UDP パケット受信・OSC パース (uOSC 内部処理) |
 | **ワーカースレッド** | OSC メッセージのアドレスルーティング (`VmcMessageRouter`) |
 | **ワーカースレッド** | HumanoidMotionFrame 組み立て (`VmcFrameBuilder`) — **M-3 更新**: BoneLocalRotations dict の蓄積のみ (Muscle 変換は MainThread 責務) |

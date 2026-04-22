@@ -23,9 +23,9 @@ namespace RealtimeAvatarController.Motion
     /// 再設定して描画を復帰する。
     /// </para>
     /// <para>
-    /// <b>(M-3) 適用経路の分岐</b>: <see cref="HumanoidMotionFrame.BoneLocalRotations"/> の有無で分岐する。
+    /// <b>(M-3 / 2026-04-22 修正版) 適用経路の分岐</b>: <see cref="HumanoidMotionFrame.BoneLocalRotations"/> の有無で分岐する。
     /// <list type="bullet">
-    ///   <item><description>BoneLocalRotations が非 null かつ Count &gt; 0: Transform.localRotation 書込 → GetHumanPose で Muscle 逆変換 → SetHumanPose</description></item>
+    ///   <item><description>BoneLocalRotations が非 null かつ Count &gt; 0: Avatar root の position/rotation と各 bone の localRotation に直接書込 (HumanPoseHandler バイパス)</description></item>
     ///   <item><description>それ以外: 従来の Muscles 直接経路 (SetHumanPose に muscles + Root を渡す)</description></item>
     /// </list>
     /// 詳細は motion-pipeline design.md §7.1.1 参照。
@@ -211,7 +211,8 @@ namespace RealtimeAvatarController.Motion
 
         /// <summary>
         /// フレームを Humanoid アバターへ適用する。
-        /// <see cref="HumanoidMotionFrame.BoneLocalRotations"/> の有無で経路が分岐する (M-3)。
+        /// <see cref="HumanoidMotionFrame.BoneLocalRotations"/> の有無で経路が分岐する
+        /// (M-3 / 2026-04-22 修正版: 経路 A は Transform 直接書込)。
         /// </summary>
         private void ApplyInternal(HumanoidMotionFrame humanoidFrame)
         {
@@ -220,9 +221,17 @@ namespace RealtimeAvatarController.Motion
 
             if (useBoneRotationPath && _animator != null)
             {
-                // === 経路 A: BoneLocalRotations 経由 ===
-                // 1. 受信した parent-local rotation を各 bone の Transform.localRotation に書き込む
-                //    (直後の GetHumanPose が Muscle 値を逆算する前提)
+                // === 経路 A: BoneLocalRotations 経由 (Transform 直接書込) ===
+                // HumanPoseHandler の Muscle 逆算経路では近似誤差でボーン姿勢がずれるため、
+                // VMC など native な parent-local rotation を送るソースでは Transform を直接更新する
+                // (motion-pipeline design.md §7.1.1 / contracts.md §2.2 M-3 方針修正)。
+
+                // 1. Root: アバターの root Transform (Animator.transform) に position / rotation を書込む
+                var avatarRootTf = _animator.transform;
+                avatarRootTf.localPosition = humanoidFrame.RootPosition;
+                avatarRootTf.localRotation = humanoidFrame.RootRotation;
+
+                // 2. 各ボーンの parent-local rotation を Animator.GetBoneTransform().localRotation に直接書込む
                 foreach (var kv in boneRotations)
                 {
                     var boneTf = _animator.GetBoneTransform(kv.Key);
@@ -231,16 +240,6 @@ namespace RealtimeAvatarController.Motion
                         boneTf.localRotation = kv.Value;
                     }
                 }
-
-                // 2. 書き換えた Transform 状態から HumanPose を逆算 (muscles が Unity 規格値になる)
-                _poseHandler.GetHumanPose(ref _workPose);
-
-                // 3. Root を上書き
-                _workPose.bodyPosition = humanoidFrame.RootPosition;
-                _workPose.bodyRotation = humanoidFrame.RootRotation;
-
-                // 4. 最終適用 (Humanoid rig 制約を通した pose 再構築)
-                _poseHandler.SetHumanPose(ref _workPose);
             }
             else
             {

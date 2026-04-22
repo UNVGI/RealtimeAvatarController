@@ -568,31 +568,30 @@ HumanoidMotionApplier
 
 > **_errorChannel を持たない設計**: ApplyFailure の ErrorChannel 発行責務は SlotManager が担う (§9 参照)。Applier は例外を throw するだけであり、`ISlotErrorChannel` への参照を保持しない。これにより Applier の依存が最小化され、単体テストでのモック設定が不要になる。
 
-### 7.1.1 ApplyInternal 分岐 (M-3 追加)
+### 7.1.1 ApplyInternal 分岐 (M-3 / 2026-04-22 修正版)
 
 `ApplyInternal(HumanoidMotionFrame humanoidFrame)` は `humanoidFrame.BoneLocalRotations` の有無で 2 経路に分岐する。
+**経路 A は HumanPoseHandler を使用せず Transform に直接書き込む** (2026-04-22 撤回修正版)。
 
 **経路 A (BoneLocalRotations 経由 / VMC 等 native bone rotation ソース)**:
 
 ```csharp
-// 1. 各ボーンの親ローカル回転を Transform にそのまま書き込む
-//    (SetHumanPose より先に書くことで、直後の GetHumanPose で localRotation → muscle 値の逆変換が行える)
+// 1. Root: アバターの root Transform (Animator の GameObject) に position / rotation を直接書き込む。
+//    VMC /VMC/Ext/Root/Pos の値はアバター全体の位置・向きを表す (Unity 座標系)。
+var avatarRootTf = _animator.transform;
+avatarRootTf.localPosition = humanoidFrame.RootPosition;
+avatarRootTf.localRotation = humanoidFrame.RootRotation;
+
+// 2. 各ボーンの parent-local rotation を Animator.GetBoneTransform().localRotation に直接書き込む。
+//    HumanPoseHandler / Muscle system はバイパスする (Humanoid rig constraint の近似誤差を回避)。
 foreach (var kv in humanoidFrame.BoneLocalRotations)
 {
     var boneTf = _animator.GetBoneTransform(kv.Key);
-    if (boneTf != null) boneTf.localRotation = kv.Value;
+    if (boneTf != null)
+    {
+        boneTf.localRotation = kv.Value;
+    }
 }
-
-// 2. Transform の現ポーズから HumanPose (muscles) を逆算
-var pose = new HumanPose();
-_poseHandler.GetHumanPose(ref pose);
-
-// 3. Root は BoneLocalRotations に含まれない直接値で上書き
-pose.bodyPosition = humanoidFrame.RootPosition;
-pose.bodyRotation = humanoidFrame.RootRotation;
-
-// 4. 最終適用 (Humanoid rig 制約に従った muscle ベースの pose 再構築)
-_poseHandler.SetHumanPose(ref pose);
 ```
 
 **経路 B (従来: Muscles 直接経路)**:
@@ -612,9 +611,15 @@ _poseHandler.SetHumanPose(ref pose);
 - `humanoidFrame.BoneLocalRotations != null && humanoidFrame.BoneLocalRotations.Count > 0` → 経路 A
 - それ以外 → 経路 B
 
-**経路 A での注意**:
-- `Transform.localRotation` への書込は一時的。直後の `SetHumanPose` で Humanoid rig constraint を通した最終 pose で上書きされる
-- よって BoneLocalRotations と Muscle システムの食い違い (例: 骨の rest pose オフセット) は Unity 側で自動補正される
+**経路 A (Transform 直接書込) の根拠**:
+- VMC プロトコルの bone rotation は Unity の `Transform.localRotation` と同じセマンティクス (親ローカル回転)
+- `HumanPoseHandler.GetHumanPose` を経由すると Humanoid rig constraint の近似で muscle 値がずれ、結果的に元の rotation と異なるポーズになる問題が確認された (contracts.md §2.2 M-3 実装方針の途中修正を参照)
+- EVMC4U など VMC 業界標準実装も Transform 直接書込方式を採用しており整合する
+- `SlotManagerBehaviour.LateUpdate` で呼ばれるため Unity `Animator.Update` (Update フェーズ) より後に書き込まれ、同フレーム内で別の系統が上書きすることはない
+
+**経路 A の副作用**:
+- Humanoid rig の Muscle constraint を通さないため、非常識な rotation (関節の可動域外) を指定すると骨折れ表示になる可能性がある。VMC 送信側が妥当な rotation を送ってくる前提
+- `_lastGoodPose` は経路 A 完了後に `HumanPoseHandler.GetHumanPose` で Transform 状態から取得する (Fallback.HoldLastPose 用の資料保持)
 
 ### 7.2 HumanPoseHandler の初期化・破棄
 
