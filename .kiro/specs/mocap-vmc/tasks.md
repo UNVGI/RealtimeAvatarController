@@ -304,7 +304,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
 - [ ] 6. 旧 VMC 自前実装ファイルを削除・関連テストを再編
   - 置き換えが安全に行えることを 5 系統までで担保してから削除する (要件 11.1 / 11.2)。
 
-- [ ] 6.1 [Delete] 旧自前実装ソースを削除
+- [x] 6.1 [Delete] 旧自前実装ソースを削除
   - 以下ファイルを `.meta` とともに削除する (design.md §7.2):
     - `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/VmcMoCapSource.cs`
     - `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/AssemblyInfo.cs`
