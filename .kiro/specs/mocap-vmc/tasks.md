@@ -330,7 +330,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 11.2_
   - _Boundary: Tests/EditMode/mocap-vmc/, Tests/PlayMode/mocap-vmc/_
 
-- [ ] 6.3 [Refactor] asmdef 依存の再整理
+- [x] 6.3 [Refactor] asmdef 依存の再整理
   - `RealtimeAvatarController.MoCap.VMC.asmdef` の `references` から `com.hidano.uosc` 直接参照を撤去し、代わりに `EVMC4U` asmdef を追加する (design.md §7.1)。
   - UniRx は必要 (Subject / Publish / RefCount) のため残す。
   - 観測可能な完了条件: アセンブリ定義 Inspector 上で `com.hidano.uosc` 直接参照が解除され、EVMC4U asmdef GUID が参照一覧に追加されている。コンパイルが通る。
