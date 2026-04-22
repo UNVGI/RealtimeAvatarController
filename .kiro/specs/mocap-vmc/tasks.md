@@ -115,7 +115,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
 - [ ] 3. プロセスワイド単一の EVMC4U 受信コンポーネントを管理するヘルパー
   - `DontDestroyOnLoad` GameObject 1 個を refcount で生存管理する MonoBehaviour (design.md §4.3)。`RootPositionSynchronize=false` / `RootRotationSynchronize=false` を初期化時に強制する。
 
-- [ ] 3.1 [Test] 参照カウント / 単一性 / リセットに関する EditMode テスト先行作成
+- [x] 3.1 [Test] 参照カウント / 単一性 / リセットに関する EditMode テスト先行作成
   - 以下のテストを追加する (実装未着手のため赤でよい):
     - `EnsureInstance()` を 2 回呼ぶと refCount が 2 になり、同一 `ExternalReceiver` インスタンスを返す。
     - `Release()` を 2 回呼ぶと GameObject が Destroy される (次フレームまでに `(object)instance == null` となる)。
