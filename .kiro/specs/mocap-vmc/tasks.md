@@ -385,7 +385,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 11.3, 11.4, 12.1, 12.2, 12.3, 12.4, 12.5_
   - _Boundary: Tests/EditMode/, Tests/PlayMode/_
 
-- [ ] 8.3 [Research] 開発時に判明したがスコープ外とする事項の記録
+- [x] 8.3 [Research] 開発時に判明したがスコープ外とする事項の記録
   - 本 Spec 作業中に発見された issue (EVMC4U アップデート時の改変再適用手順・BlendShape 経由の将来課題・port 再バインドコスト) を、本 Spec の `design.md` §13 または別の内部メモに記録する (design.md 既存記述の範囲内で十分であれば追記不要)。
   - 観測可能な完了条件: 追加が必要な懸念が出た場合に `design.md §13` に 1〜3 行で反映されている、または追記不要と判断されたログがある。
   - _Requirements: 11.1, 11.5_

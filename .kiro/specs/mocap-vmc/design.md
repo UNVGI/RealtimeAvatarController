@@ -756,6 +756,12 @@ flowchart TB
 - **Domain Reload OFF + PlayMode 停止**: `EVMC4USharedReceiver` の static フィールドが残存する懸念に対して `RuntimeInitializeOnLoadMethod(SubsystemRegistration)` で明示クリアする
 - **EVMC4U Inspector のパフォーマンス**: `ExternalReceiver` は大量の SerializeField を持つため Inspector 描画コストは高いが、`EVMC4USharedReceiver` は DontDestroyOnLoad GameObject に貼るだけでユーザー操作対象ではないため影響は限定的
 
+### 13.2 Phase 1-7 作業中に特定したスコープ外事項 (task 8.3 追補)
+
+- **port 再バインドコストのベンチマーク**: `StopServer`/`StartServer` のコスト計測は本 Spec では実施しない (上記 §13 の受容方針に合流)。将来 UI 上でポート変更操作が頻繁化する要件が出てきた場合のみ別 Spec で扱う。
+- **BlendShape / 表情経由の MotionFrame 拡張**: 本 Spec は `BoneLocalRotations` 経路のみを対象とし、EVMC4U が内部で BlendShape 適用を行う挙動には干渉しない (要件 3.7 / 設計 §4.2)。`HumanoidMotionFrame` を BlendShape 値搬送へ拡張する要求が発生した場合は motion-pipeline 側の契約変更を伴うため別 Spec として起票する。
+- **EVMC4U アップデート時のローカルパッチ再適用ドリフト**: 次回 `Assets/EVMC4U/` を `.unitypackage` 等で再インポートした場合、§6 のローカル改変 (Model=null ガード撤去 / 読取 API / Root キャッシュ / テスト注入 Setter) は失われる。`ExternalReceiver.cs` 冒頭のマーカーコメントと本 design.md §6 の差分手順書を頼りに手動再適用する運用とし、自動化 (パッチファイル化や fork リポジトリ化) は本 Spec のスコープ外。
+
 ### 13.1 `EVMC4USharedReceiver` 静的クリアと `RegistryLocator.ResetForTest()` の実行順 (task 3.4 結論)
 
 **結論**: 両者は互いに独立 (相互依存なし) なため、`SubsystemRegistration` タイミングでの実行順に依存しない。
