@@ -47,7 +47,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 10.2, 10.5_
   - _Boundary: Packages/manifest.json_
 
-- [ ] 1.2 [Docs] `_shared/contracts.md` のワーカースレッド記述を訂正する
+- [x] 1.2 [Docs] `_shared/contracts.md` のワーカースレッド記述を訂正する
   - 以下の箇所で「受信ワーカースレッド」「ワーカースレッド (`VmcFrameBuilder`)」と書かれた記述を、「uOSC の `onDataReceived` は Unity MainThread で発火する」「`mocap-vmc` は MainThread 受信 + LateUpdate Tick emit のモデルを取る」旨に修正する。
     - `Timestamp` 欄 (打刻タイミング): 「受信スレッド上で」と表現を一般化し、VMC では MainThread である旨を補記。
     - `BoneLocalRotations` の経緯パラグラフ: 「変換責務をワーカースレッドから MainThread に移動」の表現を、M-3 追補と整合する形に置き換える。

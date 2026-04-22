@@ -799,7 +799,10 @@ namespace RealtimeAvatarController.Motion
         // 受信タイムスタンプ (Stopwatch ベース monotonic、double 秒単位)
         // 値: Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency で算出
         // 基準: App 起動時 (Stopwatch 起動基準の相対値)
-        // 打刻タイミング: 受信ワーカースレッド上でフレーム構築時
+        // 打刻タイミング: MoCap ソースの受信スレッド上でフレーム構築時
+        //   (Unity メインスレッド API 不使用のためどのスレッドから呼んでも安全)
+        //   VMC (mocap-vmc) は uOSC の onDataReceived が MainThread で発火するため
+        //   受信スレッド = MainThread となり、LateUpdate Tick で OnNext を emit する
         // 注意: プロセス間比較不可 (相対値のため)
         public double Timestamp { get; }
 
@@ -888,7 +891,7 @@ namespace RealtimeAvatarController.Motion
 - VMC プロトコルは `/VMC/Ext/Bone/Pos` で「各ボーンの親ローカル回転クォータニオン」を送信する
 - Unity の Muscle 値は「ボーンごとに固有の軸で正規化された 3 DoF 値」であり、単純な Euler 角からの変換は意味的に不正確 (各ボーンの muscle axis / rest pose を考慮しないため)
 - 既存実装 (`VmcFrameBuilder.WriteBoneMuscles`) は `Quaternion.eulerAngles / 180f` で muscle を作成しており、Hips (Root 経路) 以外のボーンが実質ほぼゼロ値となって動かない実害が発生
-- 解決策として `BoneLocalRotations` フィールドを追加し、変換責務をワーカースレッド (`VmcFrameBuilder`) → MainThread (`HumanoidMotionApplier`) に移動することで合意
+- 解決策として `BoneLocalRotations` フィールドを追加し、変換責務を MoCap ソース側 (VMC native 回転の辞書化) から Applier 側の MainThread (`HumanoidMotionApplier` による `Transform.localRotation` 直接書込) に移動することで合意。mocap-vmc では uOSC `onDataReceived` が MainThread で発火するため、ソース側の「辞書化」も実質 MainThread で行われる (M-3 追補と整合)
 
 **M-3 実装方針の途中修正** (2026-04-22 同日):
 - 初期実装: MainThread で `Transform.localRotation` へ VMC rotation を書込 → `HumanPoseHandler.GetHumanPose` で Muscle 逆算 → `SetHumanPose` で再構築
@@ -930,7 +933,7 @@ namespace RealtimeAvatarController.Motion
 | 型 | `double` (秒単位) |
 | 基準 | App 起動時 (Stopwatch 起動基準の相対値) |
 | 取得式 | `Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency` |
-| 打刻タイミング | 受信ワーカースレッド上でフレーム構築時 (Unity メインスレッド API 不使用のため安全) |
+| 打刻タイミング | MoCap ソースの受信スレッド上でフレーム構築時 (Unity メインスレッド API 不使用のためどのスレッドから呼んでも安全)。VMC (`mocap-vmc`) は uOSC `onDataReceived` が MainThread で発火するため受信スレッド = MainThread となり、LateUpdate Tick で OnNext を emit する (§2.2 末尾の M-3 追補を参照) |
 | 用途 | Slot 内フレーム順序整列 / 遅延計測 / デバッグログ |
 | プロセス間比較 | **不可** (相対値のため異なるプロセスとの比較は意味を持たない) |
 | 将来拡張 | ログ用途で wall clock が必要な場合は `WallClock: DateTime?` フィールドの追加を検討する。初期版では **未実装** とする |
