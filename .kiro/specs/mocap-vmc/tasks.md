@@ -174,7 +174,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
 - [ ] 4. `IMoCapSource` 実装としての Adapter
   - EVMC4U 内部 Dictionary を LateUpdate で snapshot し `HumanoidMotionFrame` を発行する (design.md §4.2)。状態遷移 `Uninitialized → Running → Disposed`、`MotionStream.OnError` 非発行、BoneLocalRotations 経路。
 
-- [ ] 4.1 [Test] Adapter 基本契約の EditMode テスト先行作成
+- [x] 4.1 [Test] Adapter 基本契約の EditMode テスト先行作成
   - 以下のテストを追加する (コンパイル失敗・赤でよい):
     - `SourceType` が `"VMC"` を返す。
     - `Initialize` 2 回目で `InvalidOperationException`。
