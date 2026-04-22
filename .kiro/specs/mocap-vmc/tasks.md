@@ -199,7 +199,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 3.1, 3.2, 3.5, 3.6, 4.5, 4.6, 4.7, 8.1, 12.3, 12.5, 12.7_
   - _Boundary: Tests/PlayMode/mocap-vmc/ (EVMC4UMoCapSourceIntegrationTests)_
 
-- [ ] 4.3 [Impl] Adapter クラス骨格と状態機械
+- [x] 4.3 [Impl] Adapter クラス骨格と状態機械
   - 新規ファイル `Runtime/MoCap/VMC/EVMC4UMoCapSource.cs` を作成する:
     - `public sealed class EVMC4UMoCapSource : IMoCapSource, IDisposable`
     - `internal EVMC4UMoCapSource(string slotId, ISlotErrorChannel errorChannel)` コンストラクタ
