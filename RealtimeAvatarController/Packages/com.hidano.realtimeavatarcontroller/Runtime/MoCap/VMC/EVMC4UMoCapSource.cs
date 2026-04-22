@@ -1,6 +1,11 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using RealtimeAvatarController.Core;
+using RealtimeAvatarController.Motion;
 using UniRx;
+using UnityEngine;
+using MotionFrame = RealtimeAvatarController.Core.MotionFrame;
 
 namespace RealtimeAvatarController.MoCap.VMC
 {
@@ -71,6 +76,14 @@ namespace RealtimeAvatarController.MoCap.VMC
         /// する対象となる (task 4.5 / 4.7)。
         /// </summary>
         private EVMC4USharedReceiver _sharedReceiver;
+
+        /// <summary>
+        /// 前 Tick で emit したときの Bone Dictionary のハッシュ近似値 (task 4.6 / R-1)。
+        /// 初期版は Count + 代表値の簡易ハッシュで dirty 判定する。
+        /// 将来的には <see cref="EVMC4U.ExternalReceiver"/> 側に書込カウンタを追加する予定。
+        /// </summary>
+        private int _lastEmittedBoneCount = -1;
+        private double _lastEmittedBoneHash = double.NaN;
 
         private State _state = State.Uninitialized;
 
@@ -171,16 +184,117 @@ namespace RealtimeAvatarController.MoCap.VMC
             Shutdown();
         }
 
-        // --- IEVMC4UMoCapAdapter (task 4.6 / 4.8 で実装する) ---
+        // --- IEVMC4UMoCapAdapter (task 4.6 / 4.8) ---
 
+        /// <summary>
+        /// <see cref="EVMC4USharedReceiver"/> の LateUpdate から毎フレーム呼ばれる Tick 処理 (task 4.6 / design.md §5.1)。
+        /// </summary>
+        /// <remarks>
+        /// 処理フロー:
+        /// <list type="number">
+        ///   <item><see cref="EVMC4U.ExternalReceiver.GetBoneRotationsView"/> で Bone 回転辞書ビューを取得</item>
+        ///   <item>Count==0 なら早期 return (要件 3.5 空フレーム抑制)</item>
+        ///   <item>Count + 代表値ハッシュで dirty 判定。前 Tick と同値なら emit スキップ (R-1)</item>
+        ///   <item>新規 <see cref="Dictionary{TKey,TValue}"/> に値コピーして snapshot を取る (要件 3.6)</item>
+        ///   <item><see cref="Stopwatch.GetTimestamp"/> ベースで Timestamp を打刻 (要件 3.3)</item>
+        ///   <item>Root は <see cref="EVMC4U.ExternalReceiver.LatestRootLocalPosition"/> /
+        ///         <see cref="EVMC4U.ExternalReceiver.LatestRootLocalRotation"/> から取得 (要件 3.4)</item>
+        ///   <item><see cref="HumanoidMotionFrame"/> を構築 (Muscles は空配列、要件 3.2) し <see cref="_subject"/> に OnNext</item>
+        /// </list>
+        /// Tick 内例外は try/catch で捕捉して <see cref="PublishError"/> へ委譲する (要件 8.3)。
+        /// <see cref="IObserver{T}.OnError"/> は絶対に呼ばない (要件 8.1)。
+        /// BlendShape / 表情は参照しない (要件 3.7)。
+        /// </remarks>
         void IEVMC4UMoCapAdapter.Tick()
         {
-            // task 4.6 で実装する。
+            if (_state != State.Running || _sharedReceiver == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var receiver = _sharedReceiver.Receiver;
+                if (receiver == null)
+                {
+                    return;
+                }
+
+                var view = receiver.GetBoneRotationsView();
+                if (view == null || view.Count == 0)
+                {
+                    return;
+                }
+
+                if (!HasDirtyBoneData(view, out var currentHash))
+                {
+                    return;
+                }
+
+                var snapshot = new Dictionary<HumanBodyBones, Quaternion>(view.Count);
+                foreach (var kv in view)
+                {
+                    snapshot[kv.Key] = kv.Value;
+                }
+
+                var timestamp = Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
+                var rootPosition = receiver.LatestRootLocalPosition;
+                var rootRotation = receiver.LatestRootLocalRotation;
+
+                var frame = new HumanoidMotionFrame(
+                    timestamp,
+                    Array.Empty<float>(),
+                    rootPosition,
+                    rootRotation,
+                    snapshot);
+
+                _lastEmittedBoneCount = view.Count;
+                _lastEmittedBoneHash = currentHash;
+
+                _subject.OnNext(frame);
+            }
+            catch (Exception ex)
+            {
+                PublishError(SlotErrorCategory.VmcReceive, ex);
+            }
         }
 
         void IEVMC4UMoCapAdapter.HandleTickException(Exception exception)
         {
-            // task 4.8 で実装する。
+            // task 4.8 で ErrorChannel 連携を行う。
+        }
+
+        /// <summary>
+        /// <paramref name="view"/> の内容が前 Tick と比較して変化したかを判定する (R-1 / task 4.6)。
+        /// Count + 代表値の簡易ハッシュ (x+y+z+w の総和) を用いる近似判定。
+        /// </summary>
+        /// <param name="view">Receiver から取得した Bone 回転辞書ビュー。</param>
+        /// <param name="currentHash">計算された現在のハッシュ値 (出力)。</param>
+        /// <returns>変化があれば <c>true</c>。変化がなければ <c>false</c>。</returns>
+        private bool HasDirtyBoneData(
+            IReadOnlyDictionary<HumanBodyBones, Quaternion> view,
+            out double currentHash)
+        {
+            double hash = 0.0;
+            foreach (var kv in view)
+            {
+                var q = kv.Value;
+                hash += q.x + q.y + q.z + q.w;
+            }
+            currentHash = hash;
+
+            if (view.Count != _lastEmittedBoneCount)
+            {
+                return true;
+            }
+            return currentHash != _lastEmittedBoneHash;
+        }
+
+        // --- エラー発行 (task 4.8 で詳細を詰める) ---
+
+        private void PublishError(SlotErrorCategory category, Exception ex)
+        {
+            // task 4.8 で ErrorChannel への発行処理を追加する。
         }
     }
 }

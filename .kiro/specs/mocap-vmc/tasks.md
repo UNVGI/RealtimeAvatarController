@@ -230,7 +230,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 1.5, 1.6, 1.7, 5.3, 5.4, 8.4_
   - _Boundary: Runtime/MoCap/VMC/EVMC4UMoCapSource.cs_
 
-- [ ] 4.6 [Impl] `Tick()` による Bone Dictionary の snapshot と OnNext 発行
+- [x] 4.6 [Impl] `Tick()` による Bone Dictionary の snapshot と OnNext 発行
   - 処理フロー (design.md §5.1):
     - `Receiver.GetBoneRotationsView()` (Task 2.3) を走査し、**新規 `Dictionary<HumanBodyBones, Quaternion>` を allocate して値コピー** (要件 3.6)。Count が 0 なら emit しない (要件 3.5)。
     - `_dirty` フラグで前 Tick 以降に Bone 注入があったかを判定 (Task 2.5 のテスト注入 Setter 経路 + 実 OSC 受信経路の両方で dirty を立てるため、EVMC4U 側に専用フラグを持たせない簡易実装として「前 Tick の参照等価性」では不可)。シンプル案: Receiver に `public int RotationWriteCounter { get; internal set; }` 相当のバージョン番号を追加し (Task 2.3 のパッチ拡張) Adapter が差分判定する。軽量にするため、初期版では「Dictionary の Count + 代表値の変化」での近似判定を許容するが、将来的にカウンタ方式へ移行可能な形に設計する。
