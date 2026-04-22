@@ -206,6 +206,16 @@
       },
       "hash": "3b99078d26b362733ad9bf463f98c83b8a1b4c9f"
     },
+    "com.vrmc.vrm": {
+      "version": "https://github.com/vrm-c/UniVRM.git?path=/Packages/VRM10#v0.131.0",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {
+        "com.unity.timeline": "1.7.6",
+        "com.vrmc.gltf": "0.131.0"
+      },
+      "hash": "3b99078d26b362733ad9bf463f98c83b8a1b4c9f"
+    },
     "com.unity.modules.accessibility": {
       "version": "1.0.0",
       "depth": 0,
