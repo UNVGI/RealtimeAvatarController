@@ -279,9 +279,18 @@ namespace RealtimeAvatarController.MoCap.VMC
             }
         }
 
+        /// <summary>
+        /// <see cref="EVMC4USharedReceiver"/> 側で LateUpdate の Tick を try/catch した際の
+        /// フォールバック経路 (task 4.8 / 要件 8.3)。Adapter 側の Tick() 内 try/catch と合わせて
+        /// 例外をすべて <see cref="ISlotErrorChannel"/> に集約する二重安全網となる。
+        /// </summary>
         void IEVMC4UMoCapAdapter.HandleTickException(Exception exception)
         {
-            // task 4.8 で ErrorChannel 連携を行う。
+            if (exception == null)
+            {
+                return;
+            }
+            PublishError(SlotErrorCategory.VmcReceive, exception);
         }
 
         /// <summary>
@@ -310,11 +319,32 @@ namespace RealtimeAvatarController.MoCap.VMC
             return currentHash != _lastEmittedBoneHash;
         }
 
-        // --- エラー発行 (task 4.8 で詳細を詰める) ---
+        // --- エラー発行 (task 4.8 / 要件 8.1, 8.2, 8.3, 8.5) ---
 
+        /// <summary>
+        /// <see cref="ISlotErrorChannel"/> へ <see cref="SlotError"/> を発行する内部ヘルパー
+        /// (task 4.8 / design.md §5.1)。
+        /// </summary>
+        /// <param name="category">発行するエラーのカテゴリ。</param>
+        /// <param name="ex">発行する例外。</param>
+        /// <remarks>
+        /// <para>
+        /// <see cref="IObserver{T}.OnError"/> は絶対に呼ばない (要件 8.1)。Tick 内・Initialize 内の
+        /// 例外はすべて本メソッドを通じて <see cref="ISlotErrorChannel"/> へ通知する。
+        /// </para>
+        /// <para>
+        /// <c>Debug.LogError</c> の抑制制御は <see cref="RealtimeAvatarController.Core.DefaultSlotErrorChannel"/>
+        /// 側が担うため (要件 8.5)、本メソッドは抑制を行わず単に <see cref="ISlotErrorChannel.Publish"/> へ委譲する。
+        /// EVMC4U 側 <c>Debug.LogError</c> には干渉しない (要件 8.2)。
+        /// </para>
+        /// </remarks>
         private void PublishError(SlotErrorCategory category, Exception ex)
         {
-            // task 4.8 で ErrorChannel への発行処理を追加する。
+            if (ex == null)
+            {
+                return;
+            }
+            _errorChannel.Publish(new SlotError(_slotId, category, ex, DateTime.UtcNow));
         }
     }
 }

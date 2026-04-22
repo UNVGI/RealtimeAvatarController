@@ -255,7 +255,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 1.2, 4.5_
   - _Boundary: Runtime/MoCap/VMC/EVMC4UMoCapSource.cs_
 
-- [ ] 4.8 [Impl] `PublishError` ヘルパと ErrorChannel 連携
+- [x] 4.8 [Impl] `PublishError` ヘルパと ErrorChannel 連携
   - `private void PublishError(SlotErrorCategory category, Exception ex)` を追加し `_errorChannel.Publish(new SlotError(_slotId, category, ex, DateTime.UtcNow))` を呼ぶ (要件 8.3)。
   - `MotionStream.OnError` は絶対に呼ばない (要件 8.1)。EVMC4U 側の `Debug.LogError` には干渉しない (要件 8.2)。Log 抑制は `DefaultSlotErrorChannel` 責務 (要件 8.5)。
   - 観測可能な完了条件: Task 4.2 の OnError 非発行ケースが green。Tick 例外を人工的に起こしたケースで `ISlotErrorChannel` に `VmcReceive` が 1 件 publish される (別 PlayMode テスト 1 ケース追加)。
