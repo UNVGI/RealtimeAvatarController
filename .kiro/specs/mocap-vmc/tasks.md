@@ -217,7 +217,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 1.4, 1.9, 4.6, 4.7_
   - _Boundary: Runtime/MoCap/VMC/EVMC4UMoCapSource.cs_
 
-- [ ] 4.5 [Impl] `Initialize(MoCapSourceConfigBase)` 実装
+- [x] 4.5 [Impl] `Initialize(MoCapSourceConfigBase)` 実装
   - 処理フロー (design.md §4.2):
     1. 状態チェック (`Uninitialized` 以外なら `InvalidOperationException`)。
     2. `config as VMCMoCapSourceConfig`、失敗時 `ArgumentException($"VMCMoCapSourceConfig が必要ですが {config?.GetType().Name ?? "null"} が渡されました")` 。

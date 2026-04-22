@@ -65,6 +65,13 @@ namespace RealtimeAvatarController.MoCap.VMC
         /// </summary>
         private readonly IObservable<MotionFrame> _stream;
 
+        /// <summary>
+        /// <see cref="Initialize"/> で確保した共有 Receiver。<see cref="Shutdown"/> 時に
+        /// <see cref="EVMC4USharedReceiver.Unsubscribe"/> / <see cref="EVMC4USharedReceiver.Release"/>
+        /// する対象となる (task 4.5 / 4.7)。
+        /// </summary>
+        private EVMC4USharedReceiver _sharedReceiver;
+
         private State _state = State.Uninitialized;
 
         /// <inheritdoc />
@@ -89,8 +96,18 @@ namespace RealtimeAvatarController.MoCap.VMC
 
         /// <inheritdoc />
         /// <remarks>
-        /// 4.3 時点では最小限の状態遷移のみ行う (Uninitialized → Running)。
-        /// 型キャスト・port 範囲検証・SharedReceiver 組み立ては task 4.5 で追加される。
+        /// 処理フロー (design.md §4.2 / task 4.5):
+        /// <list type="number">
+        ///   <item>状態が <see cref="State.Uninitialized"/> 以外なら <see cref="InvalidOperationException"/> (要件 7.5)</item>
+        ///   <item><paramref name="config"/> を <see cref="VMCMoCapSourceConfig"/> にキャスト。失敗時は
+        ///         <see cref="ArgumentException"/> (メッセージに実型名を含める、要件 1.5)</item>
+        ///   <item>ポート番号が 1025〜65535 の範囲外なら <see cref="ArgumentOutOfRangeException"/> (要件 5.3)</item>
+        ///   <item><see cref="EVMC4USharedReceiver.EnsureInstance"/> で共有 Receiver を確保 (要件 1.6 / 2.1 / 2.2)</item>
+        ///   <item><see cref="EVMC4USharedReceiver.ApplyReceiverSettings"/> で uOSC を該当 port で起動 (要件 1.7)。
+        ///         <see cref="System.Net.Sockets.SocketException"/> は呼び出し元へ伝播 (要件 8.4)</item>
+        ///   <item><see cref="EVMC4USharedReceiver.Subscribe"/> で LateUpdate Tick 対象に追加 (要件 4.3)</item>
+        ///   <item>状態を <see cref="State.Running"/> に遷移</item>
+        /// </list>
         /// </remarks>
         public void Initialize(MoCapSourceConfigBase config)
         {
@@ -99,6 +116,27 @@ namespace RealtimeAvatarController.MoCap.VMC
                 throw new InvalidOperationException(
                     $"EVMC4UMoCapSource.Initialize は Uninitialized 状態でのみ呼び出せます (現在の状態: {_state})。");
             }
+
+            var vmcConfig = config as VMCMoCapSourceConfig;
+            if (vmcConfig == null)
+            {
+                var actualTypeName = config?.GetType().Name ?? "null";
+                throw new ArgumentException(
+                    $"VMCMoCapSourceConfig が必要ですが {actualTypeName} が渡されました。",
+                    nameof(config));
+            }
+
+            if (vmcConfig.port < 1025 || vmcConfig.port > 65535)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(config),
+                    vmcConfig.port,
+                    "VMCMoCapSourceConfig.port は 1025〜65535 の範囲で指定してください。");
+            }
+
+            _sharedReceiver = EVMC4USharedReceiver.EnsureInstance();
+            _sharedReceiver.ApplyReceiverSettings(vmcConfig.port);
+            _sharedReceiver.Subscribe(this);
 
             _state = State.Running;
         }
