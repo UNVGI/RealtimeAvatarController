@@ -40,7 +40,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
 - [ ] 1. 契約文書の「VMC 受信はワーカースレッド」記述を訂正する前提整備
   - 旧実装前提の記述を整理し、以降のタスクが整合する Single Source of Truth を確立する。
 
-- [ ] 1.1 [Research] UniVRM / UniGLTF の manifest 依存が維持されていることを確認する
+- [x] 1.1 [Research] UniVRM / UniGLTF の manifest 依存が維持されていることを確認する
   - `Packages/manifest.json` を読み、`com.vrmc.gltf` / `com.vrmc.univrm` / `com.vrmc.vrm` が現行バージョンで残っていること (EVMC4U asmdef の GUID 参照が解決できる前提) を確認する。
   - 欠落があれば追加 PR を切る必要があるため、本タスクの完了時点で「存在する」または「追加すべき行」が明確に記録される。
   - 観測可能な完了条件: 本タスクの出力として、manifest 上の 3 パッケージのバージョン文字列を含む短い確認メモが task 実行記録 (commit message / PR description) に残る。
