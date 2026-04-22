@@ -388,6 +388,18 @@ namespace EVMC4U
         //エラー・無限ループ検出フラグ(trueで一切の受信を停止する)
         bool shutdown = false;
 
+        // [RealtimeAvatarController mocap-vmc local patch]
+        // Adapter 側から内部 Dictionary / shutdown を読み取るための公開アクセサ。
+        // 返却する Dictionary インスタンスは差し替えない (既存経路と同一インスタンスを共有する)。
+        // 参照: .kiro/specs/mocap-vmc/design.md §6.2
+        public System.Collections.Generic.IReadOnlyDictionary<HumanBodyBones, Quaternion> GetBoneRotationsView()
+            => HumanBodyBonesRotationTable;
+
+        public System.Collections.Generic.IReadOnlyDictionary<HumanBodyBones, Vector3> GetBonePositionsView()
+            => HumanBodyBonesPositionTable;
+
+        public bool IsShutdown => shutdown;
+
         //フレーム間パケットフレーム数測定
         int PacketCounterInFrame = 0;
 

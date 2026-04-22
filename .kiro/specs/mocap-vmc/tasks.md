@@ -81,7 +81,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 2.4, 2.5, 1.8_
   - _Boundary: Assets/EVMC4U/ExternalReceiver.cs_
 
-- [ ] 2.3 [Impl] 内部 Dictionary / shutdown の読取アクセサを追加
+- [x] 2.3 [Impl] 内部 Dictionary / shutdown の読取アクセサを追加
   - 以下の read API を `ExternalReceiver` に追加する (design.md §6.2):
     - `public IReadOnlyDictionary<HumanBodyBones, Quaternion> GetBoneRotationsView()` → `HumanBodyBonesRotationTable` をそのまま返す
     - `public IReadOnlyDictionary<HumanBodyBones, Vector3> GetBonePositionsView()` → `HumanBodyBonesPositionTable` をそのまま返す
