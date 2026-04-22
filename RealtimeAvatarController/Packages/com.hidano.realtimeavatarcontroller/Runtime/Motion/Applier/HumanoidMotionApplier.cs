@@ -226,12 +226,7 @@ namespace RealtimeAvatarController.Motion
                 // VMC など native な parent-local rotation を送るソースでは Transform を直接更新する
                 // (motion-pipeline design.md §7.1.1 / contracts.md §2.2 M-3 方針修正)。
 
-                // 1. Root: アバターの root Transform (Animator.transform) に position / rotation を書込む
-                var avatarRootTf = _animator.transform;
-                avatarRootTf.localPosition = humanoidFrame.RootPosition;
-                avatarRootTf.localRotation = humanoidFrame.RootRotation;
-
-                // 2. 各ボーンの parent-local rotation を Animator.GetBoneTransform().localRotation に直接書込む
+                // 各ボーンの parent-local rotation を Animator.GetBoneTransform().localRotation に直接書込む
                 foreach (var kv in boneRotations)
                 {
                     var boneTf = _animator.GetBoneTransform(kv.Key);
@@ -240,6 +235,13 @@ namespace RealtimeAvatarController.Motion
                         boneTf.localRotation = kv.Value;
                     }
                 }
+
+                // NOTE (M-3 2026-04-22): Avatar root (Animator.transform) への position / rotation 書込は
+                // 初期版では行わない。VMC Protocol の Root/Pos は「アバター親ノード」姿勢を意図するが、
+                // 多くの送信アプリ (VMagicMirror / VSeeFace 等) は Hips の global 姿勢を Bone rotation に
+                // 含めて送るため、Avatar root に RootRotation を書くと Hips と二重回転になり姿勢が破綻する。
+                // EVMC4U でもデフォルトで Root Transform への書込は無効化されている (Inspector option)。
+                // 必要に応じて将来オプションとして追加する。
             }
             else
             {

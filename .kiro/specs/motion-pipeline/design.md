@@ -576,14 +576,8 @@ HumanoidMotionApplier
 **経路 A (BoneLocalRotations 経由 / VMC 等 native bone rotation ソース)**:
 
 ```csharp
-// 1. Root: アバターの root Transform (Animator の GameObject) に position / rotation を直接書き込む。
-//    VMC /VMC/Ext/Root/Pos の値はアバター全体の位置・向きを表す (Unity 座標系)。
-var avatarRootTf = _animator.transform;
-avatarRootTf.localPosition = humanoidFrame.RootPosition;
-avatarRootTf.localRotation = humanoidFrame.RootRotation;
-
-// 2. 各ボーンの parent-local rotation を Animator.GetBoneTransform().localRotation に直接書き込む。
-//    HumanPoseHandler / Muscle system はバイパスする (Humanoid rig constraint の近似誤差を回避)。
+// 各ボーンの parent-local rotation を Animator.GetBoneTransform().localRotation に直接書き込む。
+// HumanPoseHandler / Muscle system はバイパスする (Humanoid rig constraint の近似誤差を回避)。
 foreach (var kv in humanoidFrame.BoneLocalRotations)
 {
     var boneTf = _animator.GetBoneTransform(kv.Key);
@@ -592,6 +586,11 @@ foreach (var kv in humanoidFrame.BoneLocalRotations)
         boneTf.localRotation = kv.Value;
     }
 }
+
+// 初期版では Avatar root (Animator.transform) への RootPosition / RootRotation 書込は行わない。
+// VMC Protocol の Root/Pos は「アバター親ノード」姿勢を意図するが、VMagicMirror / VSeeFace 等は
+// Hips の global 姿勢を Bone 側にも含めて送ってくる場合があり、二重回転の原因になる
+// (EVMC4U でもデフォルトで Root 書込は無効)。
 ```
 
 **経路 B (従来: Muscles 直接経路)**:

@@ -286,11 +286,9 @@ namespace RealtimeAvatarController.Motion.Tests.PlayMode.Applier
             Assert.That(Quaternion.Angle(expectedHipsRot, hips.localRotation), Is.LessThan(1e-3f),
                 "Hips.localRotation は BoneLocalRotations に渡した値と完全に一致するべき");
 
-            // Avatar root に Root position / rotation が書込まれている
-            Assert.That(Vector3.Distance(expectedRootPos, avatar.transform.localPosition), Is.LessThan(1e-3f),
-                "Avatar root localPosition は RootPosition と一致するべき");
-            Assert.That(Quaternion.Angle(expectedRootRot, avatar.transform.localRotation), Is.LessThan(1e-3f),
-                "Avatar root localRotation は RootRotation と一致するべき");
+            // NOTE (M-3 2026-04-22): 初期版では Avatar root (Animator.transform) への RootPosition /
+            // RootRotation 書込は行わない (VMagicMirror / VSeeFace 等との二重回転を回避するため)。
+            // よって avatar.transform.localPosition / localRotation は初期値 (identity) のまま。
         }
 
         /// <summary>
