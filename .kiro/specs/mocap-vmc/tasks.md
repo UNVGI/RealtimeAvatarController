@@ -99,7 +99,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 3.4_
   - _Boundary: Assets/EVMC4U/ExternalReceiver.cs_
 
-- [ ] 2.5 [Impl] テスト専用 Bone Dictionary 注入 Setter を追加
+- [x] 2.5 [Impl] テスト専用 Bone Dictionary 注入 Setter を追加
   - `ExternalReceiver` に PlayMode / EditMode テストから Dictionary を直接書ける public Setter を追加する:
     - `public void InjectBoneRotationForTest(HumanBodyBones bone, Quaternion rot)` → `HumanBodyBonesRotationTable[bone] = rot`
     - 必要に応じて `public void InjectBonePositionForTest(HumanBodyBones bone, Vector3 pos)` も追加

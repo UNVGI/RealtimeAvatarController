@@ -407,6 +407,22 @@ namespace EVMC4U
         public Vector3 LatestRootLocalPosition { get; private set; }
         public Quaternion LatestRootLocalRotation { get; private set; } = Quaternion.identity;
 
+#if UNITY_INCLUDE_TESTS || DEVELOPMENT_BUILD
+        // [RealtimeAvatarController mocap-vmc local patch]
+        // UDP / OSC を介さず Bone Dictionary を直接書き込むためのテスト専用 Setter。
+        // UNITY_INCLUDE_TESTS または DEVELOPMENT_BUILD 時のみコンパイルされ、出荷ビルドには含まれない。
+        // 参照: .kiro/specs/mocap-vmc/design.md §6 / §10.2
+        public void InjectBoneRotationForTest(HumanBodyBones bone, Quaternion rot)
+        {
+            HumanBodyBonesRotationTable[bone] = rot;
+        }
+
+        public void InjectBonePositionForTest(HumanBodyBones bone, Vector3 pos)
+        {
+            HumanBodyBonesPositionTable[bone] = pos;
+        }
+#endif
+
         //フレーム間パケットフレーム数測定
         int PacketCounterInFrame = 0;
 
