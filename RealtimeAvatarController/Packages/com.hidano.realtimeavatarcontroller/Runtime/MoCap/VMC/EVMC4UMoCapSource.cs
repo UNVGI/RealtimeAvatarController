@@ -47,7 +47,23 @@ namespace RealtimeAvatarController.MoCap.VMC
         private readonly string _slotId;
         private readonly ISlotErrorChannel _errorChannel;
 
+        /// <summary>
+        /// Tick から <c>OnNext</c> が呼ばれる素の <see cref="Subject{T}"/>。
+        /// <see cref="Shutdown"/> 時に <c>OnCompleted</c> / <c>Dispose</c> の終端操作対象となる (task 4.4 / 4.7)。
+        /// </summary>
         private readonly Subject<MotionFrame> _rawSubject = new Subject<MotionFrame>();
+
+        /// <summary>
+        /// <see cref="_rawSubject"/> に <c>Subject.Synchronize()</c> を適用したスレッドセーフな発行口。
+        /// MainThread LateUpdate 起点でも将来のワーカー起点 emit でも直列化を保証する (task 4.4)。
+        /// </summary>
+        private readonly ISubject<MotionFrame> _subject;
+
+        /// <summary>
+        /// <see cref="_subject"/> を <c>Publish().RefCount()</c> でマルチキャスト化した Hot Observable
+        /// (要件 4.7, task 4.4)。複数購読者が同一ストリームを共有し、購読者ゼロで接続解除される。
+        /// </summary>
+        private readonly IObservable<MotionFrame> _stream;
 
         private State _state = State.Uninitialized;
 
@@ -66,6 +82,9 @@ namespace RealtimeAvatarController.MoCap.VMC
         {
             _slotId = slotId ?? string.Empty;
             _errorChannel = errorChannel ?? throw new ArgumentNullException(nameof(errorChannel));
+
+            _subject = _rawSubject.Synchronize();
+            _stream = _subject.Publish().RefCount();
         }
 
         /// <inheritdoc />
@@ -85,7 +104,13 @@ namespace RealtimeAvatarController.MoCap.VMC
         }
 
         /// <inheritdoc />
-        public IObservable<MotionFrame> MotionStream => _rawSubject;
+        /// <remarks>
+        /// <see cref="_rawSubject"/> を <c>Subject.Synchronize()</c>.<c>Publish()</c>.<c>RefCount()</c>
+        /// でマルチキャスト化した Hot Observable を返す (要件 1.4, 4.7 / design.md §4.2)。
+        /// <see cref="Initialize"/> 完了前でも購読は許容され、<see cref="State.Running"/> 到達後に OnNext が流れる
+        /// (要件 1.9)。
+        /// </remarks>
+        public IObservable<MotionFrame> MotionStream => _stream;
 
         /// <inheritdoc />
         /// <remarks>

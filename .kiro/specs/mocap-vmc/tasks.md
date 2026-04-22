@@ -209,7 +209,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 1.1, 1.2, 1.3, 7.5_
   - _Boundary: Runtime/MoCap/VMC/EVMC4UMoCapSource.cs_
 
-- [ ] 4.4 [Impl] UniRx Subject による MotionStream 公開
+- [x] 4.4 [Impl] UniRx Subject による MotionStream 公開
   - `Subject<MotionFrame>` を生成し、`Synchronize().Publish().RefCount()` で Hot Observable として公開する (design.md §4.2):
     - `public IObservable<MotionFrame> MotionStream { get; }`
     - `Initialize` 完了前に購読されても例外にならず、Running 後に OnNext が始まる (要件 1.9, Q4 案 a)。
