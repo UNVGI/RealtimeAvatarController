@@ -159,7 +159,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 4.3, 4.4, 8.3_
   - _Boundary: Runtime/MoCap/VMC/EVMC4USharedReceiver.cs_
 
-- [ ] 3.6 [Impl] port 反映と StopServer/StartServer による再バインド
+- [x] 3.6 [Impl] port 反映と StopServer/StartServer による再バインド
   - `public void ApplyReceiverSettings(int port)` (または相当のメソッド) を追加し、内部 `uOscServer.port` を更新後 `StopServer()` / `StartServer()` を呼んで明示的に再バインドする (design.md §4.3)。
   - SocketException は呼び出し元 (Adapter.Initialize) へ伝播させる (要件 8.4)。
   - `bindAddress` は uOSC が bindAddress を公開していないため「情報フィールドとして受け取るが現時点では全インターフェース bind」に留める旨のコメントを残す (design.md §4.4)。

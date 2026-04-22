@@ -142,6 +142,38 @@ namespace RealtimeAvatarController.MoCap.VMC
             return shared;
         }
 
+        // --- port 反映 / 再バインド (task 3.6 / 要件 1.7, 5.3, 8.4) ---
+
+        /// <summary>
+        /// 共有 <see cref="uOscServer"/> の port を <paramref name="port"/> に更新し、
+        /// <c>StopServer()</c> / <c>StartServer()</c> を順に呼び出して UDP ソケットを
+        /// 明示的に再バインドする (design.md §4.3 / §5.1)。
+        /// </summary>
+        /// <param name="port">新しい受信ポート番号。呼び出し元側で 1025〜65535 の範囲を検証している前提。</param>
+        /// <remarks>
+        /// <para>
+        /// <b>bind address</b>: uOSC (<see cref="uOscServer"/>) は bindAddress を公開していないため
+        /// 本メソッドは port のみを反映する。Config の <c>bindAddress</c> は現時点では情報フィールドとしてのみ
+        /// 扱い、実際には全インターフェース bind になる (design.md §4.4)。
+        /// </para>
+        /// <para>
+        /// <b>例外</b>: <see cref="System.Net.Sockets.SocketException"/> は捕捉せずに呼び出し元
+        /// (<c>EVMC4UMoCapSource.Initialize</c>) へ伝播する (要件 8.4)。
+        /// </para>
+        /// </remarks>
+        public void ApplyReceiverSettings(int port)
+        {
+            if (_server == null)
+            {
+                return;
+            }
+
+            // UpdateChangePort 経路ではなく明示的に Stop→Start して決定的に再バインドする。
+            _server.StopServer();
+            _server.port = port;
+            _server.StartServer();
+        }
+
         // --- Subscribe / LateUpdate Tick 駆動 (task 3.5 / 要件 4.3, 4.4, 8.3) ---
 
         /// <summary>
