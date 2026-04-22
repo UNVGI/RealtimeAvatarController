@@ -2,153 +2,115 @@
 
 ## 今回やったこと
 
-### 1. UI Sample の Unity 実行時不具合を修復
-- Package Manager → UI Sample Import 後、複数の実装欠陥を修復:
-  - `RealtimeAvatarController.Samples.UI.asmdef` に UniTask 参照欠落 → 追加
-  - `SlotManagementDemo.unity` で EventSystem と FallbackSwitchGroup の fileID (`&100240000` `&100240001`) が重複していたため EventSystem 側を `&100410xxx` 帯へリネーム
-  - Scene 上で `SlotListScrollView` が `AddSlotButton` を覆っていたため RectTransform の `Pos Y` / `Height` を調整
-  - `SlotListItemUI` に `IPointerClickHandler` が未実装で行クリック→Detail 反映の経路が欠落 → 実装追加 + `SlotManagementPanelUI` に `detailPanel` 参照追加
-  - `DisplayNameField` / `WeightToggle` / `FallbackDropdown` が子要素 (Text/Placeholder/Background/Checkmark 等) を持たない欠陥状態だったため MCP の `Unity_RunCommand` 経由で `DefaultControls.CreateInputField / CreateToggle / CreateDropdown` で再生成 + 参照差し替え
-  - `VmcOscAdapter.uOscServer` の hideFlags を `HideAndDontSave` → `DontSave` に変更しデバッグ時 Inspector で確認可能に
+### 1. 前セッションの VRM モデルコミットを履歴から除去
+- `bb55b94` (`uchinoko_dress.vrm` 追加) と `aad8061` (`KizunaAI_KAMATTE.vrm` 追加) を `git rebase --onto 31069c1 aad8061 main` で履歴から完全削除
+- `backup/before-vrm-drop` ブランチを保険として作成 (動作確認済のため次セッション以降で削除可)
+- rebase 中の conflict (manifest.json / packages-lock.json で `com.vrmc.vrm` / `com.unity.timeline` 依存が bb55b94 のみから来ていた) は backup 側の最終状態を採用して解決
 
-### 2. アバター Applier 結線の新規実装 (Spec 実装漏れの補完)
-- `ui-sample` の `SlotManagerBehaviour` には VMC → アバターへの結線が完全に欠落していた
-- `SlotManager` に `TryGetSlotResources(slotId, out source, out avatar)` public API 追加、`ApplyWithFallback` を public 化
-- `SlotManagerBehaviour` に `LateUpdate` を追加、Slot ごとに `MotionCache` + `HumanoidMotionApplier` をビルドして `ApplyWithFallback` 経由で毎フレーム Apply
+### 2. VRM 0.x/1.x 問題の原因特定
+- 前セッション §6 で「座標系ズレ」と推測した不具合の実体は **VRM 1.x モデルで自前 Transform 直接書込が正しく動作しない** だったと判明 (VRM 0.x モデルで自前実装も正常動作)
+- 自前実装の座標系処理自体は正しかったが、VRM 1.x 対応を自前で解くコストと EVMC4U の検証実績を天秤にかけて **EVMC4U 全面置換方針を維持**
 
-### 3. M-3 合意変更 (contracts.md §2.2)
-- 既存 `VmcFrameBuilder.WriteBoneMuscles` は `Quaternion.eulerAngles / 180f` で muscle を作る破綻実装だったため、`HumanoidMotionFrame` に `IReadOnlyDictionary<HumanBodyBones, Quaternion> BoneLocalRotations` を追加
-- 前半方針 (Applier が `Transform → GetHumanPose → SetHumanPose` で再構築): Humanoid rig constraint による近似誤差でボーン姿勢がズレ、GetHumanPose 内部キャッシュで数十秒に 1 回しか更新されない事象が出たため撤回
-- 撤回後の方針: `Animator.GetBoneTransform(bone).localRotation` 直接書込 (EVMC4U と同方式)
+### 3. EVMC4U 全面置換を完遂 (mocap-vmc spec 再実行)
+- **4 論点合意**: Adapter 方式維持 / 共有 Receiver + Adapter / Config asset 保持 / mocap-vmc+contracts.md 整備
+- **Kiro 正攻法**: `/kiro:spec-requirements` → `/kiro:spec-design` → `/kiro:spec-tasks` を spec-requirements/design/tasks-agent で再生成、3 相承認
+- **実装**: `/kiro:spec-run mocap-vmc` を **Phase 単位バッチ** で実行 (per-task だと 16 時間超試算 → Phase 単位で ~3 時間に圧縮)
+- **Unity テスト**: MCP ではなく `Unity.exe -batchmode -runTests` を Bash で直叩き (子 claude-p の MCP が別プロジェクト Unity と混同する問題を回避)
+- **結果**: 32 subtask + 2 fix commit、EditMode 347/347 + PlayMode 34/34 全 pass
+- `/kiro:validate-impl mocap-vmc` で **GO 判定** (Finding は Warning 3 + 追加リスク 3、Critical なし)
 
-### 4. 1 bundle ≠ 1 frame 問題の発見と修正 (受信 / 適用の分離モデル)
-- `VmcOscAdapter.OnDataReceived` で per-message `TryFlush` を呼んでいたため、VMC bundle 内の個別 bone メッセージごとに 1 bone しか含まない `HumanoidMotionFrame` が発行されていた (MCP 診断ログで `boneRotations count=1` を確認)
-- 調査結果: **VMC Protocol 仕様上、OSC message stream から frame 境界を検知する手段は定義されていない** (`/VMC/Ext/OK` は frame 終端ではなくモデル読込 status、1 frame = 1 bundle = 1 UDP packet の保証もなし。MTU 1500 byte 制約で分割されうる)
-- **uOSC の `onDataReceived` は Unity MainThread で Invoke される** (`uOscServer.Update` が parser queue から dequeue する実装のため) → 過去 Spec が「ワーカースレッド」と書いていたのは事実誤認
-- EVMC4U 準拠の「受信即キャッシュ、MainThread Tick で flush」の分離モデルに刷新
-- `VmcTickDriver` (MonoBehaviour) を新設、LateUpdate で `VmcOscAdapter.Tick` を呼ぶ
-- `VmcFrameBuilder.TryFlush` から `_bones.Clear()` 廃止 + `_dirty` flag 追加 (欠損 bone は前回値維持、無駄 OnNext 抑制)
-
-### 5. Avatar root への RootRotation 書込を撤回
-- 両手は合うが腰/脊椎/左足の軸がズレる症状が継続
-- 原因: `avatar root.localRotation` に VMC RootRotation を書くと、Hips.localRotation と二重回転になり下半身姿勢が破綻
-- EVMC4U もデフォルトで Root Transform 書込は無効 (Inspector option)
-- 経路 A から avatar root への position/rotation 書込を削除
-
-### 6. 上記 5 までやっても VMC 受信 rotation の座標系ズレが残る
-- 「X 軸と Y 軸が入れ替わって見える」旨のユーザー観察
-- 自前の `VmcFrameBuilder.SetBone` / `VmcMessageRouter.Route` / `VmcOscAdapter` の実装群は **VMC Protocol 仕様の座標系規定を正確に実装できている根拠が薄い**
-- → 自前実装を諦め、準公式の **EVMC4U (`gpsnmeajp/EasyVirtualMotionCaptureForUnity`, MIT)** に置き換える方針で合意
+### 4. リポジトリ整備
+- 過去セッションの一時ファイル削除: `_impl_log_*.txt` 9, `remove_*_gitkeep.sh` 2, `t12-2.diff`, `cleanup_temp.sh`
+- 空 asmdef フォルダ削除: `Editor/Avatar/Builtin/`, `Editor/Motion/` (skeleton だけで中身なし)
 
 ## 決定事項
 
-- `HumanoidMotionFrame.BoneLocalRotations` フィールドは contracts.md §2.2 で永続化 (M-3 合意変更)
-- VMC → アバター適用経路は Transform 直接書込方式で確定 (Muscle pipeline 経由は撤回)
-- VMC 受信と frame 発行は分離モデル (OnDataReceived で蓄積、LateUpdate Tick で flush)
-- Avatar root (Animator.transform) への Root 書込は初期版では行わない
-- **mocap-vmc の実装は次セッションで EVMC4U ベースに全面置換**
+- **mocap-vmc は EVMC4U wrapper で実装**: 自前 VMC 実装 (`VmcMoCapSource` / `VmcOscAdapter` / `VmcFrameBuilder` / `VmcMessageRouter` / `VmcBoneMapper` / `VmcTickDriver`) は完全削除
+- **2 層構成**: `EVMC4UMoCapSource` (IMoCapSource Adapter) + `EVMC4USharedReceiver` (process-wide singleton + refcount + DontDestroyOnLoad)
+- **EVMC4U 配布**: `.unitypackage` を `Assets/EVMC4U/` に展開 (UPM 非対応)、ローカルパッチ 4 種を適用 (header marker `// [RealtimeAvatarController mocap-vmc local patch]` コメント付き)
+- **EVMC4U 改変 4 点**: Model=null ガード緩和 / bone table readonly アクセサ / LatestRoot\* キャッシュ / InjectBoneRotationForTest setter
+- **contracts.md §2.2** `HumanoidMotionFrame.BoneLocalRotations` 保持、§13.1 MainThread 訂正済 (uOSC `onDataReceived` は `uOscServer.Update` から MainThread で発火)
+- **typeId `"VMC"` は維持**: Config/Factory 名と UI/SlotSettings asset 互換性のため
+- **Root 書込なし**: `RootPositionSynchronize` / `RootRotationSynchronize` を init 時に false 固定 (Hips と二重回転する問題回避)
+- **Config 保持**: `VMCMoCapSourceConfig.asset` (port / bindAddress) を維持、Adapter が起動時に EVMC4U へ push
+- **バッチ実装は Phase 単位で claude-p 起動**、Unity テストは batchmode CLI 直叩き (memory に feedback 保存)
 
 ## 捨てた選択肢と理由
 
-- **Muscle 変換 (Option B)**: `HumanPoseHandler.GetHumanPose` が Humanoid rig constraint で muscle を近似するため、VMC の parent-local rotation を正確に復元できない。副作用で GetHumanPose 内部キャッシュにより更新遅延
-- **per-message TryFlush**: 1 bone ずつの HumanoidMotionFrame が発行され全身同期しない。VMC bundle と Unity LateUpdate を 1:1 対応させる前提自体が仕様的に誤り
-- **uOSC Udp.cs の IPv6 dual-stack 維持**: Windows 一部環境で IPv4 配信が来ないため IPv4 bind に修正したが、`Library/PackageCache` 修正で永続性なし。EVMC4U が依存する uOSC の挙動に委ねる方針へ
-- **自前で OSC パース + FrameBuilder + Applier を持つ**: 座標系変換の根拠が確立できず、VMagicMirror / VSeeFace との互換検証が不十分。EVMC4U は数年の運用実績と各送信アプリ対応の検証済み
+- **選択肢 B (フレーム抽象捨てて EVMC4U 直結)**: 既存 slot-core / motion-pipeline の Fallback / Cache / Slot 管理を VMC 用に再実装する必要があり、スコープ過大
+- **Slot ごと ExternalReceiver + daisy-chain**: `MoCapSourceRegistry` の「同一 Config は 1 source を共有」思想とズレる。1 つの共有 ExternalReceiver から Adapter が配る方式に
+- **`VMCMoCapSourceConfig.asset` 廃止 → Inspector 直設定**: Runtime 追加 Slot の仕組みを作り直す必要、UI Sample 大改修
+- **per-task バッチ実行**: 32 claude-p 起動で 16+ 時間見込み、Phase 単位で 3〜5 時間に圧縮
+- **Unity テスト MCP 経由**: 子 claude-p の MCP が別プロジェクト Unity と混同し hang する事象が発生、batchmode CLI に変更
+- **EVMC4U を Model=null なしで運用**: Model 指定すると EVMC4U 側の Transform 書込と `HumanoidMotionApplier` で二重書込になる
+- **asmdef から uOSC.Runtime 参照撤去** (task 6.3 原指示): `EVMC4USharedReceiver` が `uOscServer.StopServer/StartServer` を直接制御する必要があるため保持 (validate-impl Finding 1、design §7.1 との微差として受容)
+- **rebase 中に素直に conflict を削除**: manifest.json から `com.vrmc.vrm` 依存が失われる事態になるため、backup 側の最終状態を checkout で採用
 
 ## ハマりどころ
 
-- **Unity Humanoid の Muscle system は精度限定**: GetHumanPose / SetHumanPose の往復で誤差が出るため VMC 再現には不向き
-- **VMC Protocol 仕様に frame boundary signal は無い**: OSC bundle ≠ frame、`/VMC/Ext/OK` は frame 終端ではない
-- **uOSC の `onDataReceived` は Main Thread で Invoke される**: 過去の mocap-vmc design §13.1 は誤り
-- **VMC Root/Pos は多くの送信アプリで Hips と二重**: Root 書込デフォルト有効は破綻を生む
-- **Windows Loopback + Wireshark (npcap) の相互作用**: WireShark 起動中は OS → Unity socket への loopback 配信が阻害されるケースあり。診断時は WireShark 閉じること
-- **MCP の UNEXPECTED_ERROR**: `BindingFlags.NonPublic` を伴う Reflection で安定しない。診断スクリプトは public API 経由で書く
-- **PackageCache への直接修正は永続性なし**: Unity が package を re-fetch すると消える。一時修正の位置づけと割り切る
+- **子 claude-p は `rm` / `git rm` / `mv` 実行不可**: Phase 6 で FAIL、親セッションで削除処理してから再度 delegate する必要あり (memory に feedback 保存)
+- **Phase 6.1 で `AssemblyInfo.cs` を削除したら tests の internal constructor アクセス破綻**: `EVMC4UMoCapSource` の constructor が `internal` で Test assembly が `InternalsVisibleTo` 宣言に依存していた。復元 commit 必要
+- **Task 1.1 (Research) に 1 時間 hang**: Unity MCP の応答待ちで詰まり、子 claude-p の UnityTestRunner MCP が別セッションの Unity と混線
+- **rebase --onto での manifest 系 conflict**: 削除対象 commit に含まれる `com.vrmc.vrm` / `com.unity.timeline` 依存が後続 commit の前提になっていたため、素直な rebase resolution では依存が落ちる
+- **EVMC4U は `.unitypackage` のみの配布**: UPM git URL / OpenUPM / npm いずれも非対応。asmdef は既存 uOSC/UniVRM/UniGLTF/MToon/VRM10 の GUID を参照するため追加インストール不要で解決
+- **EVMC4U `ProcessMessage` の早期 return**: Model=null だと Bone Dictionary にも書き込まれないためパッチで緩和が必須
+- **`uOscServer` に `bindAddress` フィールド未存在**: Config の `bindAddress` は情報保持のみで現状反映不可、将来の uOSC 拡張待ち
 
 ## 学び
 
-- VMC 関連の成熟した実装 (EVMC4U) が存在する領域では、自前実装は時間の浪費になる。要件 (blending / retargeting 等) が合えば積極的に採用する方針
-- Protocol 仕様は第一次ソース (spec.md / 公式 wiki) で読む。仕様書が明示していない挙動を「暗黙ルール」で想像しない
-- Unity Humanoid Avatar の Muscle system / Animator.GetBoneTransform / HumanPoseHandler の挙動を、実装前に必ず検証する (今回は理解不足のまま進めて 2 度の方針撤回に至った)
-- 診断ログ (Debug.Log) 仕込みは仮説検証の近道。早いうちに実機ログを出すべきだった (boneRotations count=1 で 1 発で解決する問題を憶測で迷走した)
+- Kiro `/kiro:spec-run` は **per-task より Phase 単位でバッチ** する方が圧倒的に速い (claude-p startup + Unity batchmode テストのコストを amortize できる)
+- **Unity CLI batchmode は MCP より信頼性が高い** (複数プロジェクト Unity 並行時の MCP 混同を避けられる)
+- 子 claude-p (Agent spawn) は **sandbox 制約で削除系コマンド不可**、削除を伴う phase は親で先行処理する
+- `rebase --onto` で中間 commit を削除する場合、その commit に含まれる **生きている依存の変更** (package.json / lock) が後続 commit に影響しうる
+- **VRM 0.x / 1.x では Humanoid rig の normalization が異なる**: 自前 Transform 直接書込方式だと rig 差で姿勢がズレる可能性があり、EVMC4U のような実績ある実装に寄せる方が安全
+- **EVMC4U のソース読み** で発覚した重要事項:
+  - `HumanBodyBonesRotationTable` は private (要 readonly アクセサ追加)
+  - `ProcessMessage` の Model=null early-return (要緩和)
+  - Root は `RootPositionTransform.localPosition` に直書き (Synchronize=false では保存されない、要 cache プロパティ追加)
+  - `onDataReceived` は MainThread 発火で確定
 
 ## 次にやること
 
-### 最優先: EVMC4U への全面置換
+### 優先度: 高
+- **`backup/before-vrm-drop` ブランチ削除**: VRM 履歴除去時の保険、動作確認済で不要 (`git branch -D backup/before-vrm-drop`)
+- **`origin/main` へ push**: 本セッションの成果 (60+ commit) を remote に反映
 
-**背景**: VMC Protocol 対応の準公式 Unity ライブラリ。VSeeFace / VMagicMirror / VirtualMotionCapture など主要送信アプリとの互換性が数年にわたり検証済み。
+### 優先度: 中
+- **Finding 1 対処**: design.md §7.1 の uOSC.Runtime 記述を「撤去」→「保持 + `EVMC4USharedReceiver` が uOscServer を直接制御するため」に更新 (doc と impl の整合)
+- **EVMC4U ローカルパッチを `.patch` 化**: `Assets/EVMC4U/ExternalReceiver.cs` の 3 箇所パッチ (header L1 + accessors L391-424 + inline L848-878) を `.kiro/specs/mocap-vmc/evmc4u.patch` に artifact 化 (validate-impl R-6)
 
-**置換スコープ**:
-- `Runtime/MoCap/VMC/` 配下の自前実装を廃止:
-  - `VmcMoCapSource.cs` / `VMCMoCapSourceFactory.cs` / `VMCMoCapSourceConfig.cs`
-  - `Internal/VmcOscAdapter.cs` / `VmcMessageRouter.cs` / `VmcFrameBuilder.cs` / `VmcBoneMapper.cs` / `VmcTickDriver.cs`
-  - `AssemblyInfo.cs` (InternalsVisibleTo)
-- EVMC4U の `ExternalReceiver` を Avatar GameObject にアタッチし、VMC 受信とアバター適用を全て EVMC4U に委譲
-
-**設計上の検討事項** (次セッション開始時に必ず議論):
-1. **`IMoCapSource` 抽象との整合**
-   - EVMC4U は Transform 直接書込で動くため、`IObservable<MotionFrame>` 契約を満たさない
-   - 選択肢 A: EVMC4U の受信 Dictionary を定期的に読んで `HumanoidMotionFrame` に変換する薄い Adapter を書く (既存 slot-core / motion-pipeline 契約を維持)
-   - 選択肢 B: Slot の Applier 層を EVMC4U 直結に変え、MotionFrame を介さない経路を追加 (契約変更あり)
-2. **Slot 参照共有モデル (MoCapSourceRegistry) との相性**
-   - EVMC4U は ExternalReceiver を 1 つの Avatar に 1 つ想定。複数 Slot で同一 port を共有するユースケースは EVMC4U 標準に無い
-   - 複数 Slot が同一ポートで動く場合、`ExternalReceiver` を 1 個立てて複数 Avatar に適用するか、UDP packet 共有の仕組みを別途用意
-3. **VMCMoCapSourceConfig 相当の設定を EVMC4U の Inspector プロパティで代替**
-   - port / bindAddress 等を EVMC4U の `ExternalReceiver` 側の公開 field で管理
-4. **契約 Spec の書き換え**
-   - `mocap-vmc/design.md` と `requirements.md` を「EVMC4U パッケージに依存する wrapper 実装」として書き直す
-   - contracts.md の `HumanoidMotionFrame.BoneLocalRotations` はそのまま残す (motion-pipeline の Generic な財産として)
-
-**パッケージ導入手順 (概要)**:
-- `Packages/manifest.json` の `dependencies` に EVMC4U を git URL か OpenUPM 経由で追加
-- EVMC4U は `com.github.gpsnmeajp.easyvirtualmotioncaptureforunity` として npm / git から入手可能
-- 依存する uOSC は EVMC4U 側が同梱 or 同一 `com.hidano.uosc` で共有できるか要確認
-
-### 並行タスク (優先度: 中〜低)
-
-- 現行の `slot-core` の `VmcMoCapSource` 参照共有バグ (Initialize 二重呼び出し) を EVMC4U 採用後にどう扱うか再検討
-- `ui-sample` の PlayMode 統合テスト (T16/T17) は `Samples~` 配下配置の問題で欠落。EVMC4U 導入後に Sample 経路を再整理
+### 優先度: 低
+- **`_dirty` 判定を write-counter 方式に変更**: 現行は `Count + Σ(x+y+z+w)` hash 近似で near-identity pose の衝突リスク (validate-impl R-1 / R-4)。`ExternalReceiver` に `uint WriteCounter` 追加で解決
+- **PlayMode テストの動的 port 割当**: 現行は静的 port (`TestPort = 49502` 等) で socket 残留リスク (R-5)
+- **`VMCMoCapSourceConfig.cs` の XML doc 要件 ID 表記整理**: 旧 `3-3` 記法を現行 `3.x` 記法に統一 (Finding 3)
+- **Samples: `SlotManagementDemo.unity` が VRM 1.x でも動くことの検証** (別 spec 化の判断含む)
 
 ## 関連ファイル
 
-### Spec 変更 (今日)
-- `.kiro/specs/_shared/contracts.md` — §2.2 `HumanoidMotionFrame` に `BoneLocalRotations` 追加 (M-3 合意変更 + 実装方針の撤回記録)
-- `.kiro/specs/motion-pipeline/design.md` — §3.4 / §4.1 / §4.6 / §7.1 / §7.1.1 / §7.2 更新
-- `.kiro/specs/mocap-vmc/design.md` — §6.1 / §6.3 / §6.4 / §7.3 / §13.1 更新 (次セッションで全面書き換え予定)
+### Spec (今日)
+- `.kiro/specs/mocap-vmc/{requirements,design,tasks,spec.json}.md` — 全面再生成
+- `.kiro/specs/_shared/contracts.md` — §13.1 MainThread 訂正
 
-### 実装変更 (今日)
-- `Packages/com.hidano.realtimeavatarcontroller/Runtime/Motion/Frame/HumanoidMotionFrame.cs` — `BoneLocalRotations` プロパティ + 新コンストラクタ追加
-- `Packages/com.hidano.realtimeavatarcontroller/Runtime/Motion/Applier/HumanoidMotionApplier.cs` — 経路 A (Transform 直接書込) 追加、`_animator` 参照保持
-- `Packages/com.hidano.realtimeavatarcontroller/Runtime/Core/Slot/SlotManager.cs` — `TryGetSlotResources` 追加、`ApplyWithFallback` を public 化
-- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/Internal/VmcFrameBuilder.cs` — `WriteBoneMuscles` 削除、`_dirty` flag 追加、`_bones.Clear()` 廃止
-- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/Internal/VmcOscAdapter.cs` — `OnDataReceived` から `TryFlush` 削除、`Tick` 追加、`VmcTickDriver` AddComponent
-- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/Internal/VmcTickDriver.cs` — 新規作成 (LateUpdate 駆動)
+### 実装 (今日、新規)
+- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/EVMC4UMoCapSource.cs` — Adapter 本体
+- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/EVMC4USharedReceiver.cs` — process-wide singleton
+- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/VMCMoCapSourceFactory.cs` — Factory を `EVMC4UMoCapSource` 生成に差替
+- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/AssemblyInfo.cs` — `InternalsVisibleTo` (復元)
+- `Assets/EVMC4U/ExternalReceiver.cs` — ローカルパッチ 4 種 + header marker (L1, L391-424, L848-878)
 
-### UI Sample 修復 (今日)
-- `Packages/com.hidano.realtimeavatarcontroller/Samples~/UI/Runtime/SlotManagerBehaviour.cs` — `LateUpdate` + パイプライン結線
-- `Packages/com.hidano.realtimeavatarcontroller/Samples~/UI/Runtime/SlotManagementPanelUI.cs` — `detailPanel` [SerializeField] 追加、SpawnItem で callback 登録
-- `Packages/com.hidano.realtimeavatarcontroller/Samples~/UI/Runtime/SlotListItemUI.cs` — `IPointerClickHandler` 実装
-- `Packages/com.hidano.realtimeavatarcontroller/Samples~/UI/RealtimeAvatarController.Samples.UI.asmdef` — UniTask 参照追加
-- `Packages/com.hidano.realtimeavatarcontroller/Samples~/UI/Scenes/SlotManagementDemo.unity` — 重複 fileID 解消、Scroll View レイアウト調整
-- `Assets/Samples/Realtime Avatar Controller/0.1.0/UI Sample/` 配下 — 対応する imported copy に同じ変更を適用
-- (MCP 経由の Scene 内再生成) DisplayNameField / WeightToggle / FallbackDropdown を DefaultControls で正しい子構造付きで生成、`SlotDetailPanelUI` の参照を更新
+### 実装 (今日、維持)
+- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/VMCMoCapSourceConfig.cs`
+- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/RealtimeAvatarController.MoCap.VMC.asmdef`
 
 ### テスト (今日)
-- `Tests/EditMode/motion-pipeline/Frame/HumanoidMotionFrameTests.cs` — `BoneLocalRotations` 関連テスト 6 件追加
-- `Tests/PlayMode/motion-pipeline/Applier/HumanoidMotionApplierIntegrationTests.cs` — BoneLocalRotations 経路テスト 3 件追加
-- `Tests/PlayMode/mocap-vmc/VmcMoCapSourceIntegrationTests.cs` — Muscles 期待値を `BoneLocalRotations` 検証に置換
+- `Tests/EditMode/mocap-vmc/{EVMC4UMoCapSourceTests,EVMC4USharedReceiverTests,ExternalReceiverPatchTests,VmcConfigCastTests,VmcFactoryRegistrationTests}.cs`
+- `Tests/PlayMode/mocap-vmc/{EVMC4UMoCapSourceIntegrationTests,EVMC4UMoCapSourceSharingTests,SampleSceneSmokeTests}.cs`
 
-### 補助
-- `CLAUDE.md` — Unity Editor 起動コマンド (CLI から Unity 再起動可能に) を追記
-- `Library/PackageCache/com.hidano.uosc@f7a52f0c524d/Runtime/Core/DotNet/Udp.cs` — IPv6 dual-stack → IPv4 only bind に一時修正 (PackageCache なので永続性なし / EVMC4U 採用時に再評価)
-- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/Internal/VmcOscAdapter.cs` — `hideFlags` を `DontSave` (Hierarchy 表示可能化)
+### 削除 (今日、履歴に残る)
+- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/{VmcMoCapSource,Internal/Vmc*}.cs` — 旧自前実装
+- `Tests/EditMode|PlayMode/mocap-vmc/Vmc*Tests.cs`, `UdpOscSenderTestDouble.cs` — 旧自前実装テスト
+- `Packages/com.hidano.realtimeavatarcontroller/Editor/{Avatar/Builtin,Motion}/` — 空 skeleton asmdef フォルダ
 
-## EVMC4U 採用に向けた調査メモ
-
-- リポジトリ: https://github.com/gpsnmeajp/EasyVirtualMotionCaptureForUnity (MIT License)
-- Wiki: https://github.com/gpsnmeajp/EasyVirtualMotionCaptureForUnity/wiki
-- 主要コンポーネント: `ExternalReceiver.cs` (メインの MonoBehaviour)
-- 受信 → 適用モデル: 受信時は Dictionary にキャッシュ (コード内コメント `//受信と更新のタイミングは切り離した`)、Update / LateUpdate で Transform 直接書込
-- Muscle / HumanPoseHandler は未使用
-- Root 書込は Inspector で Transform 指定時のみ、デフォルト無効
-- uOSC バージョン: EVMC4U は特定バージョンの uOSC に依存 (現行プロジェクト `com.hidano.uosc 1.0.0` との衝突可能性あり、次セッションで確認)
+### 削除 (今日、一時ファイル)
+- `_impl_log_{7.3,9.1,12.2,15.4,15.5,mp_4-1,apb_T-1-3,apb_T-6-6,ui_T7-1}.txt`
+- `remove_gitkeep.sh`, `remove_playmode_gitkeep.sh`, `cleanup_temp.sh`, `t12-2.diff`
