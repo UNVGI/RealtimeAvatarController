@@ -64,7 +64,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
 - [ ] 2. `Assets/EVMC4U/ExternalReceiver.cs` に対する最小限のソース改変
   - 受信のみで動作可能化・内部状態の read API 公開・Root キャッシュ・テスト注入口の 4 点に限定する (design.md §6)。ファイル先頭に `// [RealtimeAvatarController mocap-vmc local patch] - see .kiro/specs/mocap-vmc/design.md §6` コメントを配置する。
 
-- [ ] 2.1 [Test] Patch 後の受信ガード緩和に対するテスト先行作成
+- [x] 2.1 [Test] Patch 後の受信ガード緩和に対するテスト先行作成
   - EditMode テストを追加し、ProcessMessage 相当のガードが Model=null でも Bone Dictionary への蓄積を止めないことを検証する。
     - `ExternalReceiver` インスタンスを生成 (GameObject 経由) → `Model = null` のまま後述の「テスト用 Setter」経由で `/VMC/Ext/Bone/Pos` 相当のボーン回転を注入 → `GetBoneRotationsView()` に要素が入ることを確認。
     - 既存挙動との非互換性がないこと (Model 有りの場合は従来通り Transform 書込が抑止されないこと) を回帰テストとして別ケースで担保。
