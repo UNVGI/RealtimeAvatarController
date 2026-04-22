@@ -125,7 +125,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 2.1, 2.2, 2.3, 4.4_
   - _Boundary: Tests/EditMode/mocap-vmc/ (EVMC4USharedReceiverTests)_
 
-- [ ] 3.2 [Impl] `EVMC4USharedReceiver` MonoBehaviour の実装
+- [x] 3.2 [Impl] `EVMC4USharedReceiver` MonoBehaviour の実装
   - 次の仕様で新規ファイル `Runtime/MoCap/VMC/EVMC4USharedReceiver.cs` を作成する:
     - `public static EVMC4USharedReceiver EnsureInstance()` — 初回呼び出しで GameObject `[EVMC4U Shared Receiver]` を生成し `DontDestroyOnLoad` を適用、`uOscServer` と `ExternalReceiver` を AddComponent。refCount を +1 する。
     - `public void Release()` — refCount を -1。0 到達時に `Destroy(gameObject)` を呼ぶ。

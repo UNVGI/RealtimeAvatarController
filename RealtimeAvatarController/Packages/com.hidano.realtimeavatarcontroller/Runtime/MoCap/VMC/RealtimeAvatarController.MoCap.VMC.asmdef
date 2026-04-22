@@ -5,7 +5,8 @@
     "RealtimeAvatarController.Core",
     "RealtimeAvatarController.Motion",
     "uOSC.Runtime",
-    "UniRx"
+    "UniRx",
+    "EVMC4U"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
