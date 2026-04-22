@@ -850,6 +850,14 @@ namespace RealtimeAvatarController.Motion
         // Transform.localRotation を直接書き込む方針 (EVMC4U など業界標準) に変更した (2026-04-22)。
         public IReadOnlyDictionary<HumanBodyBones, Quaternion> BoneLocalRotations { get; }
 
+        // M-3 追補 (2026-04-22): 各ボーンの親ローカル座標系での位置 (optional)
+        // VMC は Bone メッセージに position も含めて送信する。VRM 形式では骨の localPosition が
+        // 動的に変わるケースがあり、rotation だけでは腰・脚・背骨の姿勢が破綻する (EVMC4U の
+        // BonePositionSynchronize=true 相当)。本フィールドが非 null の場合、Applier は
+        //   Animator.GetBoneTransform(bone).localPosition = position の直接書込も行う。
+        // null の場合は localPosition への書込はスキップされ、rest pose のまま保持される。
+        public IReadOnlyDictionary<HumanBodyBones, Vector3> BoneLocalPositions { get; }
+
         // true: 有効フレーム (Muscles が有効 or BoneLocalRotations が有効)
         // false: 両方とも空 (データなし / 初期化前)
         public bool IsValid

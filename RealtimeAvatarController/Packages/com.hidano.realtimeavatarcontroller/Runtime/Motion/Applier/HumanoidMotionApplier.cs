@@ -236,6 +236,23 @@ namespace RealtimeAvatarController.Motion
                     }
                 }
 
+                // (M-3 追補 2026-04-22) BoneLocalPositions があれば Transform.localPosition にも書込む
+                // VMC の Bone メッセージには position も含まれており、EVMC4U の BonePositionSynchronize=true 相当。
+                // rotation のみ書いて rest pose の localPosition を残すと、腰・脚・背骨で
+                // 親骨との相対位置が矛盾して軸ずれになる (Arms は localPosition の影響が小さく rotation で再現可能)。
+                var bonePositions = humanoidFrame.BoneLocalPositions;
+                if (bonePositions != null && bonePositions.Count > 0)
+                {
+                    foreach (var kv in bonePositions)
+                    {
+                        var boneTf = _animator.GetBoneTransform(kv.Key);
+                        if (boneTf != null)
+                        {
+                            boneTf.localPosition = kv.Value;
+                        }
+                    }
+                }
+
                 // NOTE (M-3 2026-04-22): Avatar root (Animator.transform) への position / rotation 書込は
                 // 初期版では行わない。VMC Protocol の Root/Pos は「アバター親ノード」姿勢を意図するが、
                 // 多くの送信アプリ (VMagicMirror / VSeeFace 等) は Hips の global 姿勢を Bone rotation に

@@ -180,10 +180,18 @@ namespace RealtimeAvatarController.Motion
         /// VMC など「ボーン回転クォータニオンを native 形式として emit する」MoCap ソースが使用する。
         /// null または Count == 0 の場合は従来の Muscles 経路でのみ適用される。
         /// 非 null かつ Count > 0 の場合、<see cref="HumanoidMotionApplier"/> は MainThread で
-        /// Transform.localRotation への書込 → HumanPoseHandler.GetHumanPose で Muscle 逆変換 → SetHumanPose
-        /// の経路で適用する (この経路では Muscles は無視される)。
+        /// Animator.GetBoneTransform(bone).localRotation に直接書込む (Muscles は無視)。
         /// </summary>
         public IReadOnlyDictionary<HumanBodyBones, Quaternion> BoneLocalRotations { get; }
+
+        /// <summary>
+        /// (M-3 追補 2026-04-22) 各ボーンの親ローカル座標系での位置辞書 (任意)。
+        /// VRM 形式等で骨の localPosition が動的に変わるケースのため、VMC 送信側が position も含めて送る。
+        /// 非 null の場合は <see cref="HumanoidMotionApplier"/> が
+        /// Animator.GetBoneTransform(bone).localPosition に直接書込む (EVMC4U の BonePositionSynchronize 相当)。
+        /// null または空の場合は rest pose のまま保持される。
+        /// </summary>
+        public IReadOnlyDictionary<HumanBodyBones, Vector3> BoneLocalPositions { get; }
 
         /// <summary>
         /// 既存コンストラクタ (互換維持)。BoneLocalRotations は null。
