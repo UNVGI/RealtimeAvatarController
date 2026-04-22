@@ -1,4 +1,5 @@
-﻿/*
+﻿// [RealtimeAvatarController mocap-vmc local patch] - see .kiro/specs/mocap-vmc/design.md §6
+/*
  * ExternalReceiver
  * https://sabowl.sakura.ne.jp/gpsnmeajp/
  *
@@ -809,11 +810,12 @@ namespace EVMC4U
             }
 
 
-            //モデルがないか、モデル姿勢、ルート姿勢が取得できないなら以降何もしない
-            if (Model == null || Model.transform == null || RootPositionTransform == null || RootRotationTransform == null)
-            {
-                return;
-            }
+            // [RealtimeAvatarController mocap-vmc local patch]
+            // 旧実装: Model / RootTransform のいずれかが null なら以降全て早期 return していた。
+            // Adapter 経由での受信 (Model=null 固定) でも Bone / Root Dictionary 蓄積を継続させるため
+            // 早期 return を削除し、Transform 書込を行う箇所 (Root/Pos 分岐内) にのみ個別 null ガードを入れる。
+            // Bone/Pos 分岐は Dictionary への書込のみで Transform には触れないため追加のガードは不要。
+            // 参照: .kiro/specs/mocap-vmc/design.md §6.1
 
             //Root姿勢
             if (message.address == "/VMC/Ext/Root/Pos"
@@ -827,8 +829,6 @@ namespace EVMC4U
                 && (message.values[7] is float)
                 )
             {
-                StatusMessage = "OK";
-
                 pos.x = (float)message.values[1];
                 pos.y = (float)message.values[2];
                 pos.z = (float)message.values[3];
@@ -837,46 +837,55 @@ namespace EVMC4U
                 rot.z = (float)message.values[6];
                 rot.w = (float)message.values[7];
 
-                //位置同期
-                if (RootPositionSynchronize)
+                // [RealtimeAvatarController mocap-vmc local patch]
+                // Transform 書込は Model / RootTransform が揃っている場合にのみ実施する。
+                // (従来は外側の early-return で保護されていた。)
+                if (Model != null && Model.transform != null
+                    && RootPositionTransform != null && RootRotationTransform != null)
                 {
-                    RootPositionTransform.localPosition = pos;
-                }
-                //回転同期
-                if (RootRotationSynchronize)
-                {
-                    RootRotationTransform.localRotation = rot;
-                }
-                //スケール同期とオフセット補正(v2.1拡張プロトコルの場合のみ)
-                if (RootScaleOffsetSynchronize && message.values.Length > RootPacketLengthOfScaleAndOffset
-                    && (message.values[8] is float)
-                    && (message.values[9] is float)
-                    && (message.values[10] is float)
-                    && (message.values[11] is float)
-                    && (message.values[12] is float)
-                    && (message.values[13] is float)
-                    )
-                {
-                    scale.x = 1.0f / (float)message.values[8];
-                    scale.y = 1.0f / (float)message.values[9];
-                    scale.z = 1.0f / (float)message.values[10];
-                    offset.x = (float)message.values[11];
-                    offset.y = (float)message.values[12];
-                    offset.z = (float)message.values[13];
+                    StatusMessage = "OK";
 
-                    Model.transform.localScale = scale;
-                    RootPositionTransform.localPosition = Vector3.Scale(RootPositionTransform.localPosition, scale);
-
-                    //位置同期が有効な場合のみオフセットを反映する
+                    //位置同期
                     if (RootPositionSynchronize)
                     {
-                        offset = Vector3.Scale(offset, scale);
-                        RootPositionTransform.localPosition -= offset;
+                        RootPositionTransform.localPosition = pos;
                     }
-                }
-                else
-                {
-                    Model.transform.localScale = Vector3.one;
+                    //回転同期
+                    if (RootRotationSynchronize)
+                    {
+                        RootRotationTransform.localRotation = rot;
+                    }
+                    //スケール同期とオフセット補正(v2.1拡張プロトコルの場合のみ)
+                    if (RootScaleOffsetSynchronize && message.values.Length > RootPacketLengthOfScaleAndOffset
+                        && (message.values[8] is float)
+                        && (message.values[9] is float)
+                        && (message.values[10] is float)
+                        && (message.values[11] is float)
+                        && (message.values[12] is float)
+                        && (message.values[13] is float)
+                        )
+                    {
+                        scale.x = 1.0f / (float)message.values[8];
+                        scale.y = 1.0f / (float)message.values[9];
+                        scale.z = 1.0f / (float)message.values[10];
+                        offset.x = (float)message.values[11];
+                        offset.y = (float)message.values[12];
+                        offset.z = (float)message.values[13];
+
+                        Model.transform.localScale = scale;
+                        RootPositionTransform.localPosition = Vector3.Scale(RootPositionTransform.localPosition, scale);
+
+                        //位置同期が有効な場合のみオフセットを反映する
+                        if (RootPositionSynchronize)
+                        {
+                            offset = Vector3.Scale(offset, scale);
+                            RootPositionTransform.localPosition -= offset;
+                        }
+                    }
+                    else
+                    {
+                        Model.transform.localScale = Vector3.one;
+                    }
                 }
             }
             //ボーン姿勢

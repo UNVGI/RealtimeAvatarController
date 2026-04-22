@@ -73,7 +73,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 1.8, 2.5, 3.1, 12.3, 12.7_
   - _Boundary: Tests/EditMode/mocap-vmc/_
 
-- [ ] 2.2 [Impl] ProcessMessage の Model=null 早期リターン緩和
+- [x] 2.2 [Impl] ProcessMessage の Model=null 早期リターン緩和
   - `ExternalReceiver.cs` の `ProcessMessage` 内、現行の early-return (`Model == null || Model.transform == null || RootPositionTransform == null || RootRotationTransform == null` ガード) を削除または条件リオーダーし、`/VMC/Ext/Bone/Pos` および `/VMC/Ext/Root/Pos` の受信時に Bone / Root Dictionary 蓄積が Model=null でも継続するようにする (design.md §6.1)。
   - Transform 書込パス (`RootPositionSynchronize` / `RootRotationSynchronize` / `BoneSynchronizeByTable` 経由) は既存の null ガードで保護されているため、これらは動作を変えない。
   - ファイル冒頭の local patch マーカーコメントを記載する。
