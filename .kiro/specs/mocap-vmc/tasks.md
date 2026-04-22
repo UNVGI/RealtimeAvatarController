@@ -344,7 +344,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
 - [ ] 7. `SlotManagementDemo` シーン上で新 Adapter が動作することを確認
   - 旧 Spec コードパスがなくなった状態で既存 Sample が動作し続けることを確認する (要件 7.6 / 11.3)。
 
-- [ ] 7.1 [Test] PlayMode スモークテスト (Sample Scene 相当)
+- [x] 7.1 [Test] PlayMode スモークテスト (Sample Scene 相当)
   - Sample を含めるか別 PlayMode テストで代用するかは実装者判断で良いが、以下を最低限確認する:
     - `VMCMoCapSourceConfig.asset` を `MoCapSourceDescriptor.Config` として持つ `SlotSettings` から `SlotManager` を作成 → Slot 追加 → `EVMC4UMoCapSource` が Resolve され、`MotionStream` を購読できる。
     - 同一 Config を持つ 2 つの Slot を追加した場合、参照共有で同一 Adapter が返る。
