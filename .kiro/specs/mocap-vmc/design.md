@@ -755,3 +755,13 @@ flowchart TB
 - **port 再バインドコスト**: Config port を変更する度に `StopServer`/`StartServer` でソケット再作成が起きる。UI Sample 上でのポート変更操作は想定頻度が低いため受容
 - **Domain Reload OFF + PlayMode 停止**: `EVMC4USharedReceiver` の static フィールドが残存する懸念に対して `RuntimeInitializeOnLoadMethod(SubsystemRegistration)` で明示クリアする
 - **EVMC4U Inspector のパフォーマンス**: `ExternalReceiver` は大量の SerializeField を持つため Inspector 描画コストは高いが、`EVMC4USharedReceiver` は DontDestroyOnLoad GameObject に貼るだけでユーザー操作対象ではないため影響は限定的
+
+### 13.1 `EVMC4USharedReceiver` 静的クリアと `RegistryLocator.ResetForTest()` の実行順 (task 3.4 結論)
+
+**結論**: 両者は互いに独立 (相互依存なし) なため、`SubsystemRegistration` タイミングでの実行順に依存しない。
+
+- `EVMC4USharedReceiver.ResetStaticsOnSubsystemRegistration()` は `s_instance = null` / `s_refCount = 0` のみ行い、他の型の static を参照しない。また GameObject への参照は触らない (旧シーン上の GameObject は既に Unity が破棄済み前提)
+- `RegistryLocator.ResetForTest()` も自身が保持する Registry / ErrorChannel / `s_suppressedErrors` のみリセットし、`EVMC4USharedReceiver` を参照しない
+- Unity 仕様上、同一 `RuntimeInitializeLoadType.SubsystemRegistration` に属する複数の `[RuntimeInitializeOnLoadMethod]` の実行順は保証されないが、上記の独立性によりどちらが先でも安全
+
+**観測ポイント**: PlayMode テスト (Task 4.7 / 7.1 系統) で「`RegistryLocator.ResetForTest()` → `EVMC4USharedReceiver.EnsureInstance()` → `Resolve` → `Release`」の一連フローが green であることで、同一フレーム内の両 static クリアに不整合が無いことを確認する。初期実装時点でこれは EditMode テスト (`EVMC4USharedReceiverTests.ResetForTest_AfterRelease_SupportsFreshEnsureInstance`) で軽く確認済み。

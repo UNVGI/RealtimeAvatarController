@@ -143,7 +143,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 2.1, 2.3_
   - _Boundary: Runtime/MoCap/VMC/EVMC4USharedReceiver.cs_
 
-- [ ] 3.4 [Research] `RegistryLocator.ResetForTest()` と静的クリアの実行順確認
+- [x] 3.4 [Research] `RegistryLocator.ResetForTest()` と静的クリアの実行順確認
   - `SubsystemRegistration` タイミングで登録される複数の `RuntimeInitializeOnLoadMethod` の順序は Unity 仕様上保証されない点を前提に、本 Spec では「どちらが先でも安全」であるように設計する (両者とも static を null に戻すだけで、相互依存がない)。
   - 実機で `RegistryLocator.ResetForTest()` 実装内容 (slot-core) と `EVMC4USharedReceiver` の静的クリアが同一フレームで起きた場合に不具合が出ないことを PlayMode テスト (Task 4.7 または 7 系統) で軽く観測する。
   - 観測可能な完了条件: コードコメントまたはタスク実行記録に「両静的クリアは互いに独立で実行順に依存しない」旨を明記し、PlayMode テスト 1 ケースでリセット→新規 EnsureInstance→Resolve→Release の一連フローが green であることを確認する。
