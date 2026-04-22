@@ -289,7 +289,7 @@ Phase H (ドキュメント整備・回帰確認) → Task 8
   - _Requirements: 5.4, 5.5, 6.1, 6.2, 6.3, 11.3_
   - _Boundary: Runtime/MoCap/VMC/VMCMoCapSourceFactory.cs_
 
-- [ ] 5.3 [Test] 参照共有 (同一 Config → 同一 Adapter) の PlayMode テスト
+- [x] 5.3 [Test] 参照共有 (同一 Config → 同一 Adapter) の PlayMode テスト
   - `MoCapSourceRegistry.Resolve()` を用いて、同一 `VMCMoCapSourceConfig` インスタンスに対する 2 回の Resolve が同一 `EVMC4UMoCapSource` を返すことを確認する (要件 2.1 / 5.6 / 12.4)。
   - 別インスタンスの `VMCMoCapSourceConfig` (port 違い) に対しては別 Adapter が返るが、`EVMC4USharedReceiver` のインスタンスは 1 つのみ保持されていることを確認する。
   - `[SetUp]` / `[TearDown]` で `RegistryLocator.ResetForTest()` を呼ぶ (要件 12.5)。
