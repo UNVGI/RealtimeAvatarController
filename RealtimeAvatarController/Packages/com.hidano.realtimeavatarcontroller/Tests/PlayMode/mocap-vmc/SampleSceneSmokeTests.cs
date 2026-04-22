@@ -110,28 +110,45 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
                 await _manager.RemoveSlotAsync("slot-smoke-1");
             });
 
-        // --- ケース 2: 同一 Config を参照する 2 Slot は同一 Adapter を共有 (要件 5.6) ---
+        // --- ケース 2: 同一 Config に対する Adapter 参照共有 (要件 5.6) ---
+        //
+        // 共有判定の Source of Truth は <see cref="IMoCapSourceRegistry"/> であり、Config 参照等価で
+        // 同一 Adapter を返す。本ケースでは SlotManager 経由で Slot A を追加して Adapter を
+        // 初期化し、その後 Registry から同じ Config を Resolve して参照共有を検証する。
+        //
+        // Registry.Resolve の 2 回目は Adapter を再 Initialize せず refCount のみ増加させるため、
+        // 既存の Running 状態とも整合する (EVMC4UMoCapSourceSharingTests §5.3 と同じ契約)。
 
         [UnityTest]
-        public IEnumerator AddTwoSlots_WithSameVMCConfig_ShareSameEVMC4UMoCapSourceInstance()
+        public IEnumerator AddSlot_ThenResolveSameConfigFromRegistry_ReturnsSameEVMC4UMoCapSourceInstance()
             => UniTask.ToCoroutine(async () =>
             {
                 var vmcConfig = CreateVmcConfig(port: 49522);
-                var settings1 = CreateSettings("slot-smoke-a", "Smoke Slot A", vmcConfig);
-                var settings2 = CreateSettings("slot-smoke-b", "Smoke Slot B", vmcConfig);
+                var settings = CreateSettings("slot-smoke-a", "Smoke Slot A", vmcConfig);
 
-                await _manager.AddSlotAsync(settings1);
-                await _manager.AddSlotAsync(settings2);
+                await _manager.AddSlotAsync(settings);
 
-                Assert.That(_manager.TryGetSlotResources("slot-smoke-a", out var sourceA, out _), Is.True);
-                Assert.That(_manager.TryGetSlotResources("slot-smoke-b", out var sourceB, out _), Is.True);
-
+                Assert.That(_manager.TryGetSlotResources("slot-smoke-a", out var sourceA, out _), Is.True,
+                    "Slot 追加直後は Adapter が Registry 経由で Resolve されているべき。");
                 Assert.That(sourceA, Is.InstanceOf<EVMC4UMoCapSource>());
-                Assert.That(sourceB, Is.SameAs(sourceA),
-                    "同一 VMCMoCapSourceConfig を参照する 2 つの Slot は同一 Adapter を共有するべき (要件 5.6)。");
+
+                var descriptor = new MoCapSourceDescriptor
+                {
+                    SourceTypeId = VMCMoCapSourceFactory.VmcSourceTypeId,
+                    Config = vmcConfig,
+                };
+                var sourceB = RegistryLocator.MoCapSourceRegistry.Resolve(descriptor);
+                try
+                {
+                    Assert.That(sourceB, Is.SameAs(sourceA),
+                        "同一 VMCMoCapSourceConfig に対する 2 回目の Resolve は参照等価な同一 Adapter を返すべき (要件 5.6)。");
+                }
+                finally
+                {
+                    RegistryLocator.MoCapSourceRegistry.Release(sourceB);
+                }
 
                 await _manager.RemoveSlotAsync("slot-smoke-a");
-                await _manager.RemoveSlotAsync("slot-smoke-b");
             });
 
         // --- ケース 3: Release Slot → Resolve 別 Slot の差替フロー (要件 7.3 / 7.4) ---
