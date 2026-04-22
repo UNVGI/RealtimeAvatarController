@@ -1,955 +1,757 @@
 # mocap-vmc 設計ドキュメント
 
-> **フェーズ**: design  
-> **言語**: ja  
-> **Wave**: Wave B (並列波) — `slot-core` design (Wave A) を先行参照して生成
+> **フェーズ**: design (regenerate)
+> **言語**: ja
+> **対象リビジョン**: requirements.md `updated_at=2026-04-22` (EVMC4U 全面置換版)
+> **前版との関係**: 前版 (`2026-04-22` より前) は自前 VMC パーサ実装を前提としていたため全面書換。インターフェース (`IMoCapSource` / `HumanoidMotionFrame` / `MoCapSourceRegistry`) は維持する。
 
 ---
 
 ## 1. 概要
 
-### 責務範囲
+`mocap-vmc` は VMC プロトコル (OSC) 受信のための `IMoCapSource` 具象実装を提供する。
+実装主体は準公式ライブラリ **EVMC4U** (`gpsnmeajp/EasyVirtualMotionCaptureForUnity`, MIT, `Assets/EVMC4U/` に取込済み) に委譲し、本 Spec は EVMC4U が内部 Dictionary に蓄積したボーン回転を `HumanoidMotionFrame` へ変換して `IObservable<MotionFrame>` として発行する薄い Adapter を定義する。
 
-`mocap-vmc` は VMC (バーチャルモーションキャプチャ) プロトコルに対応した MoCap ソース具象実装を提供する。
+**利用者**: `SlotManager` (`slot-core`) を経由したランタイム統合者。UI Sample や動的 Slot 追加フロー。
+**影響**: 旧自前実装 (`VmcMoCapSource` / `VmcOscAdapter` / `VmcFrameBuilder` / `VmcMessageRouter` / `VmcBoneMapper` / `VmcTickDriver`) は削除される。上位コード (typeId `"VMC"` / `VMCMoCapSourceConfig` / UI Sample シーン) は変更なしで動作する。
 
-- **`VmcMoCapSource : IMoCapSource`** を定義し、OSC (Open Sound Control) 経由で VMC データを受信する
-- 受信データを `motion-pipeline` が定義するモーションデータ中立表現 (`HumanoidMotionFrame`) へ変換し、UniRx `Subject<MotionFrame>` を通じて Push 型ストリームとして発行する
-- `VMCMoCapSourceConfig : MoCapSourceConfigBase` および `VMCMoCapSourceFactory : IMoCapSourceFactory` を定義し、`MoCapSourceRegistry` へ `typeId="VMC"` で属性ベース自己登録する
-- 本 Spec は VMC 受信側 (Receiver) のみを対象とし、送信側 (Sender) は実装しない
+### Goals
 
-### 他 Spec との境界
+- G1. EVMC4U を実装主体としつつ、既存 `IMoCapSource` / `HumanoidMotionFrame` (`BoneLocalRotations` 経路) 契約を不変に保つ
+- G2. 共有 1 個の EVMC4U 受信コンポーネント + Slot 毎 Adapter により、`MoCapSourceRegistry` の参照共有モデルと互換
+- G3. 旧自前実装を撤去し、VMC 座標系・ボーンマッピング・bundle 境界検出に関する実装責任を完全に EVMC4U へ移譲する
+- G4. VSeeFace / VMagicMirror / VirtualMotionCapture 等の主要送信アプリで `HumanoidMotionApplier` を介してアバターが動くことを確認可能なテスト構造を提供する
 
-| 境界 | 内容 |
-|------|------|
-| `slot-core` → `mocap-vmc` | `IMoCapSource`・`MoCapSourceConfigBase`・`IMoCapSourceFactory`・`IMoCapSourceRegistry`・`ISlotErrorChannel`・`RegistryLocator` を参照 |
-| `motion-pipeline` → `mocap-vmc` | `MotionFrame`・`HumanoidMotionFrame` を変換先として利用 |
-| `mocap-vmc` → 下位 | 逆方向依存なし |
+### Non-Goals
 
----
-
-## 2. アーキテクチャ
-
-### データフロー
-
-```
-[VMC 送信ソース (バーチャルモーションキャプチャ等)]
-        │ UDP パケット
-        ▼
-[uOSC (com.hidano.uosc) 受信レイヤー (ワーカースレッド)]
-        │ OscMessage (address + args)  ← uOSC が OSC パースまで担う
-        ▼
-[VMC メッセージルータ (address プレフィックス振り分け)]
-        │ Bone/Root データ
-        ▼
-[HumanoidMotionFrame 組み立て (VmcFrameBuilder)]
-  ・Stopwatch で timestamp 打刻
-        │ HumanoidMotionFrame
-        ▼
-[Subject<MotionFrame>.OnNext()]
-  (Subject.Synchronize() によるスレッドセーフラッパー)
-        │ IObservable<MotionFrame>
-        ▼
-[Publish().RefCount() マルチキャストストリーム]
-        │ MotionStream (IObservable<MotionFrame>)
-        ▼
-[購読者 (MotionCache 等)] ← .ObserveOnMainThread() でメインスレッドに切替
-```
-
-### MoCapSourceRegistry 自己登録フロー
-
-```
-アプリ起動 / Editor 起動
-        │
-        ▼
-[VMCMoCapSourceFactory.RegisterRuntime() / RegisterEditor()]
-        │ RegistryLocator.MoCapSourceRegistry.Register("VMC", factory)
-        ▼
-[IMoCapSourceRegistry (DefaultMoCapSourceRegistry)]
-        │ typeId="VMC" → factory 登録完了
-```
+- VMC Sender (送信) 実装
+- VRM 1.x 固有互換検証 (EVMC4U の対応状況に従う)
+- BlendShape / 表情 / リップシンクの `HumanoidMotionFrame` 経由受け渡し (EVMC4U 側が独自に BlendShape を適用するため本 Spec では触らない)
+- 受信タイムアウト検知・再接続ロジック (初期版未実装)
+- EVMC4U のアップストリーム fork / PR
 
 ---
 
-## 3. VMC プロトコル対応範囲
+## 2. Boundary Commitments
 
-### 対応 VMC プロトコルバージョン
+### This Spec Owns
 
-**VMC Protocol v2.5** に対応する。
+- EVMC4U をラップする Adapter クラス `EVMC4UMoCapSource` (`IMoCapSource` 具象) の定義と実装
+- 共有 EVMC4U 受信コンポーネントのライフサイクル管理 (`EVMC4USharedReceiver` MonoBehaviour、DontDestroyOnLoad 上に単一生成)
+- `VMCMoCapSourceConfig` (既存 ScriptableObject) を保持し Adapter 初期化時に EVMC4U 受信ポートへ反映する責務
+- `VMCMoCapSourceFactory` (`typeId="VMC"`) と属性ベース自己登録 (Runtime / Editor)
+- `Assets/EVMC4U/ExternalReceiver.cs` に対するローカル最小改変 (§6 参照)
+- `_shared/contracts.md` §13.1 の文言訂正 (§9.2 参照)
+- 旧自前実装ファイル一式の削除 (§7 参照)
 
-### サポートする OSC アドレス
+### Out of Boundary
 
-| OSC アドレス | 内容 | 本 Spec の扱い |
-|-------------|------|--------------|
-| `/VMC/Ext/Root/Pos` | ルートトランスフォーム (位置・回転) | **実装対象** |
-| `/VMC/Ext/Bone/Pos` | Humanoid ボーン (名前・位置・回転) | **実装対象** |
-| `/VMC/Ext/Blend/Val` | ブレンドシェイプ値 | 受信は行うが変換対象外 (初期版) |
-| `/VMC/Ext/Blend/Apply` | ブレンドシェイプ確定通知 | 受信は行うが変換対象外 (初期版) |
-| `/VMC/Ext/OK` | 疎通確認 (ステータス) | スキップ (ログのみ) |
-| `/VMC/Ext/T` | 送信側タイムスタンプ | **使用しない** (VMC v2.5 では不安定) |
+- `IMoCapSource` / `IMoCapSourceFactory` / `IMoCapSourceRegistry` / `MoCapSourceConfigBase` / `ISlotErrorChannel` / `RegistryLocator` の定義 → `slot-core`
+- `MotionFrame` / `HumanoidMotionFrame` / `BoneLocalRotations` の型形状 → `motion-pipeline`
+- `HumanoidMotionApplier` (Transform 直接書込) の実装 → `motion-pipeline`
+- MotionCache の具象・購読制御 → `motion-pipeline`
+- Slot の生成/解放フロー・Fallback 動作 → `slot-core`
+- VMC プロトコル (OSC) パース・座標変換・ボーン名解決 → **EVMC4U**
 
-#### 非サポート (スコープ外)
-- VMC Sender (`/VMC/Ext/Bone/Pos` 等の送信) は本 Spec では実装しない
-- BlendShape / 表情制御への橋渡しは初期版では未実装 (将来 Spec で対応)
+### Allowed Dependencies
+
+- `RealtimeAvatarController.Core` (slot-core)
+- `RealtimeAvatarController.Motion` (motion-pipeline)
+- `EVMC4U` asmdef (Assets/EVMC4U/ 配下)
+- `com.hidano.uosc` (EVMC4U が GUID 参照で使用。Adapter は直接参照しないのが望ましい)
+- `UniRx` (Subject / Publish / RefCount のために必要)
+
+### Revalidation Triggers
+
+- `HumanoidMotionFrame.BoneLocalRotations` の形状変更 → 下流 Applier / 本 Adapter の再検証
+- EVMC4U のローカル改変箇所 (§6) への変更 → Adapter の読取経路の再検証
+- `MoCapSourceRegistry` の参照共有モデル (Descriptor 等価性) の変更 → 共有 Receiver ライフサイクル再検証
+- uOSC の `onDataReceived` 実行スレッドが変わった場合 → スレッドモデル全面見直し
 
 ---
 
-## 4. OSC ライブラリ選定
+## 3. Architecture
 
-### 候補一覧
+### 3.1 既存アーキテクチャ分析
 
-| ライブラリ | ライセンス | Unity 6 互換 | UPM 配布 | NuGet 依存 | 備考 |
-|-----------|-----------|:----------:|:-------:|:---------:|------|
-| **com.hidano.uosc** (採用) | MIT | ○ | ○ (npm scoped registry) | なし | hecomi/uOSC Fork。SO_REUSEADDR 修正済み |
-| uOSC (hecomi/uOSC 本家) | MIT | ○ | △ (GitHub URL) | なし | Unity 2017 以降対応。Fork 元 |
-| extOSC | MIT | ○ | △ (Asset Store) | なし | Editor 統合 UI あり。サイズ大 |
-| OscCore (stella3d) | MIT | △ (未確認) | ○ (OpenUPM) | なし | 最終リリース 2020 年。Unity 6 動作未確認 |
-| 自作 OSC パーサ | — | ○ | — | なし | 最小実装。OSC 1.0 のみ対応 |
+- `IMoCapSource` は Push 型 (`IObservable<MotionFrame>`) + `Publish().RefCount()` マルチキャスト + Subject Synchronize 経由の契約。現行は MainThread で `OnNext` が走ることが合意済み (contracts.md §2.2 M-3 追補)
+- `MoCapSourceRegistry` は `(SourceTypeId, Config 参照)` を key とする参照カウント共有。同一 Config を指す複数 Slot が同一 `IMoCapSource` インスタンスを共有する
+- `HumanoidMotionApplier` は `BoneLocalRotations` を `Animator.GetBoneTransform(bone).localRotation` で直接書込 (motion-pipeline 側で実装済み)。Muscles は `Array.Empty<float>()` 経路
+- EVMC4U の `ExternalReceiver` は GameObject に貼る MonoBehaviour で、`uOSC.uOscServer` を兄弟コンポーネントとして持ち、`onDataReceived` は `uOscServer.Update` (MainThread) から Invoke される
+- EVMC4U は受信時に `HumanBodyBonesRotationTable` / `HumanBodyBonesPositionTable` の 2 つの private Dictionary にキャッシュし、`Process()` (Update または LateUpdate) で `Animator.GetBoneTransform(bone).localRotation = rot` を書込む
 
-### 選定結果: **com.hidano.uosc (バージョン 1.0.0)**
+### 3.2 アーキテクチャパターン
 
-**パッケージ情報**:
+選定: **Adapter + Shared Singleton**。EVMC4U の ExternalReceiver を 1 個のプロセスワイド共有コンポーネントとして立ち上げ、Slot 毎の Adapter がその内部状態を pull read して `HumanoidMotionFrame` を emit する。EVMC4U の Model 適用ループは**無効化** (Model=null にする) し、ボーン Transform 書込は `HumanoidMotionApplier` に一本化する。
 
-| 項目 | 値 |
-|-----|---|
-| パッケージ ID | `com.hidano.uosc` |
-| バージョン | `1.0.0` |
-| ライセンス | MIT |
-| 配布方法 | npm scoped registry (`https://registry.npmjs.com`、scope: `com.hidano`) |
-| Fork 元 | `hecomi/uOSC` (Unity 2017 以降対応、VMC 界隈で実績) |
-| 主な変更点 | SO_REUSEADDR オプションを有効化し、受信ポート開放問題を修正 |
+```mermaid
+graph TB
+  subgraph SlotCore[slot-core]
+    SM[SlotManager]
+    MR[MoCapSourceRegistry]
+  end
 
-**選定理由**:
+  subgraph MoCapVMC[mocap-vmc this spec]
+    Factory[VMCMoCapSourceFactory]
+    Config[VMCMoCapSourceConfig]
+    Shared[EVMC4USharedReceiver]
+    Adapter1[EVMC4UMoCapSource adapter A]
+    Adapter2[EVMC4UMoCapSource adapter B]
+  end
 
-1. **SO_REUSEADDR 修正済み**: hecomi/uOSC をベースに受信ポートの開放問題を修正したフォーク版。VMC ソフトウェアとの共存や、テスト間でのポート再利用において問題が生じにくい。
-2. **VMC 界隈の実績継承**: hecomi/uOSC は VMC プロトコル対応ソフトウェアで広く使用されており、互換性実績がある。`com.hidano.uosc` はそのフォークであるため同等の VMC 互換性を持つ。
-3. **UPM 配布対応**: npm scoped registry 経由で UPM 導入が可能。`package.json` への scoped registry 追加のみで導入できる。
-4. **NuGet 依存なし**: UniRx と同様に NuGet 依存を持たないため、scoped registry 構成が簡潔に保たれる。
-5. **MIT ライセンス**: UPM パッケージへの同梱・再配布に問題なし。
+  subgraph EVMC4U[EVMC4U local]
+    Ext[ExternalReceiver patched]
+    Srv[uOscServer]
+  end
 
-> **Unity 6 互換性について**: hecomi/uOSC は Unity 2017 以降に対応している。`com.hidano.uosc` としての Unity 6000.3 での明示的な動作確認は tasks フェーズでの実機検証、またはリリース前検証項目として実施する。
+  subgraph MotionPipeline[motion-pipeline]
+    Cache[MotionCache]
+    Applier[HumanoidMotionApplier]
+  end
 
-### 導入方法
-
-`Packages/manifest.json` に以下を追加する:
-
-```json
-{
-  "scopedRegistries": [
-    {
-      "name": "npm (com.hidano)",
-      "url": "https://registry.npmjs.com",
-      "scopes": [
-        "com.hidano"
-      ]
-    },
-    {
-      "name": "OpenUPM",
-      "url": "https://package.openupm.com",
-      "scopes": [
-        "com.neuecc.unirx",
-        "com.cysharp.unitask"
-      ]
-    }
-  ],
-  "dependencies": {
-    "com.hidano.uosc": "1.0.0",
-    "com.neuecc.unirx": "7.1.0",
-    "com.cysharp.unitask": "2.x.x"
-  }
-}
+  SM --> MR
+  MR --> Factory
+  Factory --> Adapter1
+  Factory --> Adapter2
+  Adapter1 --> Shared
+  Adapter2 --> Shared
+  Shared --> Ext
+  Ext --> Srv
+  Srv -->|onDataReceived MainThread| Ext
+  Adapter1 -->|MotionStream HumanoidMotionFrame| Cache
+  Cache --> Applier
+  Config -.uses.-> Shared
 ```
 
-### VMC プロトコル解析方針
+### 3.3 Technology Stack
 
-OSC 受信層には `com.hidano.uosc` を使用し、VMC プロトコル解析 (OSC アドレスハンドリング・ボーンマッピング・フレーム組み立て) は自前実装とする。
+| Layer | Choice / Version | Role in Feature | Notes |
+|-------|------------------|-----------------|-------|
+| OSC 受信 / VMC パース / 座標変換 | EVMC4U v5.0a (Assets/EVMC4U/) + com.hidano.uosc 1.0.0 | VMC 互換性検証済み実装主体 | MIT。アップストリーム fork はしない。ローカル改変は §6 のみ |
+| Reactive | UniRx (com.neuecc.unirx 7.x) | `Subject<MotionFrame>` + `Publish().RefCount()` | slot-core / motion-pipeline と共通 |
+| Runtime / PlayerLoop | Unity 6000.3.10f1 | `MonoBehaviour.LateUpdate` で Adapter Tick 駆動 | project-foundation が pin |
 
-**参考実装**: `gpsnmeajp/EasyVirtualMotionCaptureForUnity` (EVMC4U) の `ExternalReceiver.cs`
-- リポジトリ: `https://github.com/gpsnmeajp/EasyVirtualMotionCaptureForUnity`
-- ライセンス: MIT (Copyright (c) 2019 gpsnmeajp)
-- 採用方針: EVMC4U を丸ごと取り込まず、OSC アドレスハンドリング (`/VMC/Ext/Bone/Pos`・`/VMC/Ext/Root/Pos` 等の switch-case 構造) を**参考実装**として自前で `VmcMessageRouter` / `VmcFrameBuilder` を実装する。これにより EVMC4U のアーキテクチャ (MonoBehaviour ベース) との衝突を回避する。
-- **帰属表記**: 実装ファイル `VmcMessageRouter.cs` のヘッダーコメントに EVMC4U のリポジトリ URL とライセンス帰属を明記すること。
+### 3.4 Dependency Direction
+
+Adapter → (slot-core, motion-pipeline, EVMC4U) の一方向。EVMC4U → mocap-vmc の逆方向参照は存在しない。EVMC4U は mocap-vmc の型を知らない。
 
 ---
 
-## 5. 公開 API 仕様
+## 4. Components and Interfaces
 
-### 5.1 `VMCMoCapSourceConfig`
+### 4.1 Summary
+
+| Component | Layer | Intent | Req Coverage | Key Dependencies | Contracts |
+|-----------|-------|--------|--------------|------------------|-----------|
+| `EVMC4UMoCapSource` (Adapter) | mocap-vmc Runtime | EVMC4U 内部状態を読み、`HumanoidMotionFrame` を発行する `IMoCapSource` 具象 | 1.1–1.9, 2.4, 3.1–3.7, 4.1–4.7, 7.5, 8.1–8.4 | `EVMC4USharedReceiver` (P0), `ExternalReceiver` (P0), UniRx (P0), `HumanoidMotionFrame` (P0) | Service, State |
+| `EVMC4USharedReceiver` (MonoBehaviour) | mocap-vmc Runtime | プロセスワイド単一の ExternalReceiver GameObject を保持・生成・解体する | 2.1–2.3 | `ExternalReceiver` (P0), `uOscServer` (P0) | State |
+| `VMCMoCapSourceConfig` | mocap-vmc Runtime | port / bindAddress を保持する ScriptableObject (既存継続) | 5.1–5.3 | `MoCapSourceConfigBase` (P0) | State |
+| `VMCMoCapSourceFactory` | mocap-vmc Runtime | `IMoCapSourceFactory` 実装。Adapter 生成と属性ベース自己登録 | 5.4–5.6, 6.1–6.4 | `RegistryLocator` (P0) | Service |
+| `VmcMoCapSourceFactoryEditorRegistrar` | mocap-vmc Editor | Editor 起動時の Registry 登録 (InitializeOnLoadMethod) | 6.2 | `RegistryLocator` (P0) | Service |
+| `ExternalReceiver` (EVMC4U, patched) | EVMC4U local fork | 受信 + 内部 Dictionary 蓄積。本 Spec ではボーン Transform 書込を抑止し読取 API を公開 | 1.8, 2.5, 3.1, 4.1, 4.2 | `uOscServer` (P0), UniVRM / UniGLTF (P2, 受信専用ではロードしない) | Service, State |
+
+### 4.2 `EVMC4UMoCapSource` (Adapter)
+
+| Field | Detail |
+|-------|--------|
+| Intent | EVMC4U に受信・蓄積させた状態を LateUpdate で snapshot し `HumanoidMotionFrame` を emit する |
+| Requirements | 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 7.5, 8.1, 8.2, 8.3, 8.4 |
+| Namespace / asmdef | `RealtimeAvatarController.MoCap.VMC` / `RealtimeAvatarController.MoCap.VMC` |
+
+**命名の根拠 (Q1 解決)**: 旧 `VmcMoCapSource` は削除対象 (要件 11.1) であり、実装主体が自前 OSC パーサから EVMC4U に本質的に変わるため、名称でこれを明示する方が将来の保守に資する。typeId `"VMC"` は VMC プロトコルそのものを指すため `VMCMoCapSourceFactory.VmcSourceTypeId` として維持し、内部クラス名だけを `EVMC4UMoCapSource` とする。UI Sample やシーン参照にはクラス名は直接現れない (typeId 経由) ため互換性は保たれる。
+
+**Responsibilities & Constraints**
+
+- `SourceType` は文字列 `"VMC"` を返す (要件 1.3)
+- `MotionStream` は `Subject<MotionFrame>.Synchronize().Publish().RefCount()` 経由の Hot Observable (既存パターン踏襲、要件 1.4 / 4.6 / 4.7)
+- `Initialize()` は MainThread からのみ呼ぶ。以下の順:
+  1. 状態チェック (`Uninitialized` 以外なら `InvalidOperationException`、要件 7.5)
+  2. `config as VMCMoCapSourceConfig`、失敗時 `ArgumentException` with 実型名 (要件 1.5 / 5.4)
+  3. `port` 範囲 (1025–65535) 外なら `ArgumentOutOfRangeException` (要件 5.3)
+  4. `EVMC4USharedReceiver.EnsureInstance()` を呼び、共有 Receiver を取得 (要件 1.6, 2.1, 2.2)
+  5. 取得した `ExternalReceiver` の `uOscServer.port` を Config.port で更新し再起動 (§5.2 参照、要件 1.7)
+  6. `ExternalReceiver` へ subscribe 登録 (§5.3 参照)
+  7. 状態 `Running` 遷移
+- `Dispose()` / `Shutdown()` は冪等 (要件 1.2)。subscribe 解除 → `Subject.OnCompleted()` → `Subject.Dispose()` → `EVMC4USharedReceiver.Release()` の順
+- MotionStream への `OnError` を発行しない (要件 8.1)
+- `Initialize()` 未完了時の購読は **空 Observable として振舞う** (Q4 採用案 a): `Subject<MotionFrame>` を先行生成しておき `Publish().RefCount()` ストリームを返す。OnNext は Running 遷移後に限る。理由: 既存自前実装と挙動が一致し、UI Sample の早期購読パスを壊さないため (要件 1.9)
+- `BoneLocalRotations` は Adapter が Tick 毎に新規 `Dictionary<HumanBodyBones, Quaternion>` を allocate し、EVMC4U の内部 Dictionary から値をコピーする (要件 3.6 / contracts.md §2.2 イミュータブル要求)
+- Root は `/VMC/Ext/Root/Pos` 相当のデータを EVMC4U 経由で取得できる範囲で `RootPosition` / `RootRotation` に格納可能 (要件 3.4)。ただし EVMC4U の `RootPositionSynchronize` / `RootRotationSynchronize` フラグは `false` に強制する (§5.2)
+- 診断カウンタは構造的な拡張余地を残すが初期版では未公開 (要件 8.7)
+
+**Dependencies**
+
+- Outbound: `EVMC4USharedReceiver` — 共有 Receiver の参照取得・解放 (P0)
+- Outbound: `ExternalReceiver` (EVMC4U, patched) — 内部 Dictionary 読取 (P0)
+- Outbound: `RegistryLocator.ErrorChannel` — エラー発行 (P0)
+- Outbound: UniRx `Subject<T>` / `Publish().RefCount()` — マルチキャスト (P0)
+- External: UnityEngine (LateUpdate 駆動用 MonoBehaviour は Shared 側で代行)
+
+**Contracts**: Service [x] / State [x]
+
+##### Service Interface
 
 ```csharp
 namespace RealtimeAvatarController.MoCap.VMC
 {
-    /// <summary>
-    /// VMC 受信ソースの設定。MoCapSourceDescriptor.Config として使用する。
-    /// SO アセット編集 (シナリオ X) と ScriptableObject.CreateInstance 動的生成 (シナリオ Y) の両方を許容する。
-    /// </summary>
-    [CreateAssetMenu(
-        menuName = "RealtimeAvatarController/MoCap/VMC Config",
-        fileName = "VMCMoCapSourceConfig")]
-    public class VMCMoCapSourceConfig : MoCapSourceConfigBase
+    public sealed class EVMC4UMoCapSource : IMoCapSource
     {
-        /// <summary>
-        /// VMC データ受信ポート番号。有効範囲: 1025〜65535。
-        /// デフォルト: 39539 (VMC プロトコル標準ポート)。
-        /// </summary>
-        [Range(1025, 65535)]
-        public int port = 39539;
-
-        /// <summary>
-        /// 受信アドレス (IPv4 文字列)。
-        /// デフォルト: "0.0.0.0" (全インターフェースで受信)。
-        /// </summary>
-        public string bindAddress = "0.0.0.0";
-    }
-}
-```
-
-### 5.2 `VmcMoCapSource`
-
-```csharp
-namespace RealtimeAvatarController.MoCap.VMC
-{
-    /// <summary>
-    /// VMC プロトコル (OSC 受信) の IMoCapSource 具象実装。
-    /// ワーカースレッドで UDP パケットを受信し、OSC をパースして HumanoidMotionFrame を発行する。
-    /// MotionStream は OnError を発行しない。受信エラーは ISlotErrorChannel 経由で通知される。
-    /// インスタンスのライフサイクルは MoCapSourceRegistry が管理する。Slot 側から直接 Dispose() を呼ばないこと。
-    /// </summary>
-    public sealed class VmcMoCapSource : IMoCapSource
-    {
-        // --- IMoCapSource 実装 ---
-
-        /// <summary>ソース種別識別子。常に "VMC" を返す。</summary>
         public string SourceType => "VMC";
+        public IObservable<MotionFrame> MotionStream { get; } // Subject.Synchronize().Publish().RefCount()
 
-        /// <summary>
-        /// 初期化。ポートバインド・ワーカースレッド起動を行う。
-        /// config は VMCMoCapSourceConfig にキャスト可能であること。
-        /// メインスレッドからの呼び出しを前提とする。
-        /// </summary>
-        /// <exception cref="ArgumentException">config が VMCMoCapSourceConfig でない場合</exception>
-        /// <exception cref="ArgumentOutOfRangeException">ポート番号が範囲外 (1025〜65535) の場合</exception>
-        /// <exception cref="SocketException">ポート競合 / ソケットバインド失敗の場合</exception>
-        public void Initialize(MoCapSourceConfigBase config);
+        // Factory 専用 internal ctor
+        internal EVMC4UMoCapSource(string slotId, ISlotErrorChannel errorChannel);
 
-        /// <summary>
-        /// Push 型モーションストリーム。受信スレッドから Subject.OnNext() で配信される。
-        /// 購読側は .ObserveOnMainThread() でメインスレッドに同期すること。
-        /// OnError は発行しない。
-        /// </summary>
-        public IObservable<MotionFrame> MotionStream { get; }
+        public void Initialize(MoCapSourceConfigBase config); // MainThread only
+        public void Shutdown();                               // 冪等
+        public void Dispose();                                // == Shutdown
 
-        /// <summary>
-        /// シャットダウン。ワーカースレッド停止・Subject 終端・リソース解放を行う。
-        /// IDisposable.Dispose() と等価。メインスレッドからの呼び出しを前提とする。
-        /// </summary>
-        public void Shutdown();
-
-        // IDisposable
-        public void Dispose();
-
-        // --- 内部コンストラクタ (Factory 経由で生成) ---
-        internal VmcMoCapSource(string slotId, ISlotErrorChannel errorChannel);
+        // 内部: LateUpdate Tick (EVMC4USharedReceiver から呼ばれる)
+        internal void Tick();
     }
 }
 ```
 
-### 5.3 `VMCMoCapSourceFactory`
+- Preconditions: `Initialize` は `MonoBehaviour` 駆動ライフサイクル内 (PlayMode / Editor 起動後) の MainThread から
+- Postconditions: `Running` 状態では LateUpdate 毎に最大 1 回の OnNext (変化がなければ emit しない、要件 3.5)
+- Invariants: `MotionStream.OnError` は決して発行されない (要件 8.1)
 
-```csharp
-namespace RealtimeAvatarController.MoCap.VMC
-{
-    /// <summary>
-    /// VmcMoCapSource インスタンスを生成する Factory。
-    /// 属性ベース自己登録により MoCapSourceRegistry に typeId="VMC" で登録される。
-    /// </summary>
-    public sealed class VMCMoCapSourceFactory : IMoCapSourceFactory
-    {
-        /// <summary>
-        /// VmcMoCapSource インスタンスを生成する。
-        /// config は VMCMoCapSourceConfig にキャスト可能であること。
-        /// </summary>
-        /// <exception cref="ArgumentException">config が VMCMoCapSourceConfig でない場合</exception>
-        public IMoCapSource Create(MoCapSourceConfigBase config);
+##### State Management
 
-        // --- ランタイム自己登録 ---
+- State: `Uninitialized → Running → Disposed` (要件 7.5 / 既存 VmcMoCapSource と同一)
+- 受信状態そのものは EVMC4U の `ExternalReceiver` が保持し、Adapter は stateless に近い snapshot 変換器である
+- 複数 Slot が同一 Config を参照する場合、`MoCapSourceRegistry` が同一 Adapter インスタンスを共有する (要件 2.1 / 5.6)
 
-        /// <summary>
-        /// Player ビルドおよびランタイム起動時 (シーンロード前) に自己登録する。
-        /// Domain Reload OFF 設定下では SubsystemRegistration タイミングで RegistryLocator.ResetForTest()
-        /// が先行実行されるため、通常は二重登録による RegistryConflictException は発生しない。
-        /// 万一発生した場合は ErrorChannel 経由で通知し、握り潰さない。
-        /// </summary>
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void RegisterRuntime()
-        {
-            try
-            {
-                RegistryLocator.MoCapSourceRegistry.Register("VMC", new VMCMoCapSourceFactory());
-            }
-            catch (RegistryConflictException ex)
-            {
-                RegistryLocator.ErrorChannel.Publish(
-                    SlotErrorCategory.RegistryConflict,
-                    ex,
-                    "VMCMoCapSourceFactory.RegisterRuntime: typeId=\"VMC\" は既に登録済みです。");
-            }
-        }
+**Implementation Notes**
 
-#if UNITY_EDITOR
-        // --- エディタ自己登録 ---
+- Integration: EVMC4U への依存は `ExternalReceiver.HumanBodyBonesRotationTable` (§6 で内部フィールドを public/internal read API として公開) に集中させる
+- Validation: PlayMode テストから Dictionary を直接書き換えて Adapter が期待フレームを発行することを観察 (§10 参照)
+- Risks: EVMC4U が将来アップデートされると公開した read API が壊れる可能性 → 本 Spec はローカル fork なので意図せぬ追随更新は発生しない。明示的に更新する際に本 Spec の改変を再適用する手順を `research.md` か本 design の §6 末尾に記録しておく
 
-        /// <summary>
-        /// Editor 起動時 (コンパイル完了後) に自己登録する。
-        /// Inspector UI でのタイプ候補列挙に使用する。
-        /// 万一 RegistryConflictException が発生した場合は ErrorChannel 経由で通知する。
-        /// </summary>
-        [UnityEditor.InitializeOnLoadMethod]
-        private static void RegisterEditor()
-        {
-            try
-            {
-                RegistryLocator.MoCapSourceRegistry.Register("VMC", new VMCMoCapSourceFactory());
-            }
-            catch (RegistryConflictException ex)
-            {
-                RegistryLocator.ErrorChannel.Publish(
-                    SlotErrorCategory.RegistryConflict,
-                    ex,
-                    "VMCMoCapSourceFactory.RegisterEditor: typeId=\"VMC\" は既に登録済みです。");
-            }
-        }
-#endif
-    }
-}
-```
+### 4.3 `EVMC4USharedReceiver` (MonoBehaviour)
+
+| Field | Detail |
+|-------|--------|
+| Intent | プロセスワイド単一の `ExternalReceiver` GameObject を生存させ、参照カウントで破棄する |
+| Requirements | 2.1, 2.2, 2.3 |
+| Namespace / asmdef | `RealtimeAvatarController.MoCap.VMC` / `RealtimeAvatarController.MoCap.VMC` |
+
+**Q2 解決 (Lifecycle 責務の所在)**: 選択肢 c (専用 MonoBehaviour ヘルパー) を採用する。理由:
+
+- a (最初の Adapter が lazy 生成) は「Adapter は MonoBehaviour でない POCO」かつ「GameObject 生成は MainThread 限定」の制約で、生成順序の仕様が `Initialize` の暗黙副作用に埋もれて読みにくくなる
+- b (`MoCapSourceRegistry` 側で singleton) は `slot-core` の Registry 契約を汚す (MoCap 一般ではなく VMC 固有の都合)。Registry 汎用性を保つため不採用
+- c は lifetime を 1 つの MonoBehaviour に集約でき、Editor→Play 遷移 / Domain Reload / PlayMode テスト間での Reset ポイントを明示化できる
+
+**Responsibilities & Constraints**
+
+- シーン非依存 (DontDestroyOnLoad) の単一 GameObject `[EVMC4U Shared Receiver]` をプロセス内で 1 個だけ生存させる
+- `public static EVMC4USharedReceiver EnsureInstance()` で Adapter からの要求毎に refcount++。未生成なら `GameObject` + `uOscServer` + `ExternalReceiver` を新規生成
+- `public void Release()` で refcount--。0 到達時に自 GameObject を `Destroy()` する
+- `LateUpdate()` で現在登録されている全 Adapter の `Tick()` を呼び出す (要件 4.3 / 4.4)
+  - Adapter 登録・解除は `Subscribe(EVMC4UMoCapSource adapter)` / `Unsubscribe(...)` で行う (`HashSet` ベース)
+- `ExternalReceiver.Model` は常に `null` に保つ (要件 2.4: Adapter が `Model` を書き換えない)
+  - これにより EVMC4U 側 `Process()` 内の `Animator.GetBoneTransform(...).localRotation = rot` パスを発火させない。ボーン Transform 書込は下流 `HumanoidMotionApplier` が担うため二重適用を避ける
+- `ExternalReceiver.RootPositionSynchronize = false` / `RootRotationSynchronize = false` を初期化時に設定 (HANDOVER §5 / 要件採用方針)
+- ポート変更: Config に合わせて `uOscServer.port` を書き換え、`StopServer()` / `StartServer()` を呼んで再バインド (`uOscServer` の `UpdateChangePort` 経路は Update で拾うため、明示再起動するほうが決定的)
+
+**Editor PlayMode 遷移ルール**:
+
+- Play 開始時: `EnsureInstance` が呼ばれた時点で生成
+- Play 停止時: Unity がシーン上のすべての GameObject (DontDestroyOnLoad 含む) を破棄するため、本コンポーネントの `OnDestroy` で内部 static 参照を null クリアする (PlayMode 再実行時の二重参照防止)
+- Domain Reload OFF: Unity は static フィールドをリセットしないため、`RuntimeInitializeOnLoadMethod(SubsystemRegistration)` で `s_instance = null` と `s_refCount = 0` を強制クリア (`RegistryLocator.ResetForTest` と同じ生存期間制御)
+
+**Dependencies**
+
+- Outbound: `ExternalReceiver` (P0, patched)
+- Outbound: `uOscServer` (P0, EVMC4U 依存)
+
+**Contracts**: State [x]
+
+##### State Management
+
+- State model: `(Instance: GameObject?, RefCount: int, Subscribers: HashSet<EVMC4UMoCapSource>)`
+- Persistence: なし (ランタイム揮発)
+- Concurrency: MainThread 専用。`EnsureInstance` / `Release` / `Subscribe` / `Unsubscribe` はすべて MainThread (Adapter の `Initialize` / `Shutdown` から呼ばれる)
+
+### 4.4 `VMCMoCapSourceConfig` (既存継続)
+
+| Field | Detail |
+|-------|--------|
+| Intent | 受信ポート番号とバインドアドレスを保持する ScriptableObject |
+| Requirements | 5.1, 5.2, 5.3 |
+
+**Responsibilities & Constraints**
+
+- public フィールド `int port` (既定 `39539`) / `string bindAddress` (既定 `"0.0.0.0"`) を維持 (要件 5.1)
+- `[CreateAssetMenu(..., menuName = "RealtimeAvatarController/MoCap/VMC Config")]` を維持
+- 範囲 1025–65535 の `[Range]` 属性を維持 (要件 5.3)
+- **`bindAddress` の扱い (仕様の明示)**: uOSC の `uOscServer` は bindAddress を公開していない (§5.2 参照)。本 Adapter は `bindAddress` を情報フィールドとして読み取るが、現行の `uOscServer` 実装上は全インターフェース bind になる。将来 uOSC 側が bindAddress に対応した場合に反映できるよう Config 形状は維持する
+
+**Contracts**: State [x]
+
+### 4.5 `VMCMoCapSourceFactory` (既存継続 + Adapter 差替)
+
+| Field | Detail |
+|-------|--------|
+| Intent | `EVMC4UMoCapSource` を生成する Factory。`typeId="VMC"` で `MoCapSourceRegistry` に自己登録する |
+| Requirements | 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4 |
+
+**Responsibilities & Constraints**
+
+- `public const string VmcSourceTypeId = "VMC"` を維持
+- `Create(MoCapSourceConfigBase)` で `config as VMCMoCapSourceConfig` をキャスト、失敗時 `ArgumentException` with 実型名 (要件 5.4)
+- キャスト成功時は `new EVMC4UMoCapSource(slotId: string.Empty, errorChannel: RegistryLocator.ErrorChannel)` を返す (要件 5.5)
+- `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` で Runtime 自己登録、`RegistryConflictException` は ErrorChannel へ `RegistryConflict` として発行し握り潰さない (要件 6.1 / 6.3)
+- Editor 自己登録は `Editor/MoCap/VMC/VmcMoCapSourceFactoryEditorRegistrar.cs` (`RealtimeAvatarController.MoCap.VMC.Editor` asmdef) で `[InitializeOnLoadMethod]` メソッドを保持 (要件 6.2)
+- Domain Reload OFF 時の二重登録回避は `RegistryLocator.ResetForTest` が `SubsystemRegistration` 段で先行実行されることに委ねる (要件 6.4)
+
+**Contracts**: Service [x]
+
+### 4.6 `ExternalReceiver` (EVMC4U, local patch)
+
+| Field | Detail |
+|-------|--------|
+| Intent | 受信処理と Bone 内部 Dictionary 蓄積。本 Spec では Transform 書込パスは使わない |
+| Requirements | 1.8, 2.5, 3.1, 4.1, 4.2 |
+
+改変方針は §6 で詳細化する。要点は「Model=null でも例外なく受信処理を完了する」「`HumanBodyBonesRotationTable` / `HumanBodyBonesPositionTable` を外部から読み取れるようにする」の 2 点に限る。
 
 ---
 
-## 6. 内部実装設計
+## 5. System Flows
 
-### 6.1 受信ループと MainThread Tick (M-3 改訂 2026-04-22)
-
-VMC Protocol 仕様上、OSC message stream から frame 境界を検知する手段は定義されていない (VMC Protocol v2.7 §specification: "1 frame = 1 bundle" の規定なし、MTU 1500 byte 制約により 1 frame が複数 bundle に分割される可能性あり)。
-EVMC4U (`gpsnmeajp/EasyVirtualMotionCaptureForUnity`, MIT) が 5 年以上運用している構造に倣い、**"受信即キャッシュ、Tick で一括 flush"** の分離モデルを採用する。
-
-- uOSC の `uOscServer` コンポーネントを GameObject に追加し、`onDataReceived` UnityEvent で OSC メッセージを受信する
-- uOSC の実装により `onDataReceived` は **Unity MainThread** で Invoke される (`uOscServer.Update` が parser の Queue から dequeue して Invoke する実装)
-- 受信コールバックでは `VmcMessageRouter.Route` で `VmcFrameBuilder` にキャッシュを書き込むのみ。`TryFlush` / `OnNext` は呼ばない
-- 別の MonoBehaviour (`VmcTickDriver`) を同 GameObject に AddComponent し、Unity の `LateUpdate` で `VmcOscAdapter.Tick()` を呼ぶ
-- `VmcOscAdapter.Tick()` は `VmcFrameBuilder` に蓄積があれば 1 回だけ `TryFlush` → `_subject.OnNext` を実行する
-
-```csharp
-// 受信コールバック (MainThread 前提、蓄積のみ)
-private void OnDataReceived(Message message)
-{
-    try
-    {
-        _router.Route(message.address, message);
-        // TryFlush はここで呼ばない (frame 境界は OSC stream から検知不能)
-    }
-    catch (Exception ex)
-    {
-        PublishError(SlotErrorCategory.VmcReceive, ex);
-    }
-}
-
-// MainThread Tick (VmcTickDriver の LateUpdate から呼ばれる)
-internal void Tick()
-{
-    if (_frameBuilder.TryFlush(out var frame))
-    {
-        _subject.OnNext(frame);
-    }
-}
-```
-
-> **設計意図**: uOSC は bundle を展開して個別 Message として順次 Invoke するため「これが bundle の終端か」「同一 frame の続きか」は受信側から判定不能である。Unity の Update サイクル自体を "flush の天然のタイミング" として利用することで、VMC Protocol の任意送信周期 / 任意 bundle 分割に対してロバストな実装となる。Shutdown 時は `VmcTickDriver` も Destroy されるため特別な停止処理は不要。
-
-### 6.2 OSC パーサ (アドレスプレフィックスルーティング)
-
-`com.hidano.uosc` が提供する OSC 受信コールバックを用いてメッセージを受信し、アドレスプレフィックスで処理を振り分ける。OSC パース自体は uOSC 側が担い、`VmcMessageRouter` は受信した address と引数リストを解釈する薄いルータとして機能する。
-
-VMC プロトコルの OSC アドレスハンドリング構造は EVMC4U (`gpsnmeajp/EasyVirtualMotionCaptureForUnity`, MIT) の `ExternalReceiver.cs` を参考に実装する (参照: §4 VMC プロトコル解析方針)。
-
-```csharp
-// ルーティング概念コード (内部クラス VmcMessageRouter)
-switch (message.Address)
-{
-    case "/VMC/Ext/Root/Pos":
-        _frameBuilder.SetRoot(message);
-        break;
-    case "/VMC/Ext/Bone/Pos":
-        _frameBuilder.SetBone(message);
-        break;
-    case "/VMC/Ext/Blend/Val":
-        // 初期版: 受信のみ・変換スキップ
-        break;
-    case "/VMC/Ext/Blend/Apply":
-        // フレーム確定シグナル (将来利用)
-        break;
-    default:
-        // 未知アドレスは無視
-        break;
-}
-```
-
-### 6.3 HumanoidMotionFrame への集約 (M-3 改訂 2026-04-22)
-
-`VmcFrameBuilder` の役割:
-
-- 受信した Bone/Root データを `Dictionary<HumanBodyBones, (Vector3, Quaternion)>` に蓄積する
-- (M-3 改訂) **`TryFlush` で _bones を Clear しない**。欠損 bone (同一送信周期で来なかった bone) は前回受信値を維持する (EVMC4U と同一方針)
-- `TryFlush` は「前回 Flush 以降に 1 度でも `SetBone` / `SetRoot` が呼ばれた場合のみ true を返し、その瞬間の蓄積値の snapshot を `HumanoidMotionFrame` として返す」セマンティクス。内部 `_dirty` フラグで追跡
-- 蓄積した各ボーン回転を `HumanoidMotionFrame.BoneLocalRotations` フィールドに渡す (snapshot は新規辞書にコピーして返す。Frame はイミュータブルなのでコピー後の辞書は触らない)
-- Muscle 変換は Applier (MainThread) 側が担うため、本ビルダは Unity 非スレッドセーフ API を呼ばない
-- `Muscles` 配列は空 (`Array.Empty<float>()`) を渡す。IsValid 判定は `BoneLocalRotations.Count > 0` が担う
-
-> **M-3 合意変更 (2026-04-22) で刷新された方針**: VMC プロトコルは「親ローカル座標系のクォータニオン」を送ってくる一方、Unity の Muscle 値は「ボーンごとに固有の軸で正規化された 3 DoF 値」であり、両者を直接 (`Quaternion.eulerAngles / 180f` 等で) 線形変換するのは意味的に不正確である。
->
-> 正確な変換は `HumanPoseHandler.GetHumanPose`（MainThread 限定 API）が必要となるため、`VmcFrameBuilder` (ワーカースレッド) では行えない。そこで **contracts.md §2.2 に `BoneLocalRotations` フィールドを追加**し、変換責務を `HumanoidMotionApplier` (MainThread) に移した。
->
-> 過去の [M-2] エントリで「拡張フィールドの追加は採用しない」と判断していたが、バグ (VMC データ適用後に Hips 以外の骨が静止する) の根本修正のため、M-3 合意変更で方針を反転した。
-
-### 6.4 timestamp 打刻
-
-```csharp
-// OSC パース完了後・OnNext 前に打刻
-double timestamp = Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
-
-// M-3: BoneLocalRotations 対応コンストラクタを使用する
-// HumanoidMotionFrame(double, float[], Vector3, Quaternion, IReadOnlyDictionary<HumanBodyBones, Quaternion>)
-var frame = new HumanoidMotionFrame(
-    timestamp,
-    Array.Empty<float>(),             // Muscles は空 (Applier 側で BoneLocalRotations から逆算する)
-    rootPosition,
-    rootRotation,
-    boneLocalRotations);              // 蓄積した bone 辞書をそのまま引き渡す
-_subject.OnNext(frame);
-```
-
-### 6.5 UniRx Subject とマルチキャスト
-
-```csharp
-// 内部 Subject (スレッドセーフラッパー)
-private readonly Subject<MotionFrame> _rawSubject = new Subject<MotionFrame>();
-private readonly ISubject<MotionFrame> _subject;      // = _rawSubject.Synchronize()
-private readonly IObservable<MotionFrame> _stream;    // = _subject.Publish().RefCount()
-
-// コンストラクタ内初期化
-_subject = _rawSubject.Synchronize();                 // ワーカースレッドからのスレッドセーフ OnNext
-_stream  = _subject.Publish().RefCount();             // マルチキャスト (購読者ゼロ時は接続解除)
-
-// 公開プロパティ
-public IObservable<MotionFrame> MotionStream => _stream;
-```
-
-- `Subject.Synchronize()`: UniRx が提供するスレッドセーフラッパー。`OnNext()` への同時アクセスをロックで保護する。
-- `Publish().RefCount()`: 複数購読者が同一ストリームを購読できる ConnectableObservable ラッパー。購読者がいる間だけ Hot Observable として動作する。
-
----
-
-## 7. VMC → HumanoidMotionFrame マッピング
-
-### 7.1 VMC Bone 名 → Unity HumanBodyBones 変換
-
-VMC プロトコルでは Unity の `HumanBodyBones` 列挙値名と同一の文字列を Bone 名として使用する。変換は名前照合で行う。
-
-```csharp
-// VMC Bone 名 → HumanBodyBones への変換 (VmcBoneMapper)
-private static readonly Dictionary<string, HumanBodyBones> s_boneMap;
-
-static VmcBoneMapper()
-{
-    s_boneMap = new Dictionary<string, HumanBodyBones>(StringComparer.Ordinal);
-    // Unity の HumanBodyBones 全値を列挙して辞書登録
-    foreach (HumanBodyBones bone in Enum.GetValues(typeof(HumanBodyBones)))
-    {
-        if (bone == HumanBodyBones.LastBone) continue;
-        s_boneMap[bone.ToString()] = bone;
-    }
-}
-
-public static bool TryGetBone(string vmcBoneName, out HumanBodyBones bone)
-    => s_boneMap.TryGetValue(vmcBoneName, out bone);
-```
-
-対応ボーン数は Unity の `HumanBodyBones` 全 55 ボーン (LastBone 除く)。
-
-### 7.2 Root Position / Rotation の取り扱い
-
-- `/VMC/Ext/Root/Pos` メッセージの引数は `(string name, float px, float py, float pz, float qx, float qy, float qz, float qw)` の形式
-- 位置は `HumanoidMotionFrame.RootPosition` に、回転は `HumanoidMotionFrame.RootRotation` にそのまま格納する
-- 座標系は VMC プロトコルが Unity 座標系 (左手座標、Y-up) を使用するため変換不要
-
-### 7.3 未受信ボーンの扱い (M-3 更新)
-
-- VMC メッセージに含まれないボーンは、`BoneLocalRotations` 辞書に**含めない** (追加しない)
-- Applier は辞書に存在しないボーンの Transform には一切書込まないため、直前の最終 pose の localRotation が保持される
-- 受信ボーンが 1 件以上ある場合 (`_bones.Count > 0`) に `HumanoidMotionFrame` を `BoneLocalRotations` 付きで生成する
-- `BoneLocalRotations.Count == 0` かつ `Muscles.Length == 0` は無効フレームを示す。VmcFrameBuilder.TryFlush は `_bones.Count == 0` で `false` を返すため、この状態のフレームは発行されない
-
-### 7.4 BlendShape の扱い (初期版)
-
-- `/VMC/Ext/Blend/Val` および `/VMC/Ext/Blend/Apply` は受信するが `HumanoidMotionFrame` への変換対象外とする
-- 将来の表情制御 Spec で `IFacialController` への橋渡しを実装する際に本章を更新する
-
----
-
-## 8. エラーハンドリング
-
-### 8.1 方針概要
-
-| エラー種別 | 対応 | MotionStream | ISlotErrorChannel |
-|-----------|------|:----------:|:----------------:|
-| OSC パースエラー | パケットスキップ・ループ継続 | OnError 発行しない | `VmcReceive` カテゴリで発行 |
-| 切断検知 (SocketException) | ループ継続・再受信待機 | OnError 発行しない | `VmcReceive` カテゴリで発行 |
-| ポート競合 (バインド失敗) | `Initialize()` から例外スロー | — | `InitFailure` (SlotManager が発行) |
-| ポート範囲外 | `Initialize()` から例外スロー | — | `InitFailure` (SlotManager が発行) |
-| 二重 `Initialize()` | `InvalidOperationException` スロー | — | — |
-| ワーカー未ハンドル例外 | ログ出力・ループ継続 | OnError 発行しない | `VmcReceive` カテゴリで発行 |
-
-### 8.2 エラー発行の実装
-
-```csharp
-private void PublishError(SlotErrorCategory category, Exception ex)
-{
-    // ISlotErrorChannel への発行 (抑制ロジックは Channel 実装側が担う)
-    _errorChannel.Publish(new SlotError(_slotId, category, ex, DateTime.UtcNow));
-    // Debug.LogError の抑制は DefaultSlotErrorChannel が行うため、ここでは呼ばない
-}
-```
-
-- `VmcMoCapSource` 側では `Debug.LogError` の抑制制御を**持たない**
-- `DefaultSlotErrorChannel` が同一 `(SlotId, Category)` につき 1 フレームのみ `Debug.LogError` を出力する
-
-### 8.3 `MotionStream.OnError` 非発行の保証
-
-- ワーカーループの例外は `try-catch` で全捕捉し、`Subject.OnError()` は一切呼び出さない
-- `Shutdown()` / `Dispose()` 時のみ `Subject.OnCompleted()` を呼び出してストリームを終端させる
-
----
-
-## 9. ライフサイクル
-
-### 9.1 内部状態
-
-```
-Uninitialized ──Initialize()──▶ Running ──Shutdown()/Dispose()──▶ Disposed
-                                    │
-                          例外 (ポート競合等) ──▶ Uninitialized (再試行不可)
-                                                    ※ Disposed への強制遷移は SlotManager が制御
-```
-
-| 状態 | 説明 |
-|------|------|
-| `Uninitialized` | 生成直後。ソケット・スレッドなし |
-| `Running` | `Initialize()` 完了後。受信ループ稼働中 |
-| `Disposed` | `Shutdown()` / `Dispose()` 完了後。再使用不可 |
-
-### 9.2 `Initialize(MoCapSourceConfigBase config)` の処理フロー
-
-1. 状態チェック: `Uninitialized` 以外であれば `InvalidOperationException` をスロー
-2. `config as VMCMoCapSourceConfig` でキャスト: `null` であれば `ArgumentException` をスロー
-3. ポート番号バリデーション (1025〜65535): 範囲外であれば `ArgumentOutOfRangeException` をスロー
-4. `com.hidano.uosc` の受信オブジェクトを `bindAddress:port` で初期化・受信コールバック (`VmcOscAdapter.OnOscMessageReceived`) を登録 (SO_REUSEADDR 有効化済み)
-5. `Subject<MotionFrame>` および `Publish().RefCount()` チェーンを初期化
-6. uOSC 受信を開始 (失敗時は `SocketException` を伝播)
-7. 内部状態を `Running` に遷移
-
-### 9.3 `Shutdown()` / `Dispose()` の処理フロー
-
-1. 状態チェック: `Disposed` であれば即時 return (冪等)
-2. `CancellationTokenSource.Cancel()` でワーカーループに停止シグナル
-3. `UdpClient.Close()` でソケット閉鎖 (ブロッキング Receive を強制解除)
-4. `workerThread.Join(timeout: 2000ms)` で停止を待機
-5. `_rawSubject.OnCompleted()` でストリームを終端
-6. `_rawSubject.Dispose()` / `UdpClient.Dispose()` でリソース解放
-7. 内部状態を `Disposed` に遷移
-
-### 9.4 MoCapSourceRegistry による参照カウント制御
-
-- `VmcMoCapSource` は `Dispose()` を `public` で公開するが、**Slot 側が直接呼び出してはならない**
-- `MoCapSourceRegistry` が参照カウント 0 を検知した時点で `Dispose()` を呼び出す
-- `MoCapSourceRegistry.Release(source)` が Slot からの解放通知の正規経路となる
-
----
-
-## 10. Factory 自動登録
-
-### 10.1 ランタイム登録エントリコード
-
-```csharp
-// ファイル: Runtime/MoCap/VMC/VMCMoCapSourceFactory.cs
-namespace RealtimeAvatarController.MoCap.VMC
-{
-    public sealed class VMCMoCapSourceFactory : IMoCapSourceFactory
-    {
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void RegisterRuntime()
-        {
-            // SubsystemRegistration タイミングで RegistryLocator.ResetForTest() が先行実行済みのため
-            // Domain Reload OFF 設定下でも通常は RegistryConflictException は発生しない。
-            // 万一発生した場合は ErrorChannel 経由で通知し、握り潰さない。
-            try
-            {
-                RegistryLocator.MoCapSourceRegistry.Register("VMC", new VMCMoCapSourceFactory());
-            }
-            catch (RegistryConflictException ex)
-            {
-                RegistryLocator.ErrorChannel.Publish(
-                    SlotErrorCategory.RegistryConflict,
-                    ex,
-                    "VMCMoCapSourceFactory.RegisterRuntime: typeId=\"VMC\" は既に登録済みです。");
-            }
-        }
-
-        public IMoCapSource Create(MoCapSourceConfigBase config)
-        {
-            var vmcConfig = config as VMCMoCapSourceConfig;
-            if (vmcConfig == null)
-                throw new ArgumentException(
-                    $"VMCMoCapSourceConfig が必要ですが {config?.GetType().Name ?? "null"} が渡されました",
-                    nameof(config));
-
-            return new VmcMoCapSource(
-                slotId: string.Empty,           // Registry が後から設定
-                errorChannel: RegistryLocator.ErrorChannel);
-        }
-    }
-}
-```
-
-### 10.2 エディタ登録エントリコード
-
-```csharp
-// ファイル: Editor/MoCap/VMC/VMCMoCapSourceFactoryEditorRegistrar.cs
-// asmdef: RealtimeAvatarController.MoCap.VMC.Editor
-#if UNITY_EDITOR
-namespace RealtimeAvatarController.MoCap.VMC.Editor
-{
-    using UnityEditor;
-
-    /// <summary>
-    /// Editor 起動時に VMCMoCapSourceFactory を MoCapSourceRegistry に登録する。
-    /// Inspector UI での候補列挙に使用する。
-    /// RegistryConflictException が発生した場合は ErrorChannel 経由で通知する。
-    /// </summary>
-    internal static class VmcMoCapSourceFactoryEditorRegistrar
-    {
-        [UnityEditor.InitializeOnLoadMethod]
-        private static void RegisterEditor()
-        {
-            try
-            {
-                RegistryLocator.MoCapSourceRegistry.Register("VMC", new VMCMoCapSourceFactory());
-            }
-            catch (RegistryConflictException ex)
-            {
-                RegistryLocator.ErrorChannel.Publish(
-                    SlotErrorCategory.RegistryConflict,
-                    ex,
-                    "VMCMoCapSourceFactory.RegisterEditor: typeId=\"VMC\" は既に登録済みです。");
-            }
-        }
-    }
-}
-#endif
-```
-
-> **[L-1 解決]** エディタ登録は `[UnityEditor.InitializeOnLoadMethod]` メソッド属性に統一した。旧来の `[InitializeOnLoad]` クラス属性 + 静的コンストラクタ方式は採用しない。§5.3 の API 仕様コードも同属性で記述されており、設計全体で統一されている。
-
----
-
-## 11. 参照共有モデル
-
-### 11.1 同一ポート指定時の `MoCapSourceRegistry.Resolve` 挙動
-
-`MoCapSourceDescriptor` の等価性は `(SourceTypeId, Config インスタンス)` の組合せで判定される。**同一の `VMCMoCapSourceConfig` インスタンスを指す場合のみ**同一と判定され、参照共有が発生する。
-
-```
-Slot A: Descriptor { SourceTypeId="VMC", Config=configA (port=39539) }
-Slot B: Descriptor { SourceTypeId="VMC", Config=configA (port=39539) }  ← 同一インスタンス
-         → MoCapSourceRegistry は同一の VmcMoCapSource を返す (参照共有)
-
-Slot C: Descriptor { SourceTypeId="VMC", Config=configC (port=39539) }  ← 別インスタンス (同値)
-         → MoCapSourceRegistry は新しい VmcMoCapSource を生成して返す
-         → 同一ポートへの二重バインドにより SocketException が発生する
-```
-
-### 11.2 参照カウントのインクリメント / デクリメント
-
-```
-Resolve(descriptor)
-    → 参照カウント +1
-    → 既存インスタンスがある場合はそれを返す
-    → ない場合は Factory.Create() で新規生成してキャッシュ
-
-Release(source)
-    → 参照カウント -1
-    → カウントが 0 になったら source.Dispose() を呼び出し、キャッシュから削除
-```
-
-- 参照カウントは `DefaultMoCapSourceRegistry` 内の `Dictionary<IMoCapSource, int>` で管理する (`slot-core` の責務)
-
----
-
-## 12. シーケンス図 (Mermaid)
-
-### 12.1 受信 → パース → Subject.OnNext → 購読者配信
+### 5.1 Initialize → 受信 → Tick → OnNext
 
 ```mermaid
 sequenceDiagram
-    participant W as ワーカースレッド
-    participant U as uOSC (com.hidano.uosc)
-    participant P as VmcOscAdapter
-    participant B as VmcFrameBuilder
-    participant S as Subject<MotionFrame>
-    participant M as MotionCache (メインスレッド)
+  participant SM as SlotManager
+  participant MR as MoCapSourceRegistry
+  participant F as VMCMoCapSourceFactory
+  participant A as EVMC4UMoCapSource
+  participant S as EVMC4USharedReceiver
+  participant E as ExternalReceiver patched
+  participant U as uOscServer
 
-    loop 受信ループ
-        W->>U: UDP 受信 + OSC パース (uOSC 内部)
-        U-->>P: OscMessage コールバック
-        P->>W: address + args を VmcMessageRouter へ転送
-        alt パース成功
-            W->>B: SetBone / SetRoot
-            B-->>W: HumanoidMotionFrame
-            W->>W: timestamp = Stopwatch.GetTimestamp() / Frequency
-            W->>S: OnNext(frame) [Subject.Synchronize()]
-            S-->>M: (Publish().RefCount() 経由) OnNext(frame)
-            Note over M: ObserveOnMainThread() でメインスレッド受信
-        else OSC 形式エラー / 未知アドレス
-            W->>W: PublishError(VmcReceive, ex) または無視
-        end
+  SM->>MR: Resolve descriptor VMC config
+  MR->>F: Create config
+  F-->>MR: new adapter
+  MR->>A: Initialize config
+  A->>S: EnsureInstance
+  alt first adapter
+    S->>S: Instantiate DontDestroyOnLoad GameObject
+    S->>U: AddComponent uOscServer
+    S->>E: AddComponent ExternalReceiver
+  end
+  S-->>A: instance ref
+  A->>E: set uOscServer.port and RootSynchronize false
+  E->>U: StopServer then StartServer
+  A->>S: Subscribe this adapter
+
+  loop every UDP packet
+    U->>U: parser enqueue worker
+    Note over U: MainThread Update dequeues and Invokes
+    U->>E: onDataReceived MainThread
+    E->>E: ProcessMessage patched guard
+    E->>E: write HumanBodyBonesRotationTable
+  end
+
+  loop every LateUpdate
+    S->>A: Tick
+    A->>E: read HumanBodyBonesRotationTable snapshot
+    alt snapshot not empty and changed
+      A->>A: build HumanoidMotionFrame BoneLocalRotations
+      A->>A: Subject OnNext frame
     end
+  end
 ```
 
-### 12.2 参照共有 Resolve フロー
+### 5.2 Slot 解放 → Shared 破棄
 
 ```mermaid
 sequenceDiagram
-    participant SM as SlotManager
-    participant R as MoCapSourceRegistry
-    participant F as VMCMoCapSourceFactory
-    participant V as VmcMoCapSource
+  participant SM as SlotManager
+  participant MR as MoCapSourceRegistry
+  participant A as EVMC4UMoCapSource
+  participant S as EVMC4USharedReceiver
 
-    SM->>R: Resolve(descriptor {typeId="VMC", config})
-    alt 既存インスタンスなし
-        R->>F: Create(config)
-        F-->>R: new VmcMoCapSource()
-        R->>V: Initialize(config)
-        R->>R: refCount[V] = 1
-        R-->>SM: V
-    else 既存インスタンスあり (同一 Config インスタンス)
-        R->>R: refCount[V] += 1
-        R-->>SM: 既存 V (参照共有)
+  SM->>MR: Release adapter
+  MR->>MR: refCount for adapter minus one
+  alt adapter refCount zero
+    MR->>A: Dispose
+    A->>S: Unsubscribe adapter
+    A->>S: Release
+    A->>A: Subject OnCompleted and Dispose
+    S->>S: refCount minus one
+    alt refCount zero
+      S->>S: Destroy own GameObject
     end
-
-    Note over SM: Slot 解放時
-    SM->>R: Release(V)
-    R->>R: refCount[V] -= 1
-    alt refCount == 0
-        R->>V: Dispose()
-        R->>R: キャッシュから削除
-    end
+  end
 ```
 
-### 12.3 エラー発生時のフロー
+### 5.3 エラー経路
 
 ```mermaid
 sequenceDiagram
-    participant W as ワーカースレッド
-    participant V as VmcMoCapSource
-    participant E as ISlotErrorChannel
-    participant C as DefaultSlotErrorChannel
-    participant U as UI / 監視コード
+  participant U as uOscServer
+  participant E as ExternalReceiver
+  participant A as EVMC4UMoCapSource
+  participant EC as ISlotErrorChannel
 
-    W->>W: OSC パースエラー発生
-    W->>V: PublishError(VmcReceive, ex)
-    V->>E: Publish(SlotError {slotId, VmcReceive, ex})
-    E->>C: (実装)
-    C->>C: Debug.LogError 抑制判定 (同一 (SlotId, Category) 初回のみ)
-    C-->>U: Errors.OnNext(slotError) [ObserveOnMainThread()]
-    Note over W: ストリームは継続。OnError は発行しない
+  alt port bind failure Initialize phase
+    U->>U: Udp.StartServer throws SocketException
+    Note over U: caller frame surfaces exception to Adapter
+    A->>A: Initialize rethrows to SlotManager
+    Note over A: SlotManager publishes InitFailure
+  end
+
+  alt parse exception runtime
+    E->>E: try catch in MessageDaisyChain
+    E->>E: shutdown true and Debug LogError
+    Note over E: Adapter detects by reading shutdown flag exposed via property
+    A->>EC: Publish SlotError VmcReceive
+  end
+
+  alt adapter tick exception
+    A->>A: Tick catches exception
+    A->>EC: Publish SlotError VmcReceive
+  end
 ```
 
 ---
 
-## 13. スレッドモデル
+## 6. EVMC4U ローカル改変 (最小スコープ)
 
-### 13.1 スレッド責務分担 (M-3 改訂 2026-04-22: 実装実態に合わせて更新)
+**Q3 解決 (改変スコープの最小化)**: 以下 3 点に限定する。いずれも `Assets/EVMC4U/ExternalReceiver.cs` への局所改変。アップストリーム PR は行わない。
 
-| スレッド | 担当処理 |
-|---------|---------|
-| **メインスレッド** | `Initialize()` / `Shutdown()` / `Dispose()` の呼び出し |
-| **メインスレッド** | `VmcMessageRouter.Route` / `VmcFrameBuilder.SetBone` / `SetRoot` (uOSC の `onDataReceived` は `uOscServer.Update` 内で Invoke されるため MainThread) |
-| **メインスレッド** | `VmcOscAdapter.Tick()` (`VmcTickDriver.LateUpdate` から呼ばれる): `VmcFrameBuilder.TryFlush` → `timestamp` 打刻 → `Subject<MotionFrame>.OnNext` |
-| **メインスレッド** | MotionCache でのフレーム受信 (`MotionStream.Subscribe` のコールバック、MainThread 呼び出し) |
-| **メインスレッド** | BoneLocalRotations の `Animator.GetBoneTransform(bone).localRotation` への直接書込 (Applier の責務 / motion-pipeline §7.1.1) |
-| **ワーカースレッド** (uOSC 内部) | UDP パケット受信 (`UdpClient.Receive`) |
-| **ワーカースレッド** (uOSC 内部) | OSC パース (uOSC `Parser.Parse`, bundle 展開) |
-| **ワーカースレッド** (uOSC 内部) | 解析済み `Message` を `parser_.messages_` キューへ enqueue (lock 付き) |
-| **ワーカースレッド** (必要時) | `ISlotErrorChannel.Publish()` 呼び出し (エラーハンドラ経由。例外発生箇所のスレッドで発行するため通常 MainThread) |
+### 6.1 Model=null 時のガード (受信のみ動作可)
 
-> **訂正**: 以前の版では `VmcMessageRouter` / `VmcFrameBuilder` / `Subject.OnNext` を「ワーカースレッド」としていたが、これは事実誤認であった。uOSC の実装では `onDataReceived` UnityEvent は `uOscServer.Update` (MonoBehaviour.Update, MainThread) 内で Invoke されるため、受信コールバック以降の処理はすべて MainThread で走る。`Subject.Synchronize()` による保護は過剰同期として残すが、実質的には MainThread 単独アクセスとなる。
-
-### 13.2 スレッドセーフティの確保
-
-- `Subject.Synchronize()`: `OnNext()` / `OnError()` / `OnCompleted()` へのスレッドセーフアクセスを保証
-- `UdpClient` のソケット閉鎖 (`Close()`) はメインスレッドから呼ぶが、ブロッキング中の `Receive()` を強制解除するため `SocketException` (`ObjectDisposedException`) が発生する。これをワーカー側で捕捉してループを終了させる
-- `VmcFrameBuilder` はワーカースレッド専用。メインスレッドから直接アクセスしない
-- `Subject` の `_stream` (`Publish().RefCount()`) は購読開始がメインスレッド・OnNext がワーカースレッドとなる。UniRx の `Publish()` 内部実装はスレッドセーフであることを前提とする
-
----
-
-## 14. ファイル / ディレクトリ構成
-
-```
-RealtimeAvatarController/
-  Packages/
-    com.example.realtime-avatar-controller/
-      Runtime/
-        MoCap/
-          VMC/
-            VmcMoCapSource.cs                   # IMoCapSource 具象実装
-            VMCMoCapSourceConfig.cs             # MoCapSourceConfigBase 派生 Config
-            VMCMoCapSourceFactory.cs            # IMoCapSourceFactory 実装 + ランタイム自己登録
-            Internal/
-              VmcFrameBuilder.cs               # Bone/Root → HumanoidMotionFrame 組み立て
-              VmcMessageRouter.cs              # OSC アドレスプレフィックスルーティング
-              VmcBoneMapper.cs                 # VMC Bone 名 → HumanBodyBones 変換
-              VmcOscAdapter.cs                 # uOSC コールバック受信アダプタ (薄い抽象レイヤー)
-        RealtimeAvatarController.MoCap.VMC.asmdef
-      Editor/
-        MoCap/
-          VMC/
-            VmcMoCapSourceFactoryEditorRegistrar.cs  # Editor 自己登録
-        RealtimeAvatarController.MoCap.VMC.Editor.asmdef
-      Tests/
-        EditMode/
-          MoCap/
-            VMC/
-              VmcOscParserTests.cs             # OSC パーサ単体テスト
-              VmcConfigCastTests.cs            # Config キャスト検証テスト
-              VmcFactoryRegistrationTests.cs   # 属性ベース自己登録確認テスト
-              VmcBoneMapperTests.cs            # Bone マッピング変換テスト
-          RealtimeAvatarController.MoCap.VMC.Tests.EditMode.asmdef
-        PlayMode/
-          MoCap/
-            VMC/
-              VmcMoCapSourceIntegrationTests.cs  # ローカル UDP 送受信統合テスト
-              UdpOscSenderTestDouble.cs          # テストダブル: ローカル UDP 送信クライアント
-          RealtimeAvatarController.MoCap.VMC.Tests.PlayMode.asmdef
-```
-
-### asmdef 依存関係
-
-| asmdef | 依存先 |
-|--------|--------|
-| `RealtimeAvatarController.MoCap.VMC` | `RealtimeAvatarController.Core`・`RealtimeAvatarController.Motion`・`com.hidano.uosc`・`UniRx` |
-| `RealtimeAvatarController.MoCap.VMC.Editor` | `RealtimeAvatarController.MoCap.VMC`・`RealtimeAvatarController.Core` |
-| `RealtimeAvatarController.MoCap.VMC.Tests.EditMode` | `RealtimeAvatarController.MoCap.VMC`・`RealtimeAvatarController.Core`・`UnityEngine.TestRunner`・`UnityEditor.TestRunner` |
-| `RealtimeAvatarController.MoCap.VMC.Tests.PlayMode` | `RealtimeAvatarController.MoCap.VMC`・`RealtimeAvatarController.Core`・`RealtimeAvatarController.Motion`・`UnityEngine.TestRunner` |
-
----
-
-## 15. テスト設計
-
-### 15.1 EditMode テスト (`RealtimeAvatarController.MoCap.VMC.Tests.EditMode`)
-
-#### OSC パーサ単体テスト (`VmcOscParserTests.cs`)
-
-| テストケース | 検証内容 |
-|------------|---------|
-| 正常な `/VMC/Ext/Bone/Pos` パケットのパース | ボーン名・位置・回転が正しく抽出される |
-| 正常な `/VMC/Ext/Root/Pos` パケットのパース | Root 位置・回転が正しく抽出される |
-| 不正バイト列のパース | `TryParse` が `false` を返し例外をスローしない |
-| 空バイト列のパース | `TryParse` が `false` を返す |
-
-#### Config キャスト検証テスト (`VmcConfigCastTests.cs`)
-
-| テストケース | 検証内容 |
-|------------|---------|
-| `VMCMoCapSourceConfig` を `MoCapSourceConfigBase` として渡した場合 | 正常にキャストされ `VmcMoCapSource` が生成される |
-| 別の `MoCapSourceConfigBase` 派生型を渡した場合 | `ArgumentException` がスローされ、型名がメッセージに含まれる |
-| `null` を渡した場合 | `ArgumentException` がスローされる |
-| `ScriptableObject.CreateInstance<VMCMoCapSourceConfig>()` で動的生成した Config | Factory が正常に `VmcMoCapSource` を生成できる |
-
-#### 属性ベース自己登録確認テスト (`VmcFactoryRegistrationTests.cs`)
-
-| テストケース | 検証内容 |
-|------------|---------|
-| `RegistryLocator.MoCapSourceRegistry.GetRegisteredTypeIds()` | `"VMC"` が含まれる |
-| 同一 typeId の二重登録 | `RegistryConflictException` がスローされる |
-| `RegistryLocator.ResetForTest()` 後の再登録 | 正常に登録できる |
-
-#### Bone マッピングテスト (`VmcBoneMapperTests.cs`)
-
-| テストケース | 検証内容 |
-|------------|---------|
-| Unity HumanBodyBones の全列挙値が VMC Bone 名として変換できる | すべて正しく `HumanBodyBones` 列挙値にマップされる |
-| 未知の VMC Bone 名 | `TryGetBone` が `false` を返す |
-
-### 15.2 PlayMode テスト (`RealtimeAvatarController.MoCap.VMC.Tests.PlayMode`)
-
-#### 統合テスト (`VmcMoCapSourceIntegrationTests.cs`)
-
-| テストケース | 検証内容 |
-|------------|---------|
-| ローカル UDP 送信 → `MotionStream` 受信 | `UdpOscSenderTestDouble` が送信したパケットが `MotionStream` 経由で届く |
-| Root / Bone データの往復正確性 | 送信した位置・回転と受信した `HumanoidMotionFrame` の値が一致する |
-| `timestamp` の単調増加 | 連続受信フレームの `Timestamp` が単調増加している |
-| パースエラー時にストリームが継続する | 不正パケット送信後も次の正常パケットが `MotionStream` に届く |
-| `Shutdown()` 後に `MotionStream` が完了する | `OnCompleted()` が発行される |
-
-#### テストダブル仕様 (`UdpOscSenderTestDouble.cs`)
+**対象**: `ProcessMessage` (現行 812–816 行付近):
 
 ```csharp
-// ローカルホスト上の UDP 送信クライアント
-// [SetUp] で初期化、[TearDown] で Dispose する
-internal sealed class UdpOscSenderTestDouble : IDisposable
+// 現行: Model または RootTransform が null なら以降全て無視
+if (Model == null || Model.transform == null || RootPositionTransform == null || RootRotationTransform == null)
 {
-    private readonly UdpClient _sender;
-    private readonly IPEndPoint _target;
-
-    public UdpOscSenderTestDouble(int targetPort)
-    {
-        _sender = new UdpClient();
-        _target = new IPEndPoint(IPAddress.Loopback, targetPort);
-    }
-
-    public void SendRootPos(Vector3 position, Quaternion rotation)
-    {
-        // OSC バイト列を構築して送信
-        var data = OscEncoder.Encode("/VMC/Ext/Root/Pos", "Root", position, rotation);
-        _sender.Send(data, data.Length, _target);
-    }
-
-    public void SendBonePos(string boneName, Vector3 position, Quaternion rotation)
-    {
-        var data = OscEncoder.Encode("/VMC/Ext/Bone/Pos", boneName, position, rotation);
-        _sender.Send(data, data.Length, _target);
-    }
-
-    public void Dispose() => _sender.Dispose();
+    return;
 }
 ```
 
-### 15.3 テスト共通方針
+**改変**: Root 系メッセージ (`/VMC/Ext/Root/Pos`) と Bone 系メッセージ (`/VMC/Ext/Bone/Pos`) で挙動を分ける。Bone 蓄積 (`HumanBodyBonesRotationTable` / `HumanBodyBonesPositionTable` への書込) は `Model == null` でも継続できるようにガードを外す。Transform 書込 (`animator.GetBoneTransform(bone).localRotation = rot` 系、`BoneSynchronize` / `BoneSynchronizeByTable` 経由) は既に `animator != null` / `Model != null` でガード済みなので変更不要。具体的には:
 
-- 各テストの `[SetUp]` / `[TearDown]` で `RegistryLocator.ResetForTest()` を呼び出して Registry を初期化する
-- PlayMode テストではポート番号として `50000 + TestContext.CurrentContext.Random.NextShort()` 等の動的ポートを使用し、テスト間のポート競合を回避する
-- カバレッジ数値目標は初期版では設定しない
+- 上記の early-return ブロックを削除するか、`/VMC/Ext/Bone/Pos` と `/VMC/Ext/Root/Pos` のケースを先に評価してから Model ガードに入るようにリオーダーする
+- `Update()` / `LateUpdate()` → `Process()` 内の `StatusMessage = "Model not found."` + `return` (540–547 行) は維持するが、`BoneSynchronizeByTable()` を呼ばずに return する形を保つ (Model null の場合は Transform 書込をしない)
+
+結果: Adapter が使うユースケース (`Model=null` 固定、受信のみ、Transform 書込なし) が成立する。既存の Model 有モード (EVMC4U 単独利用) の挙動は変えない。
+
+### 6.2 内部 Dictionary / shutdown フラグの読取 API 公開
+
+**対象**:
+
+- `private Dictionary<HumanBodyBones, Vector3> HumanBodyBonesPositionTable` (374)
+- `private Dictionary<HumanBodyBones, Quaternion> HumanBodyBonesRotationTable` (375)
+- `bool shutdown` (388)
+
+**改変**: 読取専用アクセサを追加する (代入は内部のみ、データ構造は既存のままインスタンスを再利用する):
+
+```csharp
+// 追加 API (ExternalReceiver.cs に挿入)
+public IReadOnlyDictionary<HumanBodyBones, Quaternion> GetBoneRotationsView()
+    => HumanBodyBonesRotationTable;
+
+public IReadOnlyDictionary<HumanBodyBones, Vector3> GetBonePositionsView()
+    => HumanBodyBonesPositionTable;
+
+public bool IsShutdown => shutdown;
+
+// Root 位置・回転の最新値を Adapter に渡すためのアクセサ
+// 現行コードは RootPositionTransform.localPosition に直書きしているため、
+// RootPositionSynchronize/RotationSynchronize=false 時は何も書き込まれない。
+// その場合に備え、/VMC/Ext/Root/Pos 受信時の pos/rot を別途フィールドにキャッシュする。
+public Vector3 LatestRootLocalPosition { get; private set; }
+public Quaternion LatestRootLocalRotation { get; private set; } = Quaternion.identity;
+```
+
+`/VMC/Ext/Root/Pos` 処理部 (818–881 行付近) で `LatestRootLocalPosition` / `LatestRootLocalRotation` に代入する 1 行を追加する (既存の `pos` / `rot` ローカル変数を利用)。これにより `RootPositionSynchronize=false` でも Adapter 側から Root 情報を取得できる。
+
+### 6.3 フィールドアクセス修飾子
+
+`public GameObject Model` 等は既に public。`RootPositionSynchronize` / `RootRotationSynchronize` も既に public。追加の可視性変更は不要。
+
+### 6.4 改変の適用先
+
+`Assets/EVMC4U/ExternalReceiver.cs` (プロジェクトのアセット配下にインポート済み、**EVMC4U asmdef に属する**)。改変は EVMC4U アップストリームに送らない。`EVMC4U.asmdef` の API (namespace / 既存 public メンバ名) は破壊的変更しない (要件 10.5)。
+
+### 6.5 改変箇所の記録
+
+本 design §6 と、EVMC4U 各改変ファイル先頭に `// [RealtimeAvatarController mocap-vmc local patch] - see .kiro/specs/mocap-vmc/design.md §6` コメントを配置し、次回 EVMC4U を更新する際に追跡できるようにする。
 
 ---
 
-## 補足: 設計決定の記録
+## 7. File Structure Plan
 
-| 決定事項 | 選択肢 | 採用 | 理由 |
-|---------|--------|------|------|
-| OSC ライブラリ | uOSC / extOSC / OscCore / 自作 | **com.hidano.uosc 1.0.0** | SO_REUSEADDR 修正済み・hecomi/uOSC Fork・VMC 実績継承・npm scoped registry 配布・MIT ライセンス |
-| Reactive ライブラリ | UniRx / R3 | **UniRx** | NuGet 依存なし・UPM 配布の簡素化 (requirements.md 確定事項) |
-| Subject スレッドセーフ | `lock` 手動実装 / `Subject.Synchronize()` | **`Subject.Synchronize()`** | UniRx 標準拡張。自前 lock より信頼性高 |
-| マルチキャスト方式 | `BehaviorSubject` / `Publish().RefCount()` | **`Publish().RefCount()`** | 最新値キャッシュ不要。購読者ゼロ時に接続解除できる効率的な Hot Observable |
-| `timestamp` 打刻ソース | VMC 送信側タイムスタンプ / Stopwatch | **Stopwatch** | VMC v2.5 の送信タイムスタンプは不安定 (requirements.md 確定事項) |
-| VMC Sender 実装 | 本 Spec で実装 / 将来 Spec に委ねる | **スコープ外** | 初期段階スコープ (requirements.md 確定事項) |
-| BlendShape 変換 | 初期版で実装 / 将来 Spec に委ねる | **初期版では変換対象外** | 表情制御は別 Spec の責務 (requirements.md 確定事項) |
+### 7.1 新規 / 改変ファイル
+
+| 種別 | パス | 役割 |
+|------|------|------|
+| 新規 | `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/EVMC4UMoCapSource.cs` | Adapter 実装 |
+| 新規 | `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/EVMC4USharedReceiver.cs` | 共有 MonoBehaviour |
+| 維持 | `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/VMCMoCapSourceConfig.cs` | 既存 (要件 5.1) |
+| 改変 | `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/VMCMoCapSourceFactory.cs` | `Create` を `EVMC4UMoCapSource` 生成に差替 |
+| 維持 | `Packages/com.hidano.realtimeavatarcontroller/Editor/MoCap/VMC/VmcMoCapSourceFactoryEditorRegistrar.cs` | 既存 (要件 6.2) |
+| 改変 | `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/RealtimeAvatarController.MoCap.VMC.asmdef` | `com.hidano.uosc` 直接参照を撤去 (EVMC4U 経由に集約)。`EVMC4U` asmdef 参照を追加 |
+| 改変 | `Assets/EVMC4U/ExternalReceiver.cs` | §6 の最小パッチ |
+
+### 7.2 削除対象 (要件 11.1 / 11.2)
+
+- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/VmcMoCapSource.cs`
+- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/AssemblyInfo.cs` (InternalsVisibleTo — Internal クラスが消えるため不要)
+- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/Internal/VmcOscAdapter.cs`
+- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/Internal/VmcFrameBuilder.cs`
+- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/Internal/VmcMessageRouter.cs`
+- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/Internal/VmcBoneMapper.cs`
+- `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/Internal/VmcTickDriver.cs`
+- `Internal/` ディレクトリごと削除可
+- 付随する EditMode テスト: `VmcOscParserTests.cs` / `VmcMessageRouterTests.cs` / `VmcFrameBuilderTests.cs` / `VmcBoneMapperTests.cs` 等 (置換ポリシーは §10)
+- 付随する PlayMode テスト: `VmcMoCapSourceIntegrationTests.cs` (UDP 送信テストダブル利用版) は廃止または大幅再構築
+
+### 7.3 Dependency Direction
+
+```
+VMCMoCapSourceConfig  (POCO on ScriptableObject)
+     ↓
+EVMC4UMoCapSource  (Adapter POCO)
+     ↓ uses
+EVMC4USharedReceiver  (MonoBehaviour)
+     ↓ owns / reads
+ExternalReceiver (EVMC4U, patched)
+     ↓ hosts
+uOscServer (uOSC)
+```
+
+mocap-vmc → EVMC4U / motion-pipeline / slot-core の一方向のみ。
+
+---
+
+## 8. Requirements Traceability
+
+| Requirement | Summary | Components | Flows |
+|-------------|---------|------------|-------|
+| 1.1 | Adapter クラスを 1 つ定義 | `EVMC4UMoCapSource` | §5.1 |
+| 1.2 | IDisposable 冪等 | `EVMC4UMoCapSource.Dispose/Shutdown` | §5.2 |
+| 1.3 | `SourceType = "VMC"` | `EVMC4UMoCapSource.SourceType` | — |
+| 1.4 | `MotionStream` は `IObservable<MotionFrame>` | `EVMC4UMoCapSource.MotionStream` | §5.1 |
+| 1.5 | 型キャスト例外 | `EVMC4UMoCapSource.Initialize` / `VMCMoCapSourceFactory.Create` | — |
+| 1.6 | Shared Receiver を確保 | `EVMC4USharedReceiver.EnsureInstance` | §5.1 |
+| 1.7 | Config を Receiver へ反映 | `EVMC4USharedReceiver` port 反映 | §5.1 |
+| 1.8 | OSC パース自前実装禁止 | Adapter は `ExternalReceiver` 読み取りのみ | — |
+| 1.9 | Init 前購読時は空ストリーム | Subject 生成 + Publish/RefCount 先行、Initialize 後に OnNext | §5.1 |
+| 2.1 | シーン全体で Receiver 1 個 | `EVMC4USharedReceiver` static singleton | §4.3 |
+| 2.2 | 既存 Receiver の再利用 | `EnsureInstance` refCount++ | §5.1 |
+| 2.3 | 最終参照解放で GameObject 破棄 | `EVMC4USharedReceiver.Release` | §5.2 |
+| 2.4 | Model の書換禁止 | `EVMC4USharedReceiver` は Model=null 固定 | §6.1 |
+| 2.5 | Model=null 受信可のローカルパッチ | §6.1 ExternalReceiver 改変 | §5.1 |
+| 3.1 | Dictionary 読取 → BoneLocalRotations | `EVMC4UMoCapSource.Tick` | §5.1 |
+| 3.2 | Muscles は `Array.Empty<float>()` | `EVMC4UMoCapSource` frame 構築 | — |
+| 3.3 | Timestamp は Stopwatch | `EVMC4UMoCapSource` frame 構築 | — |
+| 3.4 | Root は optional 格納 | `EVMC4UMoCapSource.Tick` (`LatestRoot*` 経由) | §5.1 |
+| 3.5 | 空フレーム抑制 | `Tick` で `_dirty` フラグ判定 | §5.1 |
+| 3.6 | snapshot コピー | Tick で新規 `Dictionary` allocate | §5.1 |
+| 3.7 | BlendShape は含めない | `EVMC4UMoCapSource` は Blend Dictionary を参照しない | — |
+| 4.1 | MainThread 受信 | `uOscServer.Update` 前提 | §5.1 |
+| 4.2 | 受信コールバックで `OnNext` しない | Dictionary 蓄積のみ (EVMC4U 実装済挙動) | §5.1 |
+| 4.3 | LateUpdate Tick で発行 | `EVMC4USharedReceiver.LateUpdate` → `Adapter.Tick` | §5.1 |
+| 4.4 | Tick 駆動は MonoBehaviour | `EVMC4USharedReceiver` | §5.1 |
+| 4.5 | Shutdown で Tick 停止・完了 | `EVMC4UMoCapSource.Shutdown` | §5.2 |
+| 4.6 | `OnNext` は全て MainThread | `LateUpdate` 駆動 | §5.1 |
+| 4.7 | マルチキャスト | `Subject.Synchronize().Publish().RefCount()` | §5.1 |
+| 5.1 | Config 継承維持 | `VMCMoCapSourceConfig` | — |
+| 5.2 | SO アセット + 動的生成両対応 | 既存継続 | — |
+| 5.3 | Port 範囲バリデーション | `EVMC4UMoCapSource.Initialize` | — |
+| 5.4 | Factory キャスト失敗で例外 | `VMCMoCapSourceFactory.Create` | — |
+| 5.5 | Factory は Adapter 生成 | `VMCMoCapSourceFactory.Create` | — |
+| 5.6 | 同一 Config 共有 | `MoCapSourceRegistry` 参照カウント | §5.2 |
+| 6.1 | Runtime 自己登録 | `VMCMoCapSourceFactory.RegisterRuntime` | — |
+| 6.2 | Editor 自己登録 | `VmcMoCapSourceFactoryEditorRegistrar` | — |
+| 6.3 | 二重登録は RegistryConflict | 既存 Factory パターン踏襲 | §5.3 |
+| 6.4 | Domain Reload OFF 対応 | `RegistryLocator.ResetForTest` 依存 | — |
+| 7.1 | Resolve で Adapter 取得 | `MoCapSourceRegistry.Resolve` | §5.1 |
+| 7.2 | `Release()` 経由で解放 | `MoCapSourceRegistry.Release` | §5.2 |
+| 7.3 | 差替時は旧 Release → 新 Resolve | SlotManager 側 (slot-core) | §5.2 |
+| 7.4 | 差替中の例外耐性 | `Applier` がフレーム欠落を許容 (motion-pipeline 側) | — |
+| 7.5 | 状態遷移管理 | `EVMC4UMoCapSource` State enum | §5.1 |
+| 7.6 | SlotSettings 無改修で動作 | typeId / Config 形状維持 | — |
+| 8.1 | `MotionStream.OnError` 非発行 | `EVMC4UMoCapSource` 内で Subject OnError を呼ばない | §5.3 |
+| 8.2 | EVMC4U 内部エラーは Adapter 不介入 | Adapter は EVMC4U の `Debug.LogError` に任せる | §5.3 |
+| 8.3 | Adapter 例外を ErrorChannel へ | `PublishError(VmcReceive)` | §5.3 |
+| 8.4 | Port bind 失敗は Init 例外 | `uOscServer.StartServer` → `SocketException` 伝播 | §5.3 |
+| 8.5 | LogError 抑制は Channel 担当 | 現行 `DefaultSlotErrorChannel` | — |
+| 8.6 | 受信タイムアウト未実装 | 設計上非スコープ | — |
+| 8.7 | 診断カウンタは拡張余地のみ | 未公開 | — |
+| 9.1 | 主要 VMC 送信アプリ互換 | EVMC4U に委譲 | — |
+| 9.2 | VRM 0.x で動作 | `HumanoidMotionApplier` 側互換 | — |
+| 9.3 | VRM 1.x は EVMC4U 準拠 | — | — |
+| 9.4 | OSC アドレス範囲は EVMC4U 準拠 | — | — |
+| 10.1 | asmdef 配置 | §7.1 | — |
+| 10.2 | asmdef 依存構成 | §7.3 | — |
+| 10.3 | UniRx 参照は Core 経由 | `RealtimeAvatarController.MoCap.VMC.asmdef` | — |
+| 10.4 | Editor asmdef 構成 | 既存 `.Editor.asmdef` | — |
+| 10.5 | EVMC4U asmdef API 破壊禁止 | §6 の改変は追加のみ | — |
+| 11.1 | 旧自前実装を削除 | §7.2 | — |
+| 11.2 | 旧テストを新テストへ置換 | §10 | — |
+| 11.3 | 上位コードは無改修で動作 | typeId 維持 / Config 維持 | — |
+| 11.4 | `HumanoidMotionFrame` 形状不変 | motion-pipeline 契約維持 | — |
+| 11.5 | contracts.md §13.1 訂正 | §9.2 | — |
+| 12.1 | EditMode/PlayMode 2 系統 | §10 | — |
+| 12.2 | EditMode カバレッジ項目 | §10.1 | — |
+| 12.3 | PlayMode Dictionary 注入 | §10.2 | — |
+| 12.4 | 参照共有テスト | §10.1 | — |
+| 12.5 | SetUp/TearDown で ResetForTest | §10 共通方針 | — |
+| 12.6 | カバレッジ数値未設定 | — | — |
+| 12.7 | public state を使ってテスト | §10.2 | — |
+
+---
+
+## 9. Error Handling
+
+### 9.1 エラー戦略
+
+| エラー種別 | 発生スレッド | 対応 | MotionStream | ISlotErrorChannel |
+|-----------|-------------|------|:------------:|:-----------------:|
+| Port bind 失敗 | MainThread (`uOscServer.StartServer` 内 `Udp.StartServer`) | `Initialize` から `SocketException` を呼び出し元 (`SlotManager`) へ伝播 | — | `InitFailure` (SlotManager が発行) |
+| Port 範囲外 | MainThread (`Initialize`) | `ArgumentOutOfRangeException` | — | `InitFailure` (SlotManager) |
+| Config 型不一致 | MainThread (`Initialize` / `Factory.Create`) | `ArgumentException` | — | `InitFailure` |
+| EVMC4U パースエラー | MainThread (`onDataReceived`) | EVMC4U 側で catch + `Debug.LogError` + `shutdown=true` 遷移。Adapter は検知不可のまま | 継続 (OnError なし) | 次 Tick で Adapter が `IsShutdown==true` を検知したら 1 度だけ `VmcReceive` 発行 |
+| Adapter 側 `Tick` 内例外 (snapshot 構築失敗等) | MainThread | try/catch で捕捉し `Tick` 継続 | 継続 | `VmcReceive` |
+| Registry 二重登録 | MainThread (起動時) | `RegistryConflictException` catch | — | `RegistryConflict` |
+
+### 9.2 contracts.md §13.1 の訂正 (要件 11.5)
+
+**Q5 解決 (訂正の実施タイミング)**: 本 mocap-vmc Spec のタスクフェーズで同時に実施する。旧記述の「`VmcMessageRouter` / `VmcFrameBuilder` / `Subject.OnNext` はワーカースレッド」は自前実装前提の誤認であり、EVMC4U 採用により削除される対象。訂正の内容:
+
+- 「uOSC の `onDataReceived` は Unity MainThread で発火する」旨を明記
+- ソース: `uOscServer.Update` が `parser_.messageCount > 0` の間 `Dequeue` → `onDataReceived.Invoke` を行う実装 (Library/PackageCache/com.hidano.uosc@.../Runtime/uOscServer.cs 81–97 行)
+- 本 Spec の LateUpdate Tick モデルも §13.1 に追記し、自前ワーカースレッド前提の記述を段落単位で整理する
+
+本 Adapter は BoneLocalRotations を 1 つのフレームとして Tick で emit するため、contracts.md §2.2 の `BoneLocalRotations` 契約と整合する。§2.2 本体には変更を加えない (要件 11.4)。
+
+### 9.3 Monitoring
+
+- 診断カウンタの公開 (パケット受信数、Tick 発行数) は構造的余地を残すが初期版未実装 (要件 8.7)
+- 既存 `DefaultSlotErrorChannel` の抑制ポリシー (同一 SlotId + Category で 1 フレーム 1 回) に従う (要件 8.5)
+
+---
+
+## 10. Testing Strategy
+
+### 10.1 EditMode (`RealtimeAvatarController.MoCap.VMC.Tests.EditMode`)
+
+- **Config キャスト** (要件 12.2):
+  - `VMCMoCapSourceConfig` を `MoCapSourceConfigBase` として `Factory.Create` に渡し Adapter が生成される
+  - 別 MoCapSourceConfigBase 派生型を渡した場合に `ArgumentException` + 実型名メッセージ
+  - `ScriptableObject.CreateInstance<VMCMoCapSourceConfig>()` 動的生成 Config での生成成功
+- **Factory 自己登録** (要件 12.2):
+  - `RegistryLocator.MoCapSourceRegistry.GetRegisteredTypeIds()` に `"VMC"` が含まれる
+  - 同一 typeId 二重登録で `RegistryConflictException`
+  - `RegistryLocator.ResetForTest()` 後の再登録が成功
+- **Adapter 状態遷移** (要件 7.5):
+  - `Initialize` 2 回目で `InvalidOperationException`
+  - `Dispose` 後の `Shutdown` は no-op
+- **port 範囲バリデーション** (要件 5.3): port=0, 1024, 65536 で `ArgumentOutOfRangeException`
+
+### 10.2 PlayMode (`RealtimeAvatarController.MoCap.VMC.Tests.PlayMode`)
+
+主戦場。EVMC4U の Model=null モードで受信→発行の End-to-End を検証する。
+
+**ハーネス**:
+
+- テスト側で `EVMC4USharedReceiver.EnsureInstance()` を呼び、返ってきた `ExternalReceiver` の `HumanBodyBonesRotationTable` (§6.2 で追加した public 読取アクセサ経由) を Reflection ではなく新規 public Setter で直接書き換える
+  - 補助のため §6.2 に以下の追加 API を提案:
+    ```csharp
+    // テスト専用: EditMode/PlayMode テストから Dictionary を注入するための Setter
+    public void InjectBoneRotationForTest(HumanBodyBones bone, Quaternion rot)
+    { HumanBodyBonesRotationTable[bone] = rot; }
+    ```
+  - この API は `#if UNITY_INCLUDE_TESTS || DEVELOPMENT_BUILD` ガードで出荷ビルドから除外する (要件 12.7)
+
+**テストケース**:
+
+- 単一 bone 注入 → 次 LateUpdate で `EVMC4UMoCapSource.MotionStream` が `HumanoidMotionFrame` を emit する。`BoneLocalRotations[HumanBodyBones.LeftHand]` が注入値と一致する (要件 3.1 / 3.6 / 12.3)
+- 全身 (55 bone) 注入 → 1 フレームに全ボーンが格納される
+- 再注入なしで 2 回目の LateUpdate が走っても emit されない (要件 3.5 / `_dirty` フラグ)
+- `Muscles.Length == 0` / `IsValid == true` の検証 (要件 3.2)
+- 複数 Adapter (同一 Config) が同一 Adapter インスタンスを共有することを `MoCapSourceRegistry.Resolve` で確認 (要件 12.4 / 5.6)
+- 複数 Adapter (別 Config インスタンス) は別 Adapter だが、`EVMC4USharedReceiver` が 1 つしか存在しないことを確認
+- `Shutdown` 後に `MotionStream` が `OnCompleted` を発行 (要件 4.5)
+- `MotionStream.OnError` が一度も発行されない (要件 8.1): `DoOnError` で観測カウント 0 を確認
+
+**テスト共通方針**:
+
+- `[SetUp]` / `[TearDown]` で `RegistryLocator.ResetForTest()` を呼ぶ (要件 12.5)
+- port は `50000 + NUnit.Framework.TestContext.CurrentContext.Random.NextShort()` で動的割当
+- 実 UDP 送信テストは optional (要件 12.3)。初期版では Dictionary 注入で代替
+
+### 10.3 破棄されるテスト
+
+- 自前 OSC パーサ前提のテスト (`VmcOscParserTests`, `VmcMessageRouterTests`, `VmcFrameBuilderTests`, `VmcBoneMapperTests`) は削除。これらは EVMC4U 側責務のため不要 (要件 11.2)
+- `VmcMoCapSourceIntegrationTests` (UDP 送信ダブル使用版) は上記 PlayMode テスト群に置き換え
+
+---
+
+## 11. Migration Strategy
+
+### 11.1 Delta from Prior Design
+
+| 領域 | 旧設計 (自前実装) | 新設計 (EVMC4U 採用) | 継続 |
+|------|------------------|----------------------|------|
+| OSC 受信 | `com.hidano.uosc` 直接 + `VmcOscAdapter` | EVMC4U `ExternalReceiver` + `uOscServer` | uOSC パッケージ自体は EVMC4U 経由で継続利用 |
+| OSC アドレスルーティング | `VmcMessageRouter` (自作 switch/case) | EVMC4U `ProcessMessage` | — |
+| Bone 名 → HumanBodyBones | `VmcBoneMapper` (自作 Dictionary) | EVMC4U `HumanBodyBonesTryParse` | — |
+| Frame 組み立て | `VmcFrameBuilder` (自作 Dictionary 蓄積) | Adapter が EVMC4U の `HumanBodyBonesRotationTable` を snapshot | — |
+| Tick 駆動 | `VmcTickDriver` (単一 MonoBehaviour) | `EVMC4USharedReceiver` (単一 MonoBehaviour) | MonoBehaviour.LateUpdate パターン |
+| Subject / Publish | `VmcMoCapSource` (内包) | `EVMC4UMoCapSource` (内包) | `Subject.Synchronize().Publish().RefCount()` |
+| Config | `VMCMoCapSourceConfig` | `VMCMoCapSourceConfig` (変更なし) | 継続 |
+| Factory | `VMCMoCapSourceFactory` (Create 内で VmcMoCapSource を new) | `VMCMoCapSourceFactory` (Create 内で EVMC4UMoCapSource を new) | typeId `"VMC"` / 自己登録の枠組み |
+| `HumanoidMotionFrame` | `BoneLocalRotations` (M-3) | 同上 | 契約変更なし |
+| エラー | `VmcReceive` / `InitFailure` | 同上 | Channel 経路継続 |
+
+### 11.2 実装移行フロー
+
+```mermaid
+flowchart TB
+  A[現状 自前 VMC 実装 + EVMC4U 未使用] --> B[Step 1 ExternalReceiver ローカルパッチ]
+  B --> C[Step 2 EVMC4USharedReceiver 実装]
+  C --> D[Step 3 EVMC4UMoCapSource 実装]
+  D --> E[Step 4 VMCMoCapSourceFactory を差替]
+  E --> F[Step 5 PlayMode テスト置換]
+  F --> G[Step 6 旧 Vmc 系ファイル削除]
+  G --> H[Step 7 asmdef 依存整理 com.hidano.uosc 削除 EVMC4U 追加]
+  H --> I[Step 8 contracts.md §13.1 訂正]
+  I --> J[完了 UI Sample 実機動作確認]
+```
+
+### 11.3 ロールバックトリガ
+
+- EVMC4U が Unity 6000.3.10f1 上で起動時例外を出す場合 → ローカルパッチで `Start` を防衛
+- EVMC4U の `onDataReceived` が MainThread 以外で Invoke される挙動へ変わった場合 → スレッドモデル全面再設計
+- 上位 Sample でパフォーマンス退行 (LateUpdate 毎 Dictionary コピーのコスト) が顕在化した場合 → snapshot を `pool` 化する最適化 (tasks で検討可)
+
+---
+
+## 12. 補足: 5 つの Open Questions の解決記録
+
+| Q | 採用案 | 根拠 |
+|---|--------|------|
+| Q1 Adapter クラス名 | `EVMC4UMoCapSource` | 実装基盤が本質的に変わり保守時の検索性が上がる。typeId `"VMC"` は維持するため互換性影響なし |
+| Q2 ExternalReceiver Lifetime 責務 | 専用 `EVMC4USharedReceiver` MonoBehaviour (選択肢 c) | 生成順・破棄・Domain Reload リセットを 1 箇所に集約。slot-core の汎用契約を汚さない |
+| Q3 EVMC4U 改変範囲 | Model=null ガード + 3 つの読取 API + テスト用 Setter 追加のみ (§6) | 最小改変で動作。既存挙動を壊さない |
+| Q4 MotionStream 初期化前購読 | 空 Observable (選択肢 a) | 既存 Sample の購読タイミング互換性保持 |
+| Q5 contracts.md §13.1 訂正 | 本 Spec タスク内で同時実施 | EVMC4U 採用の波で `VmcMessageRouter` 等を消すのと同時なので境界を切らないほうが一貫する |
+
+---
+
+## 13. 既知リスクと留意事項
+
+- **EVMC4U に UniVRM / UniGLTF 依存がある**: `ExternalReceiver.cs` の LoadVRM 系コード (1102–1207 行) は本 Spec では使わないが、同一アセンブリがこれらを参照するため `Assets/EVMC4U/` 配下の既存状態を維持する必要がある (UniVRM 等のパッケージが package manifest 上に存在し続ける前提)
+- **uOSC の IPv4/IPv6 選択**: HANDOVER で言及されている Windows 環境の IPv6 dual-stack 問題は EVMC4U 側ではなく `com.hidano.uosc` の `Udp.cs` 側の課題。本 Spec ではこれを uOSC の将来更新に委ね、初期版では PackageCache への一時修正を行わない
+- **port 再バインドコスト**: Config port を変更する度に `StopServer`/`StartServer` でソケット再作成が起きる。UI Sample 上でのポート変更操作は想定頻度が低いため受容
+- **Domain Reload OFF + PlayMode 停止**: `EVMC4USharedReceiver` の static フィールドが残存する懸念に対して `RuntimeInitializeOnLoadMethod(SubsystemRegistration)` で明示クリアする
+- **EVMC4U Inspector のパフォーマンス**: `ExternalReceiver` は大量の SerializeField を持つため Inspector 描画コストは高いが、`EVMC4USharedReceiver` は DontDestroyOnLoad GameObject に貼るだけでユーザー操作対象ではないため影響は限定的
