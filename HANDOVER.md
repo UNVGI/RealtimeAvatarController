@@ -75,9 +75,6 @@
 - **`backup/before-vrm-drop` ブランチ削除**: VRM 履歴除去時の保険、動作確認済で不要 (`git branch -D backup/before-vrm-drop`)
 - **`origin/main` へ push**: 本セッションの成果 (60+ commit) を remote に反映
 
-### 優先度: 中
-- **EVMC4U ローカルパッチを `.patch` 化**: `Assets/EVMC4U/ExternalReceiver.cs` の 3 箇所パッチ (header L1 + accessors L391-424 + inline L848-878) を `.kiro/specs/mocap-vmc/evmc4u.patch` に artifact 化 (validate-impl R-6)
-
 ### 優先度: 低
 - **`_dirty` 判定を write-counter 方式に変更**: 現行は `Count + Σ(x+y+z+w)` hash 近似で near-identity pose の衝突リスク (validate-impl R-1 / R-4)。`ExternalReceiver` に `uint WriteCounter` 追加で解決
 - **PlayMode テストの動的 port 割当**: 現行は静的 port (`TestPort = 49502` 等) で socket 残留リスク (R-5)

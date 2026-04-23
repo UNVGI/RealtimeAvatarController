@@ -484,6 +484,8 @@ public Quaternion LatestRootLocalRotation { get; private set; } = Quaternion.ide
 
 本 design §6 と、EVMC4U 各改変ファイル先頭に `// [RealtimeAvatarController mocap-vmc local patch] - see .kiro/specs/mocap-vmc/design.md §6` コメントを配置し、次回 EVMC4U を更新する際に追跡できるようにする。
 
+加えて、`Assets/EVMC4U/ExternalReceiver.cs` に対する全ローカル改変を `git diff` 形式の artifact として `.kiro/specs/mocap-vmc/evmc4u.patch` に保存する (validate-impl R-6 対応)。新版 EVMC4U を再インポートする際は、pristine 取込後に `git apply .kiro/specs/mocap-vmc/evmc4u.patch` を実行し、conflict が出た箇所のみ手動マージする運用とする。patch を更新した場合は header に記載の手順で再生成する。
+
 ---
 
 ## 7. File Structure Plan
