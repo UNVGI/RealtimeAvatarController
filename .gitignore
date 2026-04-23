@@ -96,3 +96,9 @@ _audit_*.txt
 _gitfiles_*.txt
 
 RealtimeAvatarController/Assets/SampleModels
+RealtimeAvatarController/Assets/SampleModels.meta
+RealtimeAvatarController/Assets/Samples/
+RealtimeAvatarController/Assets/Samples.meta
+
+# IDE
+.idea/
