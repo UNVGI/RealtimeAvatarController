@@ -26,7 +26,7 @@
 
 - **Unity バージョン**: `6000.3.10f1`
 - **プロジェクトルート**: リポジトリ直下 `RealtimeAvatarController/`
-- **UPM パッケージルート**: `RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/`
+- **UPM パッケージルート**: `RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller/`
 
 > Unity プロジェクトの `Packages/` ディレクトリ内にパッケージを埋め込む形式 (Embedded Package) を採用し、git 単一リポジトリ内で開発と配布構造を一元管理する。
 
@@ -65,7 +65,7 @@ m_EditorVersionWithRevision: 6000.3.10f1 (abcdef012345)
 
 | フィールド | 値 |
 |------------|-----|
-| `name` | `com.cysharp.realtimeavatarcontroller` |
+| `name` | `com.hidano.realtimeavatarcontroller` |
 | `displayName` | `Realtime Avatar Controller` |
 | `version` | `0.1.0` |
 | `unity` | `6000.3` |
@@ -75,16 +75,16 @@ m_EditorVersionWithRevision: 6000.3.10f1 (abcdef012345)
 
 ```json
 {
-  "name": "com.cysharp.realtimeavatarcontroller",
+  "name": "com.hidano.realtimeavatarcontroller",
   "displayName": "Realtime Avatar Controller",
   "version": "0.1.0",
   "unity": "6000.3",
   "unityRelease": "10f1",
   "description": "Runtime avatar controller for VTuber use cases. Provides slot-based MoCap source management, avatar provider abstraction, and motion pipeline for Unity.",
   "author": {
-    "name": "Cysharp, Inc.",
-    "email": "info@cysharp.co.jp",
-    "url": "https://github.com/Cysharp"
+    "name": "Hidano",
+    "email": "n.hidano@hidano-dev.com",
+    "url": "https://github.com/NHidano"
   },
   "license": "MIT",
   "dependencies": {
@@ -732,7 +732,7 @@ Unity プロジェクトの `Packages/manifest.json` を開き、`scopedRegistri
 ```json
 {
   "dependencies": {
-    "com.cysharp.realtimeavatarcontroller": "0.1.0"
+    "com.hidano.realtimeavatarcontroller": "0.1.0"
   }
 }
 ```
@@ -759,7 +759,7 @@ Unity プロジェクトの `Packages/manifest.json` を開き、`scopedRegistri
     }
   ],
   "dependencies": {
-    "com.cysharp.realtimeavatarcontroller": "0.1.0",
+    "com.hidano.realtimeavatarcontroller": "0.1.0",
     "com.unity.ugui": "2.0.0"
   }
 }
@@ -786,7 +786,7 @@ Unity プロジェクトの `Packages/manifest.json` を開き、`scopedRegistri
 
 ```bash
 # プロジェクトルートで実行
-openupm add com.cysharp.realtimeavatarcontroller
+openupm add com.hidano.realtimeavatarcontroller
 ```
 
 `openupm-cli` は scoped registry の追加と `dependencies` への追記を自動で行う。UniRx・UniTask も依存として自動解決される。
@@ -798,7 +798,7 @@ openupm add com.cysharp.realtimeavatarcontroller
 scoped registry を使わずに git URL で直接インストールする場合は、`?path=` パラメータでパッケージパスを指定する必要がある。
 
 ```
-https://github.com/Hidano/RealtimeAvatarController.git?path=RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller
+https://github.com/Hidano-Dev/RealtimeAvatarController.git?path=RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller
 ```
 
 `Packages/manifest.json` の `dependencies` に以下のように記述する。
@@ -806,7 +806,7 @@ https://github.com/Hidano/RealtimeAvatarController.git?path=RealtimeAvatarContro
 ```json
 {
   "dependencies": {
-    "com.cysharp.realtimeavatarcontroller": "https://github.com/Hidano/RealtimeAvatarController.git?path=RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller"
+    "com.hidano.realtimeavatarcontroller": "https://github.com/Hidano-Dev/RealtimeAvatarController.git?path=RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller"
   }
 }
 ```
@@ -994,7 +994,7 @@ RealtimeAvatarController/   (リポジトリルート)
 │   │
 │   ├── Packages/
 │   │   ├── manifest.json            # UPM 依存宣言 (scoped registry 含む)
-│   │   └── com.cysharp.realtimeavatarcontroller/   # Embedded Package ルート
+│   │   └── com.hidano.realtimeavatarcontroller/   # Embedded Package ルート
 │   │       │
 │   │       ├── package.json         # パッケージメタデータ・依存宣言
 │   │       ├── README.md            # 利用者向け導入手順

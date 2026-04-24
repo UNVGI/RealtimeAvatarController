@@ -216,6 +216,6 @@
      ]
    }
    ```
-3. The README shall `scopedRegistries` を追加した後に `com.cysharp.realtimeavatarcontroller`（仮称）を `dependencies` に追加する手順を示す。パッケージ名の確定は design フェーズで行う。
+3. The README shall `scopedRegistries` を追加した後に `com.hidano.realtimeavatarcontroller`（仮称）を `dependencies` に追加する手順を示す。パッケージ名の確定は design フェーズで行う。
 4. The README shall 手動編集に加えて `openupm-cli` コマンド例 (`openupm add com.neuecc.unirx`) を参考情報として掲載してよい (必須ではなく任意)。
 5. The README のスニペット例は `Packages/manifest.json` の既存エントリを破壊しないよう、追記形式 (マージ) で説明すること。

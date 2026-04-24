@@ -17,7 +17,7 @@
     }
   ],
   "testables": [
-    "com.cysharp.realtimeavatarcontroller"
+    "com.hidano.realtimeavatarcontroller"
   ],
   "dependencies": {
     "com.hidano.uosc": "1.0.0",

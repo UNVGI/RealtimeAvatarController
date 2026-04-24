@@ -56,7 +56,7 @@ design.md 4.3 章に以下 6 本の完全な JSON 雛形が追加された。
 design.md 6.8 章として新設された。`?path=` パラメータ付きの完全な URL 例と `manifest.json` スニペット、および依存パッケージの手動追加が必要である旨の注意書きが記載されている。
 
 ```
-https://github.com/Hidano/RealtimeAvatarController.git?path=RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller
+https://github.com/Hidano-Dev/RealtimeAvatarController.git?path=RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller
 ```
 
 ---

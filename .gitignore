@@ -102,3 +102,6 @@ RealtimeAvatarController/Assets/Samples.meta
 
 # IDE
 .idea/
+
+# 開発セッションの引き継ぎノート (公開対象外)
+HANDOVER.md

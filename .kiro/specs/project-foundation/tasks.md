@@ -62,25 +62,25 @@ _Requirements: Req 1_
 
 _Requirements: Req 2, Req 8_
 
-**目的**: UPM 配布可能なパッケージ雛形を `Packages/com.cysharp.realtimeavatarcontroller/` に作成する。
+**目的**: UPM 配布可能なパッケージ雛形を `Packages/com.hidano.realtimeavatarcontroller/` に作成する。
 
 **作業手順**:
 
-1. `RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/` ディレクトリを作成する
+1. `RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller/` ディレクトリを作成する
 2. 以下の内容で `package.json` を作成する:
 
 ```json
 {
-  "name": "com.cysharp.realtimeavatarcontroller",
+  "name": "com.hidano.realtimeavatarcontroller",
   "displayName": "Realtime Avatar Controller",
   "version": "0.1.0",
   "unity": "6000.3",
   "unityRelease": "10f1",
   "description": "Runtime avatar controller for VTuber use cases. Provides slot-based MoCap source management, avatar provider abstraction, and motion pipeline for Unity.",
   "author": {
-    "name": "Cysharp, Inc.",
-    "email": "info@cysharp.co.jp",
-    "url": "https://github.com/Cysharp"
+    "name": "Hidano",
+    "email": "n.hidano@hidano-dev.com",
+    "url": "https://github.com/NHidano"
   },
   "license": "MIT",
   "dependencies": {
@@ -110,8 +110,8 @@ _Requirements: Req 2, Req 8_
 
 **完了条件**:
 
-- [ ] `Packages/com.cysharp.realtimeavatarcontroller/package.json` が存在する
-- [ ] `package.json` の `name` が `com.cysharp.realtimeavatarcontroller` である
+- [ ] `Packages/com.hidano.realtimeavatarcontroller/package.json` が存在する
+- [ ] `package.json` の `name` が `com.hidano.realtimeavatarcontroller` である
 - [ ] `dependencies` に `com.neuecc.unirx: "7.1.0"`・`com.cysharp.unitask: "2.5.10"`・`com.hidano.uosc: "1.0.0"` の 3 本が exact version で宣言されている
 - [ ] `samples` フィールドに UI Sample エントリが存在する
 - [ ] `LICENSE` ファイルが存在する
@@ -171,7 +171,7 @@ _Requirements: Req 2, Req 3, Req 5_
 
 **作業手順**:
 
-パッケージルート `RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/` 以下に以下のディレクトリを作成する:
+パッケージルート `RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller/` 以下に以下のディレクトリを作成する:
 
 ```
 Runtime/
@@ -841,7 +841,7 @@ _Requirements: Req 9_
 
 **作業手順**:
 
-`RealtimeAvatarController/Packages/com.cysharp.realtimeavatarcontroller/README.md` を以下の構成で作成する:
+`RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller/README.md` を以下の構成で作成する:
 
 1. **パッケージ概要セクション**: パッケージの用途 (VTuber アバター制御・Slot ベース MoCap ソース管理・アバタープロバイダ抽象化・モーションパイプライン) を説明する
 2. **前提条件セクション**: Unity 6000.3.10f1 以降、OpenUPM CLI (任意) を記載する
@@ -849,11 +849,11 @@ _Requirements: Req 9_
    - OpenUPM (`https://package.openupm.com`、scopes: `com.neuecc`, `com.cysharp`)
    - npm (hidano) (`https://registry.npmjs.com`、scopes: `com.hidano`)
    - 既存 `scopedRegistries` への追記方式で説明し、既存エントリを破壊しないことを明記する
-4. **Step 2: dependencies への追加**: `manifest.json` の `dependencies` に `com.cysharp.realtimeavatarcontroller: "0.1.0"` を追加する手順
+4. **Step 2: dependencies への追加**: `manifest.json` の `dependencies` に `com.hidano.realtimeavatarcontroller: "0.1.0"` を追加する手順
 5. **Step 3: manifest.json 完全スニペット例**: 新規プロジェクト向けの完全 JSON 例 (design.md §6.4 を使用)
 6. **Step 4: Package Manager UI での確認**: Window > Package Manager > My Registries から確認する手順
 7. **Step 5: UI サンプルのインポート**: Package Manager の Samples セクションから UI Sample をインポートする手順
-8. **補足: openupm-cli を使う場合 (任意)**: `openupm add com.cysharp.realtimeavatarcontroller` のコマンド例と、npm (hidano) registry の手動追加が必要な旨の注意書き
+8. **補足: openupm-cli を使う場合 (任意)**: `openupm add com.hidano.realtimeavatarcontroller` のコマンド例と、npm (hidano) registry の手動追加が必要な旨の注意書き
 9. **補足: git URL によるインストール (任意)**: `?path=` パラメータ付きの git URL と、依存パッケージの手動追加が必要な旨の注意書き
 10. **バージョン固定ポリシーセクション**: 全依存パッケージを exact version で固定している旨と、アップグレード時は `package.json` を手動更新する方針を記載する
 
