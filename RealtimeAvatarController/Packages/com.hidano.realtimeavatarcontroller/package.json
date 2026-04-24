@@ -1,14 +1,12 @@
 {
-  "name": "com.hidano.realtimeavatarcontroller",
+  "name": "jp.co.unvgi.realtimeavatarcontroller",
   "displayName": "Realtime Avatar Controller",
   "version": "0.1.0",
   "unity": "6000.3",
   "unityRelease": "10f1",
   "description": "Runtime avatar controller for VTuber use cases. Provides slot-based MoCap source management, avatar provider abstraction, and motion pipeline for Unity.",
   "author": {
-    "name": "Hidano",
-    "email": "n.hidano@hidano-dev.com",
-    "url": "https://github.com/NHidano"
+    "name": "UNVGI Inc."
   },
   "license": "MIT",
   "dependencies": {
