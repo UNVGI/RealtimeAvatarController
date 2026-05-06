@@ -351,6 +351,15 @@ namespace RealtimeAvatarController.Core.Tests
                 // 各呼び出しで新しいインスタンスを返す (参照共有は Registry の責務)
                 return SourceToReturn ?? new StubMoCapSource();
             }
+
+            public MoCapSourceConfigBase CreateDefaultConfig() => null;
+
+            public IDisposable CreateApplierBridge(IMoCapSource source, GameObject avatar, MoCapSourceConfigBase config) => new NoopDisposable();
+
+            private sealed class NoopDisposable : IDisposable
+            {
+                public void Dispose() { }
+            }
         }
     }
 }

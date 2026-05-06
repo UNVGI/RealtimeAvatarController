@@ -25,6 +25,41 @@ namespace RealtimeAvatarController.MoCap.Movin
             return new MovinMoCapSource();
         }
 
+        public MoCapSourceConfigBase CreateDefaultConfig()
+        {
+            return ScriptableObject.CreateInstance<MovinMoCapSourceConfig>();
+        }
+
+        public IDisposable CreateApplierBridge(IMoCapSource source, GameObject avatar, MoCapSourceConfigBase config)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (avatar == null) throw new ArgumentNullException(nameof(avatar));
+
+            var movinConfig = config as MovinMoCapSourceConfig;
+            if (movinConfig == null)
+            {
+                throw new ArgumentException(
+                    $"MovinMoCapSourceConfig is required, but {config?.GetType().Name ?? "null"} was provided.",
+                    nameof(config));
+            }
+
+            MovinMotionApplier applier = null;
+            MovinSlotBridge bridge = null;
+            try
+            {
+                applier = new MovinMotionApplier();
+                applier.SetAvatar(avatar, movinConfig.rootBoneName, movinConfig.boneClass);
+                bridge = new MovinSlotBridge(source, applier);
+                return new MovinApplierAttachment(bridge, applier);
+            }
+            catch
+            {
+                bridge?.Dispose();
+                applier?.Dispose();
+                throw;
+            }
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void RegisterRuntime()
         {
@@ -42,6 +77,26 @@ namespace RealtimeAvatarController.MoCap.Movin
                         SlotErrorCategory.RegistryConflict,
                         ex,
                         DateTime.UtcNow));
+            }
+        }
+
+        private sealed class MovinApplierAttachment : IDisposable
+        {
+            private MovinSlotBridge _bridge;
+            private MovinMotionApplier _applier;
+
+            public MovinApplierAttachment(MovinSlotBridge bridge, MovinMotionApplier applier)
+            {
+                _bridge = bridge;
+                _applier = applier;
+            }
+
+            public void Dispose()
+            {
+                _bridge?.Dispose();
+                _bridge = null;
+                _applier?.Dispose();
+                _applier = null;
             }
         }
     }

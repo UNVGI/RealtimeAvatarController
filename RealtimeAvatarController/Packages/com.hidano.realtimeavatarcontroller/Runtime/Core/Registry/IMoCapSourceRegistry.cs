@@ -31,5 +31,12 @@ namespace RealtimeAvatarController.Core
         /// 登録済みの sourceTypeId 一覧を返す。エディタ UI が利用可能な候補を列挙するために使用する。
         /// </summary>
         IReadOnlyList<string> GetRegisteredTypeIds();
+
+        /// <summary>
+        /// 登録済み Factory を返す。未登録の場合は false を返す。
+        /// 高レベル接続 API (例: <c>RealtimeAvatarSession.AttachMoCapAsync</c>) が
+        /// <c>IMoCapSourceFactory.CreateDefaultConfig</c> / <c>CreateApplierBridge</c> を呼ぶために使用する。
+        /// </summary>
+        bool TryGetFactory(string sourceTypeId, out IMoCapSourceFactory factory);
     }
 }
