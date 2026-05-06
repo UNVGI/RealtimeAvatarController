@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using UnityEngine;
 using uOSC;
 
@@ -30,10 +33,12 @@ namespace RealtimeAvatarController.MoCap.Movin
         private const int RootPoseWithScaleAndOffsetArgumentCount = 14;
 
         private static MovinOscReceiverHost s_lastCreatedHost;
+        private static readonly HashSet<int> s_activePorts = new HashSet<int>();
 
         private uOscServer _server;
         private IMovinReceiverAdapter _adapter;
         private bool _isShutdown;
+        private int _boundPort;
 
         public static MovinOscReceiverHost Create(IMovinReceiverAdapter adapter)
         {
@@ -71,9 +76,24 @@ namespace RealtimeAvatarController.MoCap.Movin
                 return;
             }
 
+            if (_boundPort == port && _server.isRunning)
+            {
+                return;
+            }
+
+            ReleasePortReservation();
             _server.StopServer();
+            ThrowIfPortUnavailable(port);
             _server.port = port;
             _server.StartServer();
+
+            if (!_server.isRunning)
+            {
+                throw new SocketException((int)SocketError.AddressAlreadyInUse);
+            }
+
+            _boundPort = port;
+            s_activePorts.Add(port);
         }
 
         public void Shutdown()
@@ -137,6 +157,8 @@ namespace RealtimeAvatarController.MoCap.Movin
 
         private void DetachServer()
         {
+            ReleasePortReservation();
+
             if (_server != null)
             {
                 _server.onDataReceived.RemoveListener(HandleOscMessage);
@@ -145,6 +167,46 @@ namespace RealtimeAvatarController.MoCap.Movin
             }
 
             _adapter = null;
+        }
+
+        private void ReleasePortReservation()
+        {
+            if (_boundPort <= 0)
+            {
+                return;
+            }
+
+            s_activePorts.Remove(_boundPort);
+            _boundPort = 0;
+        }
+
+        private static void ThrowIfPortUnavailable(int port)
+        {
+            if (s_activePorts.Contains(port) || IsUdpPortActive(port))
+            {
+                throw new SocketException((int)SocketError.AddressAlreadyInUse);
+            }
+        }
+
+        private static bool IsUdpPortActive(int port)
+        {
+            try
+            {
+                var listeners = IPGlobalProperties.GetIPGlobalProperties().GetActiveUdpListeners();
+                for (var i = 0; i < listeners.Length; i++)
+                {
+                    if (listeners[i].Port == port)
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                return false;
+            }
+
+            return false;
         }
 
         private void HandleOscMessage(Message message)
@@ -332,6 +394,7 @@ namespace RealtimeAvatarController.MoCap.Movin
         private static void ResetStaticsOnSubsystemRegistration()
         {
             s_lastCreatedHost = null;
+            s_activePorts.Clear();
         }
     }
 }

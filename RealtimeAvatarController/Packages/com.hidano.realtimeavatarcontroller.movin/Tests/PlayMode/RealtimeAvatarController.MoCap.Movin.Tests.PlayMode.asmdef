@@ -5,6 +5,7 @@
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner",
     "RealtimeAvatarController.MoCap.Movin",
+    "RealtimeAvatarController.MoCap.VMC",
     "RealtimeAvatarController.Core",
     "RealtimeAvatarController.Motion",
     "uOSC.Runtime",
