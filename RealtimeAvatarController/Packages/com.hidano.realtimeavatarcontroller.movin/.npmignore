@@ -1,0 +1,29 @@
+# Tests — 配布 tarball には含めない (利用側は GitHub repo から取得可能)
+Tests/
+Tests.meta
+
+# IDE / editor artifacts
+.idea/
+.vs/
+.vscode/
+*.DotSettings
+*.DotSettings.user
+
+# C# / Unity project generated files (should not exist here, but defensive)
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+obj/
+[Ll]ibrary/
+[Tt]emp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs / misc
+*.log
+*.bak
+*.tmp

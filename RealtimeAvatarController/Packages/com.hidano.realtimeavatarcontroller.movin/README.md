@@ -81,10 +81,25 @@ Registry の二重登録は `SlotErrorCategory.RegistryConflict` として通知
 
 Package Manager の Samples には `MOVIN` sample が含まれます。
 
-- `Samples~/MOVIN/Scenes/MOVINSampleScene.unity`
-- `Samples~/MOVIN/Configs/MovinMoCapSourceConfig.asset`
-- `Samples~/MOVIN/Runtime/MovinSampleSlotSettings.asset`
-- `Samples~/MOVIN/Prefabs/NeoMOVINMan_Unity.prefab`
+### Scenes
+- `Samples~/MOVIN/Scenes/MOVINSampleScene.unity` — MOVIN 受信を確認するための demo scene。
+
+### Configs
+- `Samples~/MOVIN/Configs/MovinMoCapSourceConfig.asset` — `port=11235` などを設定済みの MOVIN source 用 config。
+- `Samples~/MOVIN/Configs/MovinSampleAvatarProviderConfig.asset` — sample 用 AvatarProvider config。NeoMOVINMan prefab を参照します。
+
+### SlotSettings
+- `Samples~/MOVIN/Runtime/MovinSampleSlotSettings.asset` — `SourceTypeId=MOVIN` を持つ sample 用 SlotSettings。
+
+### Prefabs / Avatar assets
+- `Samples~/MOVIN/Prefabs/NeoMOVINMan_Unity.prefab` — sample avatar prefab。
+- `Samples~/MOVIN/Prefabs/NeoMOVINManAssets/NeoMOVINMan_Unity.fbx` — prefab の元 FBX。
+- `Samples~/MOVIN/Prefabs/NeoMOVINManAssets/Materials/` — sample 用の material・shader (`movinman.shader`、`movin common.hlsl`、`green.mat`、`white.mat`)。
+
+### Sample driver scripts
+- `Samples~/MOVIN/Runtime/RealtimeAvatarController.MoCap.Movin.Samples.asmdef` — sample script 用の asmdef。
+- `Samples~/MOVIN/Runtime/MovinSlotDriver.cs` — Slot を組み立てて MOVIN source / applier を接続する driver。
+- `Samples~/MOVIN/Runtime/MovinSessionDriver.cs` — Session 経由で sample を起動するための driver。
 
 sample は MOVIN 専用 driver と `MovinSlotBridge` を使い、Slot が Active になった後に source と applier を接続します。
 
