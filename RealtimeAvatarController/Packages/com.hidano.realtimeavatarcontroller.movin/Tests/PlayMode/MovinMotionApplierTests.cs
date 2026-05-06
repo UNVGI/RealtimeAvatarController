@@ -12,6 +12,10 @@ namespace RealtimeAvatarController.MoCap.Movin.Tests
         private const string SpineBoneName = "mixamorig:Spine";
         private const string HeadBoneName = "mixamorig:Head";
         private const string MissingBoneName = "mixamorig:Missing";
+        private const string MovinBoneClass = "MOVIN";
+        private const string MovinRootBoneName = "MOVIN:Hips";
+        private const string MovinSpineBoneName = "MOVIN:Spine";
+        private const string OtherHeadBoneName = "OTHER:Head";
 
         private readonly List<GameObject> _createdObjects = new List<GameObject>();
 
@@ -95,6 +99,58 @@ namespace RealtimeAvatarController.MoCap.Movin.Tests
             Assert.That(avatar.transform.localScale, Is.EqualTo(Vector3.one));
         }
 
+        [Test]
+        public void BoneClassFilter_ExcludesNonMatchingPrefixAndLeavesTransformUnchanged()
+        {
+            var avatar = CreateMixedPrefixAvatar(out var hips, out var spine, out var nonMatchingHead);
+            var nonMatchingInitialPosition = new Vector3(-1f, -2f, -3f);
+            var nonMatchingInitialRotation = Quaternion.Euler(11f, 22f, 33f);
+            var nonMatchingInitialScale = new Vector3(0.7f, 0.8f, 0.9f);
+            nonMatchingHead.SetLocalPositionAndRotation(nonMatchingInitialPosition, nonMatchingInitialRotation);
+            nonMatchingHead.localScale = nonMatchingInitialScale;
+
+            var built = MovinBoneTable.TryBuild(
+                avatar.transform,
+                MovinRootBoneName,
+                MovinBoneClass,
+                out var table);
+
+            Assert.That(built, Is.True);
+            Assert.That(table, Is.Not.Null);
+            Assert.That(table, Does.ContainKey(MovinRootBoneName));
+            Assert.That(table, Does.ContainKey(MovinSpineBoneName));
+            Assert.That(table, Does.Not.ContainKey(OtherHeadBoneName));
+
+            using var applier = new MovinMotionApplier();
+            Assert.DoesNotThrow(() => applier.SetAvatar(avatar, MovinRootBoneName, MovinBoneClass));
+
+            var hipsPosition = new Vector3(1f, 2f, 3f);
+            var hipsRotation = Quaternion.Euler(10f, 20f, 30f);
+            var spinePosition = new Vector3(4f, 5f, 6f);
+            var spineRotation = Quaternion.Euler(40f, 50f, 60f);
+            var nonMatchingFramePosition = new Vector3(7f, 8f, 9f);
+            var nonMatchingFrameRotation = Quaternion.Euler(70f, 80f, 90f);
+            var nonMatchingFrameScale = new Vector3(1.7f, 1.8f, 1.9f);
+
+            var frame = new MovinMotionFrame(
+                timestamp: Time.realtimeSinceStartupAsDouble,
+                bones: new Dictionary<string, MovinBonePose>
+                {
+                    { MovinSpineBoneName, new MovinBonePose(spinePosition, spineRotation) },
+                    { OtherHeadBoneName, new MovinBonePose(nonMatchingFramePosition, nonMatchingFrameRotation, nonMatchingFrameScale) },
+                },
+                rootPose: new MovinRootPose(
+                    MovinRootBoneName,
+                    hipsPosition,
+                    hipsRotation));
+
+            Assert.DoesNotThrow(() => applier.Apply(frame));
+
+            AssertTransform(hips, hipsPosition, hipsRotation, Vector3.one);
+            AssertTransform(spine, spinePosition, spineRotation, Vector3.one);
+            AssertTransform(nonMatchingHead, nonMatchingInitialPosition, nonMatchingInitialRotation, nonMatchingInitialScale);
+        }
+
         private GameObject CreateThreeLevelAvatar(
             out Transform hips,
             out Transform spine,
@@ -111,6 +167,26 @@ namespace RealtimeAvatarController.MoCap.Movin.Tests
 
             head = new GameObject(HeadBoneName).transform;
             head.SetParent(spine, false);
+
+            return avatar;
+        }
+
+        private GameObject CreateMixedPrefixAvatar(
+            out Transform hips,
+            out Transform spine,
+            out Transform nonMatchingHead)
+        {
+            var avatar = new GameObject("movin-boneclass-avatar");
+            _createdObjects.Add(avatar);
+
+            hips = new GameObject(MovinRootBoneName).transform;
+            hips.SetParent(avatar.transform, false);
+
+            spine = new GameObject(MovinSpineBoneName).transform;
+            spine.SetParent(hips, false);
+
+            nonMatchingHead = new GameObject(OtherHeadBoneName).transform;
+            nonMatchingHead.SetParent(spine, false);
 
             return avatar;
         }
