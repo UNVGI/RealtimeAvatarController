@@ -67,6 +67,29 @@ namespace RealtimeAvatarController.MoCap.VMC
                 errorChannel: RegistryLocator.ErrorChannel);
         }
 
+        /// <inheritdoc />
+        /// <remarks>
+        /// 既定値で <see cref="VMCMoCapSourceConfig"/> を生成して返す。
+        /// </remarks>
+        public MoCapSourceConfigBase CreateDefaultConfig()
+        {
+            return ScriptableObject.CreateInstance<VMCMoCapSourceConfig>();
+        }
+
+        /// <inheritdoc />
+        /// <remarks>
+        /// VMC は <see cref="HumanoidMotionApplier"/> + LateUpdate 駆動の標準パイプラインに依存するため、
+        /// 単発バインドの <c>CreateApplierBridge</c> ではサポートしない。
+        /// VMC を <c>RealtimeAvatarSession.AttachMoCapAsync</c> で扱いたい場合は別途 LateUpdate 駆動の
+        /// MonoBehaviour を併設する必要がある (Sample: <c>SlotManagerBehaviour</c>)。
+        /// </remarks>
+        public IDisposable CreateApplierBridge(IMoCapSource source, GameObject avatar, MoCapSourceConfigBase config)
+        {
+            throw new NotSupportedException(
+                "VMC MoCap は LateUpdate 駆動の Humanoid pipeline を必要とするため CreateApplierBridge では未対応です。" +
+                "Sample の SlotManagerBehaviour 等を併用してください。");
+        }
+
         /// <summary>
         /// Player ビルドおよびランタイム起動時 (シーンロード前) に
         /// <see cref="RegistryLocator.MoCapSourceRegistry"/> へ typeId="VMC" で自己登録する

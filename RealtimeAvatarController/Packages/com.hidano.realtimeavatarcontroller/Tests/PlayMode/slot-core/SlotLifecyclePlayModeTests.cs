@@ -235,6 +235,13 @@ namespace RealtimeAvatarController.Core.Tests
         private sealed class PlayModeMockMoCapSourceFactory : IMoCapSourceFactory
         {
             public IMoCapSource Create(MoCapSourceConfigBase config) => new PlayModeMockMoCapSource();
+            public MoCapSourceConfigBase CreateDefaultConfig() => null;
+            public IDisposable CreateApplierBridge(IMoCapSource source, GameObject avatar, MoCapSourceConfigBase config) => new NoopDisposable();
+
+            private sealed class NoopDisposable : IDisposable
+            {
+                public void Dispose() { }
+            }
         }
 
         private sealed class PlayModeMockMoCapSource : IMoCapSource

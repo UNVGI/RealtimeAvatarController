@@ -85,6 +85,12 @@ namespace RealtimeAvatarController.Core
             return _factories.Keys.ToList().AsReadOnly();
         }
 
+        /// <inheritdoc/>
+        public bool TryGetFactory(string sourceTypeId, out IMoCapSourceFactory factory)
+        {
+            return _factories.TryGetValue(sourceTypeId, out factory);
+        }
+
         private struct Entry
         {
             public IMoCapSource Source;

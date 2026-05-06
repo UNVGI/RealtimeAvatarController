@@ -241,6 +241,15 @@ namespace RealtimeAvatarController.Core.Tests
                 CreatedSources.Add(source);
                 return source;
             }
+
+            public MoCapSourceConfigBase CreateDefaultConfig() => null;
+
+            public IDisposable CreateApplierBridge(IMoCapSource source, GameObject avatar, MoCapSourceConfigBase config) => new NoopDisposable();
+
+            private sealed class NoopDisposable : IDisposable
+            {
+                public void Dispose() { }
+            }
         }
 
         private sealed class SharingMockMoCapSource : IMoCapSource

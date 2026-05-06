@@ -39,5 +39,8 @@ namespace RealtimeAvatarController.Core.Tests.Mocks
         }
 
         public IReadOnlyList<string> GetRegisteredTypeIds() => _inner.GetRegisteredTypeIds();
+
+        public bool TryGetFactory(string sourceTypeId, out IMoCapSourceFactory factory)
+            => _inner.TryGetFactory(sourceTypeId, out factory);
     }
 }

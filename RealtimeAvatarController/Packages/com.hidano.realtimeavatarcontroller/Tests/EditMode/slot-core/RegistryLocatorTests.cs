@@ -292,6 +292,7 @@ namespace RealtimeAvatarController.Core.Tests
             public IMoCapSource Resolve(MoCapSourceDescriptor descriptor) => null;
             public void Release(IMoCapSource source) { }
             public IReadOnlyList<string> GetRegisteredTypeIds() => Array.Empty<string>();
+            public bool TryGetFactory(string sourceTypeId, out IMoCapSourceFactory factory) { factory = null; return false; }
         }
 
         private class StubFacialControllerRegistry : IFacialControllerRegistry

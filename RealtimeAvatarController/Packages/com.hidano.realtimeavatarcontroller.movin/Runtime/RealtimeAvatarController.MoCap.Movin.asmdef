@@ -1,0 +1,19 @@
+{
+  "name": "RealtimeAvatarController.MoCap.Movin",
+  "rootNamespace": "RealtimeAvatarController.MoCap.Movin",
+  "references": [
+    "RealtimeAvatarController.Core",
+    "RealtimeAvatarController.Motion",
+    "uOSC.Runtime",
+    "UniRx"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

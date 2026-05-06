@@ -7,16 +7,6 @@
       "dependencies": {},
       "url": "https://package.openupm.com"
     },
-    "com.hidano.realtimeavatarcontroller": {
-      "version": "file:com.hidano.realtimeavatarcontroller",
-      "depth": 0,
-      "source": "embedded",
-      "dependencies": {
-        "com.neuecc.unirx": "7.1.0",
-        "com.cysharp.unitask": "2.5.10",
-        "com.hidano.uosc": "1.0.0"
-      }
-    },
     "com.hidano.uosc": {
       "version": "1.0.0",
       "depth": 0,
@@ -215,6 +205,25 @@
         "com.vrmc.gltf": "0.131.0"
       },
       "hash": "3b99078d26b362733ad9bf463f98c83b8a1b4c9f"
+    },
+    "jp.co.unvgi.realtimeavatarcontroller": {
+      "version": "file:com.hidano.realtimeavatarcontroller",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.neuecc.unirx": "7.1.0",
+        "com.cysharp.unitask": "2.5.10",
+        "com.hidano.uosc": "1.0.0"
+      }
+    },
+    "jp.co.unvgi.realtimeavatarcontroller.movin": {
+      "version": "file:com.hidano.realtimeavatarcontroller.movin",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "jp.co.unvgi.realtimeavatarcontroller": "0.1.0",
+        "com.hidano.uosc": "1.0.0"
+      }
     },
     "com.unity.modules.accessibility": {
       "version": "1.0.0",

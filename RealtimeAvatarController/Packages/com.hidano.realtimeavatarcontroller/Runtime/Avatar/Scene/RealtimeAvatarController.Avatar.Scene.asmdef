@@ -1,0 +1,17 @@
+{
+  "name": "RealtimeAvatarController.Avatar.Scene",
+  "rootNamespace": "RealtimeAvatarController.Avatar.Scene",
+  "references": [
+    "RealtimeAvatarController.Core",
+    "UniTask"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

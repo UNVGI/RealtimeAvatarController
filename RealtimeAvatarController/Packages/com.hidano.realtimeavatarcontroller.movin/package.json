@@ -1,0 +1,31 @@
+{
+  "name": "jp.co.unvgi.realtimeavatarcontroller.movin",
+  "displayName": "Realtime Avatar Controller MOVIN",
+  "version": "0.1.0",
+  "unity": "6000.3",
+  "unityRelease": "10f1",
+  "description": "MOVIN Studio MoCap source package for Realtime Avatar Controller.",
+  "author": {
+    "name": "UNVGI Inc."
+  },
+  "license": "MIT",
+  "dependencies": {
+    "jp.co.unvgi.realtimeavatarcontroller": "0.1.0",
+    "com.hidano.uosc": "1.0.0"
+  },
+  "samples": [
+    {
+      "displayName": "MOVIN",
+      "description": "MOVIN Studio sample content for Realtime Avatar Controller.",
+      "path": "Samples~/MOVIN"
+    }
+  ],
+  "keywords": [
+    "avatar",
+    "mocap",
+    "movin",
+    "vmc",
+    "vtuber",
+    "realtime"
+  ]
+}
