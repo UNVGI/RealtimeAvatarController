@@ -1,11 +1,8 @@
 {
-  "name": "RealtimeAvatarController.MoCap.Movin.Samples",
-  "rootNamespace": "RealtimeAvatarController.MoCap.Movin.Samples",
+  "name": "RealtimeAvatarController.Avatar.Scene",
+  "rootNamespace": "RealtimeAvatarController.Avatar.Scene",
   "references": [
     "RealtimeAvatarController.Core",
-    "RealtimeAvatarController.MoCap.Movin",
-    "RealtimeAvatarController.Session",
-    "UniRx",
     "UniTask"
   ],
   "includePlatforms": [],

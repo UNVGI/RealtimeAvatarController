@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using RealtimeAvatarController.Avatar.Scene;
+using RealtimeAvatarController.Core;
 using UnityEngine;
 
-namespace RealtimeAvatarController.Core
+namespace RealtimeAvatarController.Session
 {
     /// <summary>
     /// 高レベル接続 API。

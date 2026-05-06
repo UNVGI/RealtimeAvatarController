@@ -1,6 +1,7 @@
 using System;
 using Cysharp.Threading.Tasks;
 using RealtimeAvatarController.Core;
+using RealtimeAvatarController.Session;
 using UnityEngine;
 
 namespace RealtimeAvatarController.MoCap.Movin.Samples
