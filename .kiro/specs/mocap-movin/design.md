@@ -66,6 +66,35 @@
 - `com.hidano.uosc` メジャーバージョンアップ (`uOscServer.onDataReceived` のスレッドモデル / `port` プロパティ / `StartServer` `StopServer` 仕様変更)。
 - VMC プロトコル v2.x 上位拡張で `/VMC/Ext/Root/Pos` 引数長の互換性が破綻した場合。
 - 本パッケージ MOVIN typeId 文字列 (`"MOVIN"`) の変更。
+- 本体側に汎用 `GenericMotionPipeline` / 非 Humanoid 用 `IMotionApplier` 拡張点が追加された場合 (`MovinSlotBridge` の本体 Pipeline 移行可否を再評価, D-4 参照)。
+
+## Design Decisions (Confirmed)
+
+設計レビュー (`/kiro:validate-design mocap-movin`) で挙がった 4 つのオープン質問について、以下の方針で確定する。これらは MVP 期間中の動作仕様として固定し、変更時は本 spec の Revalidation を伴う。
+
+### D-1: `MovinMoCapSourceConfig.bindAddress` は情報フィールド扱い (Q1 帰結)
+
+- **決定**: `com.hidano.uosc` 1.0.0 の `uOscServer` は `bindAddress` を公開していないため、`MovinMoCapSourceConfig.bindAddress` は **情報フィールド** として保持し、実際の bind は全インターフェース (`0.0.0.0`) に対して行う。
+- **要件整合**: 要件 4-2 の「bindAddress を保持」は満たすが「bindAddress を実 bind に反映」までは保証しない。要件 4-2 のテキストは現行設計の制約に整合する形で解釈する。
+- **UX 対応**: Inspector に `[Tooltip]` を付与して「uOSC 1.0.0 では参照のみ。実 bind は全インターフェース。」と明記する (D-5 参照)。
+- **将来**: `com.hidano.uosc` メジャーバージョンアップで `bindAddress` が公開された際に再評価 (Revalidation Triggers に既登録)。
+
+### D-2: `SlotErrorCategory.VmcReceive` を OSC 系受信エラー全般として意味拡張 (Q2 帰結)
+
+- **決定**: 本体パッケージ非改変制約下で新規 `SlotErrorCategory` 列挙値の追加が不可能なため、`VmcReceive` を「OSC/VMC 系受信エラー全般 (MOVIN typeId 含む)」として運用する。
+- **運用周知**: 本パッケージ `README.md` に「`SlotErrorCategory.VmcReceive` は MOVIN typeId からも発行される」を明記。`SlotError.SlotId` フィールドに **`MovinMoCapSourceFactory.MovinSourceTypeId` ("MOVIN") を含めて発行** することで監視側が typeId を識別可能にする (Error Strategy 節で詳細)。
+- **将来**: 本体側で `OscReceive` 等の専用カテゴリが追加された場合は本 spec の Revalidation Trigger として再評価する (Revalidation Triggers に既登録)。
+
+### D-3: 並行稼働 Sample (`SlotManagerBehaviour` + MOVIN Driver 同居) は MVP 範囲外 (Q3 帰結)
+
+- **決定**: MVP では MOVIN 専用 Driver の単独運用 Sample (`Samples~/MOVIN/Scenes/MOVINSampleScene.unity`) のみ提供する。要件 14-4 (port 独立な並行稼動保証) は OSC port が異なれば技術的に保証されるため、Sample レベルでの demo 提供は必須でない。
+- **将来**: VMC + MOVIN 並行稼働 Demo の追加は Future Work として `CHANGELOG.md` に記録する。
+
+### D-4: `MovinSlotBridge` は Runtime asmdef に `public sealed class` で配置 (Q4 帰結)
+
+- **決定**: `MovinSlotBridge` は `Runtime/MovinSlotBridge.cs` に `public sealed class` として配置する。本体の Pipeline (`MotionCache` 等) は Humanoid 前提のため使用せず、本 spec が独自 Pipeline を Runtime API として公開する。
+- **理由**: 要件 1-6 (manifest 追加だけで MOVIN typeId が動作)・要件 9-2 (Bridge 提供責務)・要件 11-1 (Runtime 名前空間) が「本パッケージ Runtime 内の API 提供」を要求しているため。Sample 限定にすると import しないユーザーが Pipeline を自前実装する必要があり利便性が低下する。
+- **API 安定性**: `MovinSlotBridge` のコンストラクタ / `Dispose` シグネチャは MVP 期間中 freeze する。本体側に汎用 `GenericMotionPipeline` 等が将来追加された際の追随は本パッケージのメジャーバージョンアップで対応する (Revalidation Triggers に追加)。
 
 ## Architecture
 
@@ -177,6 +206,7 @@ RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller.movin/
 ├── CHANGELOG.md
 ├── Runtime/
 │   ├── RealtimeAvatarController.MoCap.Movin.asmdef
+│   ├── AssemblyInfo.cs                         # InternalsVisibleTo("...Tests.EditMode"/"...Tests.PlayMode")
 │   ├── MovinMoCapSource.cs                     # IMoCapSource 実装 (Pure C#)
 │   ├── MovinMoCapSourceFactory.cs              # IMoCapSourceFactory 実装 + Runtime 自己登録
 │   ├── MovinMoCapSourceConfig.cs               # MoCapSourceConfigBase 派生 SO
@@ -353,7 +383,7 @@ stateDiagram-v2
 | 8.1 | Applier 提供 | `MovinMotionApplier` | API: `Apply(MovinMotionFrame)` | Receive → Apply |
 | 8.2 | name 一致テーブル構築 | `MovinBoneTable` (Applier 補助) | API: `Build(Transform root, ...)` | — |
 | 8.3 | rootBoneName 起点採用 | `MovinBoneTable` | — | — |
-| 8.4 | boneClass フィルタ | `MovinBoneTable.Build` | — | — |
+| 8.4 | boneClass フィルタ | `MovinBoneTable.TryBuild` | — | — |
 | 8.5 | SetLocalPositionAndRotation + scale | `MovinMotionApplier.Apply` | Unity Transform API | Receive → Apply |
 | 8.6 | 未一致 bone はスキップ | `MovinMotionApplier.Apply` | — | — |
 | 8.7 | localScale は対象 bone Transform に書き込み (Avatar root ではない) | `MovinMotionApplier.Apply` | — | — |
@@ -430,7 +460,7 @@ stateDiagram-v2
 - 受信ワーカースレッドへ直接アクセスしない (uOSC が `onDataReceived` をメインスレッドで発火させる)。
 - Initialize は Uninitialized 状態でのみ受け付け、それ以外では `InvalidOperationException`。Config は `MovinMoCapSourceConfig` 必須。port 範囲 1..65535 (要件 4.5)。
 - 内部キャッシュ Dictionary に bone 名 → 最新 pose を蓄積し、Tick で `MovinMotionFrame` に snapshot 化して `Subject.OnNext`。
-- 例外発生時は `RegistryLocator.ErrorChannel.Publish(SlotError("", VmcReceive, ex, UtcNow))` で集約 (要件 10-5)。`OnError` は呼ばない。
+- 例外発生時は `RegistryLocator.ErrorChannel.Publish(SlotError(MovinMoCapSourceFactory.MovinSourceTypeId, VmcReceive, ex, UtcNow))` で集約 (要件 10-5, D-2)。`OnError` は呼ばない。
 - Shutdown/Dispose は冪等。`Subject` は `OnCompleted` + `Dispose`。`MovinOscReceiverHost` を `Destroy` し、再 Initialize は不可 (Disposed 状態固定)。
 - Humanoid 関連型を一切参照しない (要件 2-6)。
 
@@ -470,7 +500,10 @@ namespace RealtimeAvatarController.MoCap.Movin
 
         // Shutdown
         // Stops uOSC server, destroys host, completes and disposes the subject.
-        // Idempotent. After Shutdown, re-Initialize is not supported.
+        // Idempotent (calling twice is a no-op). The instance is terminal after Shutdown:
+        // re-Initialize is not supported. To restart receiving, callers must obtain a new
+        // instance via MovinMoCapSourceFactory.Create (this matches the registry's
+        // Release -> new-Resolve contract).
         public void Shutdown();
 
         public void Dispose(); // == Shutdown
@@ -504,15 +537,16 @@ namespace RealtimeAvatarController.MoCap.Movin
 
 ##### State Management
 
-- 状態列挙: `Uninitialized → Running → Disposed` の単方向遷移。
+- 状態列挙: `Uninitialized → Running → Disposed` の単方向遷移。`Disposed` は **terminal** で、再 `Initialize` は不可 (`InvalidOperationException`)。
+- ライフサイクル契約: 本 Source インスタンスを再利用しない設計とする。理由は本体 `DefaultMoCapSourceRegistry` が `Resolve` ごとに参照カウントを増やし、`Release` で参照カウント 0 に達すると `Dispose` を呼んで Source を破棄する契約 (要件 9-5) であり、再使用が必要な場合は Registry が新規 Source を `Factory.Create` で生成する。よって `Disposed → Initialize` の経路は本 Source 側で塞ぐことで Registry 契約と整合させる。
 - 内部キャッシュ: `Dictionary<string, MovinBonePose>` (bones), nullable `MovinRootPose`。Tick で immutable な `MovinMotionFrame` に snapshot コピー。
 - 並行性: 受信ハンドラとTickが同一メインスレッドで動作するためロック不要。`Subject.Synchronize()` は将来のスレッド境界変更時の安全網。
 
 **Implementation Notes**
 
 - 統合: 本体 EVMC4U 実装 (`EVMC4UMoCapSource`) と同形のパターン (Subject + Synchronize + Publish + RefCount, Tick 内 try/catch + ErrorChannel 通知, Dispose の冪等化) を踏襲する。コードは共有しない。
-- 検証: dirty 判定は内部辞書 `Count` + 値ハッシュ近似で OK (本体 EVMC4U 同形)。空フレームは emit しない (要件 7-6)。
-- リスク: dirty ハッシュが衝突するとフレーム drop の可能性。MVP では許容し、将来必要なら改良。
+- 検証: 空フレーム抑制は **「内部 bones Dictionary が空のときのみ suppress」** に簡素化する (要件 7-6)。値ハッシュ近似による dirty 判定は採用しない (YAGNI; ハッシュ衝突時のフレーム drop リスクとデバッグ困難性を避けるため)。Bones に少なくとも 1 件登録された時点で以降は毎 Tick emit する。
+- リスク: 受信が 1 度でも到達した後は静止状態でも emit され続ける。Apply 側は同じ値の上書きで no-op に近い挙動となるため許容範囲。負荷が問題化した場合は将来再評価する。
 
 ---
 
@@ -588,9 +622,9 @@ namespace RealtimeAvatarController.MoCap.Movin
 **Responsibilities & Constraints**
 
 - `Create(MoCapSourceConfigBase config)` は `config` を `MovinMoCapSourceConfig` にキャスト。失敗時は実型名を含む `ArgumentException` (要件 5-3)。
-- 成功時は `new MovinMoCapSource(slotId: string.Empty, errorChannel: RegistryLocator.ErrorChannel)` を返す (本体 VMC Factory と同形)。
-- `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` の `RegisterRuntime()` 静的メソッドで `RegistryLocator.MoCapSourceRegistry.Register("MOVIN", new MovinMoCapSourceFactory())` を呼ぶ。
-- `RegistryConflictException` 発生時は握り潰さず `RegistryLocator.ErrorChannel.Publish(new SlotError(string.Empty, SlotErrorCategory.RegistryConflict, ex, DateTime.UtcNow))` で通知。
+- 成功時は `new MovinMoCapSource(errorChannel: RegistryLocator.ErrorChannel)` を返す (本体 VMC Factory と同形。Source 内部の `SlotError.SlotId` は D-2 に従い `MovinSourceTypeId` を埋め込む)。
+- `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` の `RegisterRuntime()` 静的メソッドで `RegistryLocator.MoCapSourceRegistry.Register(MovinSourceTypeId, new MovinMoCapSourceFactory())` を呼ぶ。
+- `RegistryConflictException` 発生時は握り潰さず `RegistryLocator.ErrorChannel.Publish(new SlotError(MovinSourceTypeId, SlotErrorCategory.RegistryConflict, ex, DateTime.UtcNow))` で通知 (D-2)。
 - 参照キャッシュは行わない (本体 Registry の参照共有を妨げない、要件 5-5)。
 
 **Dependencies**
@@ -674,7 +708,9 @@ namespace RealtimeAvatarController.MoCap.Movin
 
 - `[CreateAssetMenu(menuName = "RealtimeAvatarController/MoCap/MOVIN Config", fileName = "MovinMoCapSourceConfig")]` を付与。
 - public フィールド: `port` (`int`, 既定 11235, `[Range(1, 65535)]`), `bindAddress` (`string`, 既定 ""), `rootBoneName` (`string`, 既定 ""), `boneClass` (`string`, 既定 "")。
+- `bindAddress` には D-1 に従い `[Tooltip("uOSC 1.0.0 では参照のみで実 bind には反映されません。実バインドは全インターフェース (0.0.0.0) です。将来 uOSC で公開された際の拡張用フィールド。")]` を付与する。
 - 範囲外 port の検証は `MovinMoCapSource.Initialize` で実施 (`ArgumentOutOfRangeException` を返す、要件 4-5)。
+- `MovinMoCapSource.Initialize` 時に `bindAddress` が非空 (空文字列 / null 以外) の場合、Initialize 経路で `Debug.LogWarning("[MovinMoCapSource] bindAddress '{0}' is informational only in uOSC 1.0.0. Server binds to all interfaces.", bindAddress)` を **1 回だけ** 出力する (D-1, Major M-1 帰結)。警告抑制状態は Source インスタンス毎に保持。
 - 拡張プロパティ追加余地を保つため `class` (sealed しない)。
 
 **Dependencies**
@@ -693,9 +729,9 @@ namespace RealtimeAvatarController.MoCap.Movin
 
 **Implementation Notes**
 
-- 統合: 本体 `VMCMoCapSourceConfig` と類似しつつ追加フィールド (`rootBoneName` / `boneClass`) を保持。bindAddress は uOSC API 制約で情報フィールド扱いとし、README に注記する。
-- 検証: EditMode テスト `MovinMoCapSourceConfigTests` でキャスト成功 / 不一致 ArgumentException を検証。
-- リスク: bindAddress が機能しない仕様への期待ずれが起こる可能性 → README で明記。
+- 統合: 本体 `VMCMoCapSourceConfig` と類似しつつ追加フィールド (`rootBoneName` / `boneClass`) を保持。bindAddress は uOSC API 制約で情報フィールド扱いとし、Tooltip + Initialize 警告 + README で利用者に明示する (D-1)。
+- 検証: EditMode テスト `MovinMoCapSourceConfigTests` でキャスト成功 / 不一致 ArgumentException を検証。bindAddress 非空時の警告ログは PlayMode `MovinSourceObservableTests` 系で `LogAssert.Expect` 確認。
+- リスク: bindAddress が機能しない仕様への期待ずれは Tooltip + Initialize 時警告 + README の三層で抑制する。
 
 ---
 
@@ -797,7 +833,7 @@ namespace RealtimeAvatarController.MoCap.Movin
 
 **Responsibilities & Constraints**
 
-- `SetAvatar(GameObject avatarRoot, string rootBoneName, string boneClass)` で `MovinBoneTable.Build` を呼んで name 一致辞書を構築 (要件 8-1, 8-2, 8-3, 8-4)。
+- `SetAvatar(GameObject avatarRoot, string rootBoneName, string boneClass)` で `MovinBoneTable.TryBuild` を呼び成功時のみ name 一致辞書を内部に保持 (要件 8-1, 8-2, 8-3, 8-4)。失敗時は実 rootBoneName / boneClass を含むメッセージで `InvalidOperationException` をスローする。
 - `Apply(MovinMotionFrame frame)`: 各 bone について name 一致 lookup + `SetLocalPositionAndRotation` 書き込み + `localScale` 任意適用 (要件 8-5)。未一致 bone は黙ってスキップ (要件 8-6)。
 - RootPose は `frame.RootPose.Value.BoneName` で resolve した Transform に対してのみ pos/rot/scale を書き込む (Avatar GameObject 自身ではない、要件 8-7)。
 - Avatar が破棄された (Transform null) ボーンへの書き込みはスキップ (要件 8-9)。
@@ -862,7 +898,7 @@ namespace RealtimeAvatarController.MoCap.Movin
 
 **Responsibilities & Constraints**
 
-- `Build(Transform avatarRoot, string rootBoneName, string boneClass)` で armature ルート Transform を決定し、再帰探索で `Dictionary<string, Transform>` を構築。
+- `TryBuild(Transform avatarRoot, string rootBoneName, string boneClass, out Dictionary<string, Transform> table)` で armature ルート Transform を決定し、再帰探索で辞書を構築。成功時 `true`、armature 未検出時は `table = null` で `false`。
 - `rootBoneName` 非空: 名前一致ノードを armature 根として採用。
 - `rootBoneName` 空: 「Renderer を持たないが兄弟が Renderer を持つ」経験則で armature 候補を探す (Sample ロジック踏襲)。
 - `boneClass` 非空: `{boneClass}:` プレフィックスで始まる名前のみ辞書に登録。
@@ -886,12 +922,17 @@ namespace RealtimeAvatarController.MoCap.Movin
 
     internal static class MovinBoneTable
     {
-        // Build
-        // Returns a name->Transform dictionary, or null if armature cannot be found.
-        public static Dictionary<string, Transform> Build(
+        // TryBuild
+        // Returns true and a name->Transform dictionary on success.
+        // Returns false with table = null when the armature cannot be located
+        // (rootBoneName not found, or empty rootBoneName + heuristic search failed).
+        // Caller (MovinMotionApplier.SetAvatar) is responsible for translating
+        // the failure into an InvalidOperationException with a descriptive message.
+        public static bool TryBuild(
             Transform avatarRoot,
             string rootBoneName,
-            string boneClass);
+            string boneClass,
+            out Dictionary<string, Transform> table);
     }
 }
 ```
@@ -900,7 +941,7 @@ namespace RealtimeAvatarController.MoCap.Movin
 
 - 統合: Sample 移植。
 - 検証: PlayMode で `boneClass` 指定時のフィルタ結果を確認。
-- リスク: 経験則による armature 探索は予期せぬ rig で失敗しうる。失敗時は `null` を返し、Applier 側は no-op になる。
+- リスク: 経験則による armature 探索は予期せぬ rig で失敗しうる。失敗時は `TryBuild` が `false` を返し、Applier (`SetAvatar`) が `InvalidOperationException` をスローする。
 
 ---
 
@@ -1039,6 +1080,17 @@ namespace RealtimeAvatarController.MoCap.Movin
 - **Avatar 破棄**: Transform null チェックでスキップ (要件 8-9)。
 - **Sample Driver 初期化失敗 (Avatar 未取得 / armature 未検出)**: `RegistryLocator.ErrorChannel.Publish(SlotError(slotId, InitFailure, ex, ...))` で通知し、シーン全体の停止には至らせない (要件 9-7)。
 
+#### `SlotError.SlotId` への typeId 埋込 (D-2 帰結)
+
+本体非改変制約下で `SlotErrorCategory.VmcReceive` を OSC/VMC 系受信エラー全般として運用するため、監視側が VMC typeId と MOVIN typeId のエラーを区別できるよう、本パッケージから `ISlotErrorChannel.Publish` を呼ぶ際は `SlotError.SlotId` フィールドに **`MovinMoCapSourceFactory.MovinSourceTypeId` ("MOVIN") を必ず含める**。
+
+- `MovinMoCapSource.PublishError` 内: `new SlotError(slotId: MovinMoCapSourceFactory.MovinSourceTypeId, category: SlotErrorCategory.VmcReceive, exception: ex, occurredAt: DateTime.UtcNow)` で発行。
+- `MovinMoCapSourceFactory.RegisterRuntime` / `MovinMoCapSourceFactoryEditorRegistrar` の `RegistryConflict` 通知も同様に `SlotId = "MOVIN"`。
+- Sample Driver が発行する `InitFailure` は実 `slotId` (SlotSettings から取得) を渡す。
+- README に「`SlotErrorCategory.VmcReceive` は本パッケージから MOVIN typeId のエラーとしても発行される。`SlotError.SlotId` フィールドで判別可能」と明記する。
+
+> Note: 本体 `SlotError` の `SlotId` は本来「Slot 識別子」フィールドだが、Source 起動 / Registry 段階ではまだ Slot に紐付かないため、本パッケージは慣習的に typeId 文字列を載せる。本体側で `SourceTypeId` 専用フィールドが追加された場合は Revalidation の対象。
+
 ### Error Categories and Responses
 
 | カテゴリ | 発生源 | 通知経路 | 受信者 | リカバリ |
@@ -1055,13 +1107,28 @@ namespace RealtimeAvatarController.MoCap.Movin
 
 ## Testing Strategy
 
+### Test Harness Setup
+
+- Runtime asmdef `RealtimeAvatarController.MoCap.Movin` には `Runtime/AssemblyInfo.cs` を配置し以下を宣言する:
+
+  ```csharp
+  using System.Runtime.CompilerServices;
+
+  [assembly: InternalsVisibleTo("RealtimeAvatarController.MoCap.Movin.Tests.EditMode")]
+  [assembly: InternalsVisibleTo("RealtimeAvatarController.MoCap.Movin.Tests.PlayMode")]
+  ```
+
+  これにより PlayMode テスト (`MovinSourceObservableTests`) が `internal interface IMovinReceiverAdapter` 経由で擬似 OSC イベントを注入でき、EditMode テスト (`MovinSelfRegistrationTests`) が `internal sealed class MovinOscReceiverHost` の状態を検査できる (Major M-2 帰結)。
+- テストアセンブリ命名は本体既存テスト (`...Tests.EditMode` / `...Tests.PlayMode`) と一貫させる。
+- `RegistryLocator.ResetForTest()` を `[SetUp]` / `[TearDown]` で呼び、テスト間 Registry 独立性を保証する (要件 6-6)。
+
 ### Unit Tests (EditMode, ≥5 items)
 
 1. `MovinMoCapSourceConfig` を `MoCapSourceConfigBase` 経由で `MovinMoCapSource.Initialize` に渡したとき、port 範囲内ならば例外なく Initialize が完了する (port 範囲外で `ArgumentOutOfRangeException`)。
 2. `MovinMoCapSourceFactory.Create` が `MovinMoCapSourceConfig` を受け取り `MovinMoCapSource` を返すこと。`VMCMoCapSourceConfig` 等の異なる Config 型を渡すと `ArgumentException` (実型名がメッセージに含まれる)。
 3. 属性ベース自己登録の結果として `RegistryLocator.MoCapSourceRegistry.GetRegisteredTypeIds()` に `"MOVIN"` が含まれること。
 4. 同一 typeId="MOVIN" を二度 `Register` すると `RegistryConflictException` が発生し、Registrar が `ISlotErrorChannel` に `RegistryConflict` カテゴリで発行すること (`OverrideErrorChannel` でモックを差し込み確認)。
-5. `MovinMoCapSource.Initialize` を二度呼び出すと `InvalidOperationException` がスローされ、Shutdown/Dispose は冪等で二重呼び出しても例外を出さないこと。
+5. `MovinMoCapSource.Initialize` を二度呼び出すと `InvalidOperationException` がスローされ、Shutdown/Dispose は冪等で二重呼び出しても例外を出さないこと。さらに **`Shutdown → Initialize` 経路でも `InvalidOperationException` がスローされる** ことを確認する (terminal-Disposed 契約のロック、Critical Issue 1 帰結)。
 
 ### Integration / PlayMode Tests (≥4 items)
 
@@ -1073,7 +1140,7 @@ namespace RealtimeAvatarController.MoCap.Movin
 
 ### Performance / Load (informative, not required)
 
-- 大規模 rig (>1000 Transform) で `MovinBoneTable.Build` の所要時間を測定 (Initialize 時 1 回のみ実行のため許容)。
+- 大規模 rig (>1000 Transform) で `MovinBoneTable.TryBuild` の所要時間を測定 (Initialize 時 1 回のみ実行のため許容)。
 - Tick 1 回あたりの bone 適用件数 (典型 50–100 bone) で `Apply` の所要時間を測定。
 
 ## Optional Sections
