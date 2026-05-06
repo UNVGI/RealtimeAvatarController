@@ -1,0 +1,19 @@
+{
+  "name": "RealtimeAvatarController.MoCap.Movin.Samples",
+  "rootNamespace": "RealtimeAvatarController.MoCap.Movin.Samples",
+  "references": [
+    "RealtimeAvatarController.Core",
+    "RealtimeAvatarController.MoCap.Movin",
+    "UniRx",
+    "UniTask"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
