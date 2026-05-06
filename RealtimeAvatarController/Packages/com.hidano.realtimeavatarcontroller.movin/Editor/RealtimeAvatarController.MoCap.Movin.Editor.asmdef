@@ -1,0 +1,19 @@
+{
+  "name": "RealtimeAvatarController.MoCap.Movin.Editor",
+  "rootNamespace": "RealtimeAvatarController.MoCap.Movin.Editor",
+  "references": [
+    "RealtimeAvatarController.MoCap.Movin",
+    "RealtimeAvatarController.Core"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
