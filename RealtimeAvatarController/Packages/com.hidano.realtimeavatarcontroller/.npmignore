@@ -1,7 +1,3 @@
-# Tests — 配布 tarball には含めない (利用側は GitHub repo から取得可能)
-Tests/
-Tests.meta
-
 # IDE / editor artifacts
 .idea/
 .vs/
