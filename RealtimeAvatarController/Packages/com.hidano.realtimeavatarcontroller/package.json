@@ -9,9 +9,6 @@
     "name": "UNVGI Inc."
   },
   "license": "MIT",
-  "dependencies": {
-    "com.hidano.uosc": "1.0.0"
-  },
   "samples": [
     {
       "displayName": "UI Sample",
