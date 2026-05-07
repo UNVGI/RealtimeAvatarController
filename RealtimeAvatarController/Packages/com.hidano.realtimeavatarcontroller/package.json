@@ -10,20 +10,8 @@
   },
   "license": "MIT",
   "dependencies": {
-    "com.neuecc.unirx": "7.1.0",
-    "com.cysharp.unitask": "2.5.10",
     "com.hidano.uosc": "1.0.0"
   },
-  "scopedRegistries": [
-    {
-      "name": "OpenUPM",
-      "url": "https://package.openupm.com",
-      "scopes": [
-        "com.neuecc.unirx",
-        "com.cysharp.unitask"
-      ]
-    }
-  ],
   "samples": [
     {
       "displayName": "UI Sample",
