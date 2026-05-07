@@ -11,9 +11,6 @@
     "url": "https://github.com/NHidano"
   },
   "license": "MIT",
-  "dependencies": {
-    "com.hidano.uosc": "1.0.0"
-  },
   "samples": [
     {
       "displayName": "UI Sample",
