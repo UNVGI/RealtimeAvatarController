@@ -1,7 +1,7 @@
 {
   "name": "com.hidano.realtimeavatarcontroller",
   "displayName": "Realtime Avatar Controller",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "unity": "6000.3",
   "unityRelease": "10f1",
   "description": "Runtime avatar controller for VTuber use cases. Provides slot-based MoCap source management, avatar provider abstraction, and motion pipeline for Unity.",
@@ -12,20 +12,8 @@
   },
   "license": "MIT",
   "dependencies": {
-    "com.neuecc.unirx": "7.1.0",
-    "com.cysharp.unitask": "2.5.10",
     "com.hidano.uosc": "1.0.0"
   },
-  "scopedRegistries": [
-    {
-      "name": "OpenUPM",
-      "url": "https://package.openupm.com",
-      "scopes": [
-        "com.neuecc.unirx",
-        "com.cysharp.unitask"
-      ]
-    }
-  ],
   "samples": [
     {
       "displayName": "UI Sample",
