@@ -42,22 +42,22 @@ MonoBehaviour:
     m_Compliance:
       m_Status: 0
       m_Violations: []
-  - m_Id: scoped:project:npm (hidano)
-    m_Name: npm (hidano)
-    m_Url: https://registry.npmjs.com
+  - m_Id: scoped:project:UNVGI
+    m_Name: UNVGI
+    m_Url: https://npm.unvgi.com
     m_Scopes:
-    - com.hidano
+    - jp.co.unvgi
     m_IsDefault: 0
     m_Capabilities: 0
     m_ConfigSource: 4
     m_Compliance:
       m_Status: 0
       m_Violations: []
-  m_UserSelectedRegistryName: 
+  m_UserSelectedRegistryName: UNVGI
   m_UserAddingNewScopedRegistry: 0
   m_RegistryInfoDraft:
     m_Modified: 0
     m_ErrorMessage: 
-    m_UserModificationsInstanceId: -898
+    m_UserModificationsInstanceId: -896
     m_OriginalInstanceId: -900
   m_LoadAssets: 0
