@@ -103,17 +103,6 @@ Unity プロジェクトの `Packages/manifest.json` を開き、`scopedRegistri
 4. `Assets/Samples/Realtime Avatar Controller/<version>/UI/` にサンプルがコピーされます
 5. `SampleScene.unity` を開いてデモを確認してください
 
-## 補足: openupm-cli を使う場合 (任意)
-
-```bash
-# プロジェクトルートで実行
-openupm add com.hidano.realtimeavatarcontroller
-```
-
-`openupm-cli` は scoped registry の追加と `dependencies` への追記を自動で行います。UniRx・UniTask も依存として自動解決されます。
-
-> **注意**: `openupm-cli` は OpenUPM レジストリの scoped registry のみを自動追加します。`com.hidano.uosc` の取得に必要な npm (hidano) registry は **手動で追加**する必要があります。Step 1 のスニペットを参照してください。
-
 ## 補足: git URL によるインストール (任意)
 
 scoped registry を使わずに git URL で直接インストールする場合は、`?path=` パラメータでパッケージパスを指定してください。
