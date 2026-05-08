@@ -20,4 +20,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 |------------|-----------|--------|------|
 | com.neuecc.unirx | 7.1.0 | OpenUPM | 2024 年時点の最新安定版。NuGet 依存なし |
 | com.cysharp.unitask | 2.5.10 | OpenUPM | 2024 年時点の最新安定版 |
-| com.hidano.uosc | 1.0.0 | npm (hidano) | VMC OSC 受信用。MIT ライセンス。SO_REUSEADDR 有効版 |
+| com.hecomi.uosc | 2.2.0 | npmjs (scope: com.hecomi) | VMC OSC 受信用。MIT ライセンス |
