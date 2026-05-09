@@ -3,8 +3,7 @@
   "rootNamespace": "RealtimeAvatarController.Samples.UI.Editor",
   "references": [
     "RealtimeAvatarController.Samples.UI",
-    "RealtimeAvatarController.Core",
-    "RealtimeAvatarController.Core.Editor"
+    "RealtimeAvatarController.Core"
   ],
   "includePlatforms": ["Editor"],
   "excludePlatforms": [],
