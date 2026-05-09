@@ -240,14 +240,14 @@
   - _Requirements: 4.1, 4.3, 4.6, 9.4_
   - _Boundary: VMCMoCapSourceSharingTests, VMCSharedReceiver_
 
-- [ ] 7. 不変維持系テストの調整
+- [x] 7. 不変維持系テストの調整
 - [x] 7.1 (P) VmcConfigCastTests / VmcFactoryRegistrationTests の維持確認
   - `Tests/EditMode/VmcConfigCastTests.cs` および `Tests/EditMode/VmcFactoryRegistrationTests.cs` の `using EVMC4U;` を削除する (`.meta` GUID は不変)
   - typeId `"VMC"` / Factory 自己登録 / Config キャスト経路が新実装でも維持されていることを検証するテストを追加または既存検証を実行する
   - 観測完了条件: EditMode runner で 2 ファイルとも GREEN を維持
   - _Requirements: 5.3, 5.9, 9.4_
   - _Boundary: VmcConfigCastTests, VmcFactoryRegistrationTests_
-- [ ] 7.2 (P) SampleSceneSmokeTests の維持確認
+- [x] 7.2 (P) SampleSceneSmokeTests の維持確認
   - `Tests/PlayMode/SampleSceneSmokeTests.cs` を `using EVMC4U;` 等が無ければ無改修で実行し GREEN を確認する (`.meta` GUID 不変)
   - sample asset (`VMCMoCapSourceConfig_Shared.asset` GUID `5c4569b4a17944fba4667acebe26c25f`) の参照解決が破壊されていないことを検証する
   - sample scene `VMCReceiveDemo.unity` を開いた際に `MissingReferenceException` / `The associated script can not be loaded` 警告が出ないことを目視 + assert で検証する
