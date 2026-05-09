@@ -192,12 +192,16 @@ RealtimeAvatarController/
 │   │       │   ├── SlotSettings_Shared_Slot2.asset           # MODIFIED: 同上
 │   │       │   ├── StubMoCapSourceConfig_Shared.asset        # NEW: Stub Config の SO 実体 + 新規 GUID
 │   │       │   └── VMCMoCapSourceConfig_Shared.asset         # MOVED OUT (新パッケージ Samples~/VMC/Data/ へ)
-│   │       ├── Editor/                                      # UNCHANGED
+│   │       ├── Editor/
+│   │       │   ├── RealtimeAvatarController.Samples.UI.Editor.asmdef     # UNCHANGED
+│   │       │   ├── SlotSettingsEditor.cs                                  # UNCHANGED
+│   │       │   └── StubMoCapSourceFactoryEditorRegistrar.cs              # NEW: Stub の Editor 自己登録 (#if UNITY_EDITOR 同居せず分離)
 │   │       ├── Prefabs/                                      # UNCHANGED
 │   │       ├── Runtime/
 │   │       │   ├── RealtimeAvatarController.Samples.UI.asmdef # MODIFIED: references から VMC 削除
-│   │       │   ├── StubMoCapSource.cs                         # NEW: 空ストリーム実装 + 自己登録
+│   │       │   ├── StubMoCapSource.cs                         # NEW: 空ストリーム実装
 │   │       │   ├── StubMoCapSourceConfig.cs                   # NEW: MoCapSourceConfigBase 派生の空 SO
+│   │       │   ├── StubMoCapSourceFactory.cs                  # NEW: typeId="Stub" 自己登録 (Runtime のみ)
 │   │       │   └── (既存 .cs UI ファイル群 UNCHANGED)
 │   │       └── Scenes/SlotManagementDemo.unity              # UNCHANGED (Stub Config 経由で動作)
 │   │
@@ -231,7 +235,8 @@ RealtimeAvatarController/
 │       └── Samples~/VMC/                                   # NEW
 │           ├── Data/
 │           │   ├── VMCMoCapSourceConfig_Shared.asset        # MOVED IN (GUID 5c4569b4a17944fba4667acebe26c25f 据置)
-│           │   └── SlotSettings_VMC_Slot1.asset             # NEW: VMC Config 参照の新規 SO + 新規 GUID
+│           │   ├── BuiltinAvatarProviderConfig_VmcDemo.asset # NEW: 新パッケージ単独完結用の Builtin Avatar Config + 新規 GUID
+│           │   └── SlotSettings_VMC_Slot1.asset             # NEW: VMC Config + 上記 Avatar Config 参照の新規 SO + 新規 GUID
 │           └── Scenes/
 │               └── VMCReceiveDemo.unity                    # NEW: VMC 受信デモシーン + 新規 GUID
 │
@@ -392,14 +397,15 @@ sequenceDiagram
 | NewPackageManifest | Packaging | 新パッケージ `package.json` を定義し、コア固定バージョン依存・samples 登録を行う | 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7 | UPM (P0), Core package version (P0) | State |
 | VmcRuntimeAsmdef | Packaging / Runtime | VMC Runtime 一式を新パッケージ Runtime/ へ GUID 据置移動 | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7 | Core asmdef (P0), Motion asmdef (P0), uOSC.Runtime (P0), UniRx (P0), EVMC4U (P0) | State |
 | VmcEditorAsmdef | Packaging / Editor | VMC Editor 自己登録を新パッケージ Editor/ へ GUID 据置移動 | 3.1, 3.2, 3.3, 3.4, 3.5 | VmcRuntimeAsmdef (P0), Core (P0) | State |
-| VmcTestsEditAsmdef | Packaging / Tests | VMC EditMode テストを新パッケージ Tests/EditMode/ へ移動 | 4.1, 4.3, 4.4, 4.5, 4.6 | VmcRuntimeAsmdef (P0), NUnit (P0) | State |
-| VmcTestsPlayAsmdef | Packaging / Tests | VMC PlayMode テストを新パッケージ Tests/PlayMode/ へ移動 | 4.2, 4.3, 4.4, 4.5, 4.6 | VmcRuntimeAsmdef (P0), UniTask (P0) | State |
+| VmcTestsEditAsmdef | Packaging / Tests | VMC EditMode テストを新パッケージ Tests/EditMode/ へ移動 + Packages/manifest.json testables 追加 | 4.1, 4.3, 4.4, 4.5, 4.6 | VmcRuntimeAsmdef (P0), NUnit (P0), manifest.json testables (P0) | State |
+| VmcTestsPlayAsmdef | Packaging / Tests | VMC PlayMode テストを新パッケージ Tests/PlayMode/ へ移動 + Packages/manifest.json testables 追加 | 4.2, 4.3, 4.4, 4.5, 4.6 | VmcRuntimeAsmdef (P0), UniTask (P0), manifest.json testables (P0) | State |
 | StubMoCapSource | Core / Samples (UI) | UI Sample 検証用ダミー実装 (空ストリーム emit) | 5.3, 5.4, 5.5, 5.9 | Core IMoCapSource (P0), UniRx (P0) | Service |
 | StubMoCapSourceConfig | Core / Samples (UI) | Stub Source 用空 SO Config | 5.3, 5.5, 5.6, 5.7 | Core MoCapSourceConfigBase (P0) | State |
-| StubMoCapSourceFactory | Core / Samples (UI) | Stub Source の自己登録 typeId="Stub" | 5.5 | Core IMoCapSourceFactory (P0), RegistryLocator (P0) | Service |
-| UISampleAsmdef | Core / Samples (UI) | UI Sample asmdef references から VMC 削除 | 5.1, 5.2, 7.2 | Core (P0), Motion (P0), Avatar.Builtin (P0) | State |
+| StubMoCapSourceFactory | Core / Samples (UI Runtime) | Stub Source Runtime 自己登録 typeId="Stub" | 5.5 | Core IMoCapSourceFactory (P0), RegistryLocator (P0) | Service |
+| StubMoCapSourceFactoryEditorRegistrar | Core / Samples (UI Editor) | Stub Source Editor 自己登録 (`Samples.UI.Editor` asmdef に分離、VMC パターン整合) | 5.5 | StubMoCapSourceFactory (P0), RegistryLocator (P0) | Service |
+| UISampleAsmdef | Core / Samples (UI) | UI Sample Runtime asmdef references から VMC 削除 | 5.1, 5.2, 7.2 | Core (P0), Motion (P0), Avatar.Builtin (P0) | State |
 | SlotSettingsSharedAssetEdit | Core / Samples (UI) | SlotSettings_Shared_Slot1/2 の Config 参照を Stub に差替 | 5.6, 5.8 | StubMoCapSourceConfig (P0) | State |
-| VmcSamples | New Package / Samples | 新パッケージ Samples~/VMC (Data + Scene) | 6.1, 6.2, 6.3, 6.4, 6.6 | VMCMoCapSourceConfig (P0), Core SlotManager (P0) | State |
+| VmcSamples | New Package / Samples | 新パッケージ Samples~/VMC (Data + Scene + 単独完結用 Builtin AvatarProvider Config) | 6.1, 6.2, 6.3, 6.4, 6.6 | VMCMoCapSourceConfig (P0), Core SlotManager (P0), Avatar.Builtin (P0) | State |
 | CoreReadmeUpdate | Documentation | コア README に VMC 分離記述追加 | 9.1, 5.10 | — | — |
 | CoreChangelogUpdate | Documentation | コア CHANGELOG 変更記録 | 9.2 | — | — |
 | NewPackageReadme | Documentation | 新パッケージ README (導入手順 / 利用者準備手順) | 8.3, 8.4, 8.5, 9.3, 6.5 | — | — |
@@ -535,17 +541,18 @@ sequenceDiagram
   - `SampleSceneSmokeTests.cs`
 - asmdef 名と GUID 据置。
 - 中間ディレクトリ `mocap-vmc/` は再現せず、`Tests/EditMode/` および `Tests/PlayMode/` 直下に平置き (research.md 参照)。
-- testables 設定の `manifest.json` 側更新は本 spec 範囲では不要 (新パッケージは独立して `testables` 配列に追加される必要はあるが、これは利用者側プロジェクトの構成、もしくは本リポジトリ内 `RealtimeAvatarController/Packages/manifest.json` を tasks フェーズで更新)。
+- **Phase 1 必須**: 本リポジトリの `RealtimeAvatarController/Packages/manifest.json` の `testables` 配列に `"com.hidano.realtimeavatarcontroller.mocap-vmc"` を追加する。現行は `testables: ["com.hidano.realtimeavatarcontroller"]` のみのため、追加しないと Test Runner ウィンドウに新パッケージのテストが列挙されず、検証シナリオ B の合否判定 (要件 4.4 / 10.2) が成立しない。
+- **Phase 2 完了チェックポイント**: ファイル移動完了後に Unity Editor の Test Runner ウィンドウを開き、`RealtimeAvatarController.MoCap.VMC.Tests.EditMode` および `.Tests.PlayMode` の両 asmdef がリスト表示されることを目視確認する。表示されない場合は `manifest.json` の `testables` 設定または asmdef 移動結果に問題がある証拠で、Phase 5 の旧ファイル削除に進まずに rollback する。
 
 **Dependencies**
-- Outbound: VmcRuntimeAsmdef (P0)。
+- Outbound: VmcRuntimeAsmdef (P0), `Packages/manifest.json` testables (P0)。
 
 **Contracts**: State [x]
 
 **Implementation Notes**
-- Integration: テストランナーは asmdef 名で照合するため、ディレクトリ移動による影響なし。
-- Validation: シナリオ B にて `Unity.exe -batchmode -runTests` で全テスト pass を確認。
-- Risks: `manifest.json` の `testables` 配列に新パッケージ名を追加する必要がある場合あり (現行 `testables: ["com.hidano.realtimeavatarcontroller"]` のみ)。tasks フェーズで判断。
+- Integration: テストランナーは asmdef 名で照合するため、ディレクトリ移動による影響なし。`testables` 追加によりウィンドウ列挙される。
+- Validation: シナリオ B にて `Unity.exe -batchmode -runTests` で全テスト pass を確認。Phase 2 チェックポイントは Editor GUI で同等の検証を行う簡易版。
+- Risks: `testables` への追加忘れは Phase 5 完了後に発覚すると rollback コストが大 (Phase 2 まで戻る)。Phase 1 必須化で本リスクを Phase 開始時に解消する。
 
 ### Core / Samples (UI)
 
@@ -634,8 +641,8 @@ namespace RealtimeAvatarController.Samples.UI
 **Responsibilities & Constraints**
 - `IMoCapSourceFactory` を実装。
 - `Create(MoCapSourceConfigBase config)`: `config` を `StubMoCapSourceConfig` にキャストし `StubMoCapSource` インスタンスを返す (キャスト失敗時 `ArgumentException`)。
-- `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` で Player ビルド + Runtime 起動時に登録。
-- `[InitializeOnLoadMethod]` で Editor 起動時に登録 (Editor サブパスを別ファイルに分離せず、`#if UNITY_EDITOR` ガード付きで同一クラス内に置く案を採用)。
+- `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` で Player ビルド + Runtime 起動時に登録 (Sample Runtime asmdef 内 `StubMoCapSourceFactory.cs` に配置)。
+- Editor 起動時の `[InitializeOnLoadMethod]` 登録は **既存 `RealtimeAvatarController.Samples.UI.Editor` asmdef に分離した別ファイル `StubMoCapSourceFactoryEditorRegistrar.cs` に配置**する (VMC 既存実装パターンと整合、`Editor/MoCap/VMC/VmcMoCapSourceFactoryEditorRegistrar.cs` と同構造)。Sample Runtime asmdef に Editor 専用 API を `#if UNITY_EDITOR` 同居させない方針を採用。
 - typeId 定数: `public const string StubSourceTypeId = "Stub"`。
 - 登録衝突 (`RegistryConflictException`) は `RegistryLocator.ErrorChannel` へ `SlotErrorCategory.RegistryConflict` として通知 (`VMCMoCapSourceFactory` と同パターン)。
 
@@ -665,7 +672,8 @@ namespace RealtimeAvatarController.Samples.UI
 - Invariants: typeId="Stub" は登録時の重複検知の対象。
 
 **Implementation Notes**
-- Integration: Editor / Runtime 双方の自己登録動作は `VMCMoCapSourceFactory` と同一パターン。`[UnityEditor.InitializeOnLoadMethod]` の Editor only 部分は `#if UNITY_EDITOR` で囲む。
+- Integration: Editor / Runtime 双方の自己登録動作は `VMCMoCapSourceFactory` と同一パターン。`[UnityEditor.InitializeOnLoadMethod]` を使う Editor 登録は `Samples~/UI/Editor/StubMoCapSourceFactoryEditorRegistrar.cs` に分離 (既存 `RealtimeAvatarController.Samples.UI.Editor` asmdef に追加、`#if UNITY_EDITOR` ガードは asmdef の `includePlatforms: ["Editor"]` で代替)。
+- Sample Runtime asmdef は Player Build に含まれる範囲のため、Editor API を一切参照しない設計を維持する。
 - Validation: VmcFactoryRegistrationTests と同様の構成で StubFactoryRegistrationTests を新設するかは tasks フェーズで判断 (本 spec の検証要件は `MoCapSourceRegistry` に typeId="Stub" が解決できることのみ)。
 
 #### UISampleAsmdef
@@ -725,10 +733,14 @@ namespace RealtimeAvatarController.Samples.UI
 
 **Responsibilities & Constraints**
 - `Samples~/VMC/Data/VMCMoCapSourceConfig_Shared.asset` を旧位置から GUID 据置 (`5c4569b4a17944fba4667acebe26c25f`) で受け入れ。
+- `Samples~/VMC/Data/BuiltinAvatarProviderConfig_VmcDemo.asset` を新規作成 (新パッケージ単独完結のため、UI Sample 側 BuiltinAvatarProviderConfig_AvatarA.asset への Sample 間 GUID 参照は不採用):
+  - script ref: `BuiltinAvatarProviderConfig.cs` (コアパッケージの新 GUID `c8cbb7f6888e43e89f62f0663e1d28b5`)。
+  - `avatarPrefab`: `null` (利用者が VMC 受信デモで使う Avatar Prefab を Inspector で設定する前提)。
+  - `.meta` GUID は新規ランダム生成 (CLAUDE.md ルール)。
 - `Samples~/VMC/Data/SlotSettings_VMC_Slot1.asset` を新規作成:
   - `slotId: "vmc-slot-01"`
   - `displayName: "VMC Slot 1"`
-  - `avatarProviderDescriptor.ProviderTypeId: "Builtin"` + Config 参照は新パッケージ側に Builtin Avatar Config を置かないため `null` (利用者側で差し替え) または UI Sample 側 BuiltinAvatarProviderConfig_AvatarA.asset への相互参照可能性は spec 確定対象外として tasks フェーズで再検討。
+  - `avatarProviderDescriptor.ProviderTypeId: "Builtin"` + `Config` 参照は同 `Samples~/VMC/Data/BuiltinAvatarProviderConfig_VmcDemo.asset`。
   - `moCapSourceDescriptor.SourceTypeId: "VMC"` + `Config` 参照は移動した `VMCMoCapSourceConfig_Shared.asset`。
   - `.meta` GUID は新規ランダム生成。
 - `Samples~/VMC/Scenes/VMCReceiveDemo.unity` を新規作成:
@@ -736,18 +748,18 @@ namespace RealtimeAvatarController.Samples.UI
   - `.meta` GUID は新規ランダム生成。
 
 **Dependencies**
-- Outbound: VmcRuntimeAsmdef (P0), Core SlotManager (P0), Motion Pipeline (P0), Avatar.Builtin (P1, AvatarProvider Config 共有時のみ)。
+- Outbound: VmcRuntimeAsmdef (P0), Core SlotManager (P0), Motion Pipeline (P0), Avatar.Builtin (P0, BuiltinAvatarProviderConfig.cs 参照のため必須)。
 
 **Contracts**: State [x]
 
 ##### State Management
-- State model: SO アセット 2 件 (移動 + 新規) + Scene 1 件 (新規)。
-- Persistence & consistency: Git 管理。新規 GUID 4 件 (SlotSettings_VMC_Slot1.asset, SlotSettings_VMC_Slot1.asset.meta は同一概念 / .unity, .unity.meta は同一概念 / もし Avatar Provider Config を新設する場合は追加 1 件) は CLAUDE.md ルールで生成。
+- State model: SO アセット 3 件 (移動 1 + 新規 2) + Scene 1 件 (新規)。
+- Persistence & consistency: Git 管理。新規 GUID 3 件 (BuiltinAvatarProviderConfig_VmcDemo.asset / SlotSettings_VMC_Slot1.asset / VMCReceiveDemo.unity の各 .meta) は CLAUDE.md ルールに従い `[guid]::NewGuid().ToString('N')` で個別に乱数生成。
 
 **Implementation Notes**
 - Integration: 新規 Scene は EditMode で開けることと、Play Mode (シナリオ B) で起動できることを確認。
 - Validation: シナリオ B で `VMCReceiveDemo.unity` を開き、EVMC4U + uOSC 準備済みの環境で VMC 受信が機能することを確認。
-- Risks: AvatarProviderConfig をどこに置くか — UI Sample 側 (BuiltinAvatarProviderConfig_AvatarA.asset) を参照する設計だと、VMC サンプル単独インポート時に Avatar Provider Config が未解決になる。tasks フェーズで「新パッケージ側に Builtin AvatarProvider Config の写しを置く」または「VMC サンプルは UI Sample との併用を要求する」のいずれかを確定。
+- Sample 単独完結性: 新パッケージ Samples~/VMC/ は UI Sample 非導入でも完結する。BuiltinAvatarProviderConfig_VmcDemo.asset は本パッケージ内で完結する独自コピーで、Sample 間 GUID 参照に依存しない (Unity Sample import 時のバージョンサフィックス付きパス展開 `Samples/<ver>/VMC/...` への耐性確保)。
 
 ### Documentation
 
@@ -869,6 +881,7 @@ namespace RealtimeAvatarController.Samples.UI
 |-----------------|-----------------|-----------|-----------|
 | `Samples~/UI/Data/VMCMoCapSourceConfig_Shared.asset` | `Samples~/VMC/Data/VMCMoCapSourceConfig_Shared.asset` (新パッケージ) | **据置** (`5c4569b4a17944fba4667acebe26c25f`) | 新パッケージ側で新規 SlotSettings_VMC_Slot1.asset から参照 |
 | (旧無し) | `Samples~/UI/Data/StubMoCapSourceConfig_Shared.asset` (コア) | 新規ランダム生成 | コア側 SlotSettings_Shared_Slot1/2 から参照差替 |
+| (旧無し) | `Samples~/VMC/Data/BuiltinAvatarProviderConfig_VmcDemo.asset` (新パッケージ) | 新規ランダム生成 | SlotSettings_VMC_Slot1 から参照 (Sample 単独完結) |
 | (旧無し) | `Samples~/VMC/Data/SlotSettings_VMC_Slot1.asset` (新パッケージ) | 新規ランダム生成 | VMCReceiveDemo.unity で initialSlots 設定 |
 | (旧無し) | `Samples~/VMC/Scenes/VMCReceiveDemo.unity` (新パッケージ) | 新規ランダム生成 | — |
 
@@ -956,21 +969,23 @@ flowchart TB
 ```
 
 **Phase breakdown**:
-- **Phase 1 — 新パッケージ scaffold**: 新パッケージのディレクトリ構造と `package.json` / `README.md` / `CHANGELOG.md` を作成。
-- **Phase 2 — VMC Move**: 旧 `Runtime/MoCap/VMC/` / `Editor/MoCap/VMC/` / `Tests/EditMode/mocap-vmc/` / `Tests/PlayMode/mocap-vmc/` を新パッケージへ GUID 据置 move (Unity Editor 閉じた状態で `git mv`)。
-- **Phase 3 — Stub 新設 and UI Sample 編集**: `StubMoCapSource.cs` / `StubMoCapSourceConfig.cs` / `StubMoCapSourceFactory.cs` を新設、`StubMoCapSourceConfig_Shared.asset` 生成 (新規 GUID)、UI Sample asmdef references から VMC 削除、SlotSettings_Shared_Slot1/2 の Config 参照を Stub に差替。
-- **Phase 4 — VMC Sample 新設**: `VMCMoCapSourceConfig_Shared.asset` を新パッケージ Samples~/VMC/Data へ受け入れ、`SlotSettings_VMC_Slot1.asset` 新規作成、`VMCReceiveDemo.unity` 新規作成。
+- **Phase 1 — 新パッケージ scaffold**: 新パッケージのディレクトリ構造と `package.json` / `README.md` / `CHANGELOG.md` を作成。**併せて `RealtimeAvatarController/Packages/manifest.json` の `testables` 配列に `"com.hidano.realtimeavatarcontroller.mocap-vmc"` を追加**する (Phase 5 削除完了後に testables 漏れが発覚すると rollback コスト大のため Phase 1 で先行確定)。
+- **Phase 2 — VMC Move**: 旧 `Runtime/MoCap/VMC/` / `Editor/MoCap/VMC/` / `Tests/EditMode/mocap-vmc/` / `Tests/PlayMode/mocap-vmc/` を新パッケージへ GUID 据置 move (Unity Editor 閉じた状態で `git mv`)。**Phase 2 完了時のチェックポイント**: Unity Editor を起動し Test Runner ウィンドウで `RealtimeAvatarController.MoCap.VMC.Tests.EditMode` および `.Tests.PlayMode` の両 asmdef がリスト表示されることを目視確認。表示されなければ testables 設定または asmdef GUID に問題があるため Phase 5 に進まずに rollback。
+- **Phase 3 — Stub 新設 and UI Sample 編集**: `StubMoCapSource.cs` / `StubMoCapSourceConfig.cs` / `StubMoCapSourceFactory.cs` (Runtime 自己登録のみ) を `Samples~/UI/Runtime/` に新設し、Editor 自己登録は **既存 `RealtimeAvatarController.Samples.UI.Editor` asmdef に `StubMoCapSourceFactoryEditorRegistrar.cs` を追加**して分離する (`#if UNITY_EDITOR` 同居方式は採用しない、VMC 既存パターンと整合)。`StubMoCapSourceConfig_Shared.asset` 生成 (新規 GUID)、UI Sample Runtime asmdef references から VMC 削除、SlotSettings_Shared_Slot1/2 の Config 参照を Stub に差替。
+- **Phase 4 — VMC Sample 新設**: `VMCMoCapSourceConfig_Shared.asset` を新パッケージ Samples~/VMC/Data へ受け入れ、`BuiltinAvatarProviderConfig_VmcDemo.asset` を新パッケージ単独完結用に新規作成 (新規 GUID、UI Sample 側 BuiltinAvatarProviderConfig_AvatarA.asset とは無関係の独立コピー)、`SlotSettings_VMC_Slot1.asset` 新規作成 (avatarProviderDescriptor.Config は同 BuiltinAvatarProviderConfig_VmcDemo.asset を参照)、`VMCReceiveDemo.unity` 新規作成。
 - **Phase 5 — 旧 VMC 削除 (親セッション必須)**: コア側 `Runtime/MoCap/VMC/` / `Editor/MoCap/VMC/` / `Tests/{EditMode,PlayMode}/mocap-vmc/` / `Samples~/UI/Data/VMCMoCapSourceConfig_Shared.asset(.meta)` を削除。Subagent からは `git rm` 不可制約のため **親セッションで実施** (MEMORY 制約)。
 - **Phase 6 — ドキュメンテーション**: 両 README / CHANGELOG / `.kiro/steering/structure.md` を更新。
 - **Validate — シナリオ A / B**: 上記 ValidationProcedureA / B を実施。
 
 **Rollback triggers**:
+- Phase 2 完了後に Test Runner にテスト asmdef が現れない → testables 設定または GUID 据置移動を点検し、Phase 1 まで `git revert`。
 - Phase 2 完了後に既存テスト全件 pass しない → Phase 1 まで `git revert`。
 - Phase 3 後にコア単独でコンパイル失敗 → Phase 2 まで `git revert`。
 - Phase 5 後に検証シナリオ A 失敗 → Phase 4 まで `git revert`。
 
 **Validation checkpoints**:
 - 各 Phase 完了後に Unity Editor を開き、Console Errors == 0 を確認。
+- Phase 2 完了後に Test Runner ウィンドウで新パッケージの両 Tests asmdef 表示を確認。
 - Phase 5 完了後に Grep `RealtimeAvatarController.MoCap.VMC` をコア側 asmdef + .cs に対して実行し、ヒットゼロ件を確認。
 
 ## Supporting References
