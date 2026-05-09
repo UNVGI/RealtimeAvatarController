@@ -305,7 +305,7 @@
 > design.md §13 に対応する 3 段階の検証を実施し、 EVMC4U 撤廃が破壊的影響を持たないことを確認する。
 
 - [ ] 9. 統合検証
-- [ ] 9.1 Compile A: VMC パッケージ単体 + uOSC のみで compile 成功
+- [x] 9.1 Compile A: VMC パッケージ単体 + uOSC のみで compile 成功
   - 利用者プロジェクトに `com.hidano.realtimeavatarcontroller.mocap-vmc` + `com.hidano.uosc` のみインストールした状態を再現する
   - `Assets/EVMC4U/` が存在しなくても compile error が出ないことを確認する
   - `Library/ScriptAssemblies/` 再生成後の Console に `EVMC4U` 関連 warning / error が一切出ないこと (N-R1 mitigation) を確認する
