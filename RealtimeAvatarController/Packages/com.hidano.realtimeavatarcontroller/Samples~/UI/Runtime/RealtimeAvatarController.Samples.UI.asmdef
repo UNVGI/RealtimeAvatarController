@@ -4,7 +4,6 @@
   "references": [
     "RealtimeAvatarController.Core",
     "RealtimeAvatarController.Motion",
-    "RealtimeAvatarController.MoCap.VMC",
     "RealtimeAvatarController.Avatar.Builtin",
     "UniRx",
     "UniTask"
