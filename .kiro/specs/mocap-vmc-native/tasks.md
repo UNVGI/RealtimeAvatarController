@@ -263,7 +263,7 @@
 > EVMC4U inspiration credit と uOSC / UniVRM credit を `THIRD_PARTY_NOTICES.md` にまとめる。
 
 - [ ] 8. パッケージドキュメント全面改訂
-- [ ] 8.1 (P) パッケージ README 全面改訂
+- [x] 8.1 (P) パッケージ README 全面改訂
   - `Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/README.md` の利用者準備手順を「uOSC を導入する。これだけ。」 に縮約する
   - EVMC4U `.unitypackage` インポート / `EVMC4U.asmdef` 自作 / `evmc4u.patch git apply` の旧手順を全削除する
   - 「Credits」セクションに EVMC4U inspiration credit (共有 receiver パターン / refCount lifecycle / SubsystemRegistration reset) を記載する
