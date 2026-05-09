@@ -286,7 +286,7 @@
   - 観測完了条件: THIRD_PARTY_NOTICES.md が新規追加され、 削除した EVMC4U 同梱 license の内容が新ファイルに保全される
   - _Requirements: 3.6, 7.7_
   - _Boundary: THIRD_PARTY_NOTICES.md_
-- [ ] 8.4 リポジトリルート / core README の利用者準備変更を反映
+- [x] 8.4 リポジトリルート / core README の利用者準備変更を反映
   - リポジトリルート README または core パッケージ README で VMC パッケージの利用者準備が EVMC4U 不要に変わった旨を反映する
   - 観測完了条件: ルート / core README の VMC 関連記述が「uOSC のみ依存」 表現に統一される
   - _Requirements: 12.3_

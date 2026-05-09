@@ -26,16 +26,14 @@ git URL で直接導入している場合は、同じ `dependencies` に VMC パ
 }
 ```
 
-VMC 側の導入手順、EVMC4U / uOSC の準備、VMC Sample の利用方法は [VMC パッケージ README](../com.hidano.realtimeavatarcontroller.mocap-vmc/README.md) を参照してください。
+VMC 側の導入手順、uOSC のみ依存する準備、VMC Sample の利用方法は [VMC パッケージ README](../com.hidano.realtimeavatarcontroller.mocap-vmc/README.md) を参照してください。
 
-UI Sample は Stub MoCap Source 経由で動作するため、VMC パッケージや EVMC4U / uOSC を導入しなくても Slot UI の検証を完結できます。
+UI Sample は Stub MoCap Source 経由で動作するため、VMC パッケージや uOSC を導入しなくても Slot UI の検証を完結できます。
 
 ## 前提条件
 
 - **Unity 6000.3.10f1** 以降
-- **EVMC4U** (`Assets/EVMC4U/` に `.unitypackage` を取り込み): VMC (Virtual Motion Capture) 受信機能を利用する場合に必須。`RealtimeAvatarController.MoCap.VMC` アセンブリは EVMC4U の `ExternalReceiver` / `uOscServer` を内部で参照するため、未導入のままでは当該アセンブリがコンパイルエラーになる。
-  - 配布形態: `.unitypackage` のみ (UPM / OpenUPM / npm 配布なし)
-  - 取得元: <https://github.com/gpsnmeajp/EasyVirtualMotionCaptureForUnity>
+- **VMC 受信**: VMC パッケージは uOSC のみ依存します。導入手順と VMC Sample は [VMC パッケージ README](../com.hidano.realtimeavatarcontroller.mocap-vmc/README.md) を参照してください。
 
 ## インストール
 
