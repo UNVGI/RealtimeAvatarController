@@ -1,0 +1,29 @@
+{
+  "feature_name": "mocap-vmc-native",
+  "created_at": "2026-05-09T19:07:39Z",
+  "updated_at": "2026-05-09T20:07:42Z",
+  "language": "ja",
+  "phase": "initialized",
+  "approvals": {
+    "requirements": {
+      "generated": false,
+      "approved": false
+    },
+    "design": {
+      "generated": false,
+      "approved": false
+    },
+    "tasks": {
+      "generated": false,
+      "approved": false
+    }
+  },
+  "ready_for_implementation": false,
+  "history": [
+    {
+      "renamed_from": "mocap-vmc-reflection-loading",
+      "renamed_at": "2026-05-09T20:07:42Z",
+      "reason": "Reflection ベース最適化を検討した結果、EVMC4U 依存自体を撤廃する自作 VMC 受信実装の方が射程が明確で patch 工程も同時に解消されると判断 (dig.md 参照)。要件は全面再生成。"
+    }
+  ]
+}
