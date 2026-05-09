@@ -6,7 +6,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 {
     /// <summary>
     /// <see cref="VMCMoCapSourceFactory"/> 経由で <see cref="IMoCapSourceRegistry.Resolve"/> が
-    /// 同一 <see cref="VMCMoCapSourceConfig"/> に対して同一 <see cref="EVMC4UMoCapSource"/> を
+    /// 同一 <see cref="VMCMoCapSourceConfig"/> に対して同一 <see cref="VMCMoCapSource"/> を
     /// 共有することを検証する PlayMode テスト
     /// (tasks.md タスク 5.3 / design.md §4.5 / requirements.md 要件 2.1, 5.6, 12.4, 12.5)。
     ///
@@ -14,8 +14,8 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
     /// 検証観点:
     ///   - 同一 <see cref="VMCMoCapSourceConfig"/> インスタンスを持つ <see cref="MoCapSourceDescriptor"/>
     ///     を 2 回 Resolve すると、参照等価 (<see cref="object.ReferenceEquals"/>) な
-    ///     <see cref="EVMC4UMoCapSource"/> が返される (要件 5.6 / Descriptor の Config 参照等価)。
-    ///   - 返却された Adapter は <see cref="EVMC4UMoCapSource"/> 型である (要件 5.5)。
+    ///     <see cref="VMCMoCapSource"/> が返される (要件 5.6 / Descriptor の Config 参照等価)。
+    ///   - 返却された Adapter は <see cref="VMCMoCapSource"/> 型である (要件 5.5)。
     ///   - 別インスタンスの <see cref="VMCMoCapSourceConfig"/> (port 違い) に対しては
     ///     別の Adapter が返る (参照共有の粒度は Config 単位)。
     /// </para>
@@ -30,7 +30,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
     /// </para>
     /// </summary>
     [TestFixture]
-    public class EVMC4UMoCapSourceSharingTests
+    public class VMCMoCapSourceSharingTests
     {
         private VMCMoCapSourceConfig _configA;
         private VMCMoCapSourceConfig _configB;
@@ -69,7 +69,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         }
 
         [Test]
-        public void Resolve_SameConfigTwice_ReturnsSameEVMC4UMoCapSourceInstance()
+        public void Resolve_SameConfigTwice_ReturnsSameVMCMoCapSourceInstance()
         {
             var registry = RegistryLocator.MoCapSourceRegistry;
 
@@ -89,8 +89,8 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 
             try
             {
-                Assert.That(first, Is.InstanceOf<EVMC4UMoCapSource>(),
-                    "Factory.Create 経由で Resolve される型は EVMC4UMoCapSource であるべき (要件 5.5)。");
+                Assert.That(first, Is.InstanceOf<VMCMoCapSource>(),
+                    "Factory.Create 経由で Resolve される型は VMCMoCapSource であるべき (要件 5.5)。");
                 Assert.That(second, Is.SameAs(first),
                     "同一 VMCMoCapSourceConfig に対する 2 回の Resolve は参照等価な同一 Adapter を返すべき (要件 2.1, 5.6)。");
             }
@@ -102,7 +102,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         }
 
         [Test]
-        public void Resolve_DifferentConfigs_ReturnsDifferentEVMC4UMoCapSourceInstances()
+        public void Resolve_DifferentConfigs_ReturnsDifferentVMCMoCapSourceInstances()
         {
             var registry = RegistryLocator.MoCapSourceRegistry;
 
@@ -122,10 +122,10 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 
             try
             {
-                Assert.That(adapterA, Is.InstanceOf<EVMC4UMoCapSource>(),
-                    "port=49510 の Config に対しても EVMC4UMoCapSource が返されるべき (要件 5.5)。");
-                Assert.That(adapterB, Is.InstanceOf<EVMC4UMoCapSource>(),
-                    "port=49511 の Config に対しても EVMC4UMoCapSource が返されるべき (要件 5.5)。");
+                Assert.That(adapterA, Is.InstanceOf<VMCMoCapSource>(),
+                    "port=49510 の Config に対しても VMCMoCapSource が返されるべき (要件 5.5)。");
+                Assert.That(adapterB, Is.InstanceOf<VMCMoCapSource>(),
+                    "port=49511 の Config に対しても VMCMoCapSource が返されるべき (要件 5.5)。");
                 Assert.That(adapterB, Is.Not.SameAs(adapterA),
                     "別 Config インスタンスに対しては別の Adapter が返されるべき (参照共有の粒度は Config 単位 / 要件 5.6)。");
             }

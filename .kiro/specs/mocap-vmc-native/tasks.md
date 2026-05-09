@@ -189,7 +189,7 @@
 > Phase 2/3 でソース書換は完了している前提。 Phase 4 は asmdef 編集 + Factory 内 `new EVMC4UMoCapSource(...)` → `new VMCMoCapSource(...)` 置換を一括で行う。
 > 完了後の Compile A / B シナリオ (design.md §13) で EVMC4U 不在状態の compile 成功を確認する。
 
-- [ ] 5. Factory + asmdef 一括更新 (atomic)
+- [x] 5. Factory + asmdef 一括更新 (atomic)
 - [x] 5.1 VMCMoCapSourceFactory の Create 戻り値型更新
   - `Runtime/VMCMoCapSourceFactory.cs` 内 `new EVMC4UMoCapSource(...)` を `new VMCMoCapSource(...)` に置換する
   - `using EVMC4U;` が残っている場合は削除する (`.meta` GUID は不変)
@@ -204,7 +204,7 @@
   - 観測完了条件: 全 4 asmdef の references から `"EVMC4U"` 文字列が消える、 各 `.meta` GUID は不変
   - _Requirements: 7.1, 7.2, 7.3, 9.8_
   - _Boundary: asmdef ファイル群_
-- [ ] 5.3 EVMC4U 全消去後の compile A 確認
+- [x] 5.3 EVMC4U 全消去後の compile A 確認
   - `Assets/EVMC4U/` が削除済み (Phase 0.1) かつ `using EVMC4U;` / asmdef references から `"EVMC4U"` が全て消えた状態で Unity Editor を再起動し、 `Library/ScriptAssemblies/` を再生成する
   - Console に EVMC4U 関連の missing reference / compile error が出ないことを確認する
   - リポジトリ全体に対し `using EVMC4U;` および asmdef references `"EVMC4U"` が grep で 0 件であることを確認する

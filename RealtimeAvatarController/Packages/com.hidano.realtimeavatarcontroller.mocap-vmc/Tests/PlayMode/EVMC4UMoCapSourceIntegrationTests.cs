@@ -11,13 +11,13 @@ using HumanoidMotionFrame = RealtimeAvatarController.Motion.HumanoidMotionFrame;
 namespace RealtimeAvatarController.MoCap.VMC.Tests
 {
     /// <summary>
-    /// <see cref="EVMC4UMoCapSource"/> の Dictionary 注入経路を検証する PlayMode 統合テスト
+    /// <see cref="VMCMoCapSource"/> の Dictionary 注入経路を検証する PlayMode 統合テスト
     /// (tasks.md タスク 4.2 / design.md §4.2, §5.1 /
     /// requirements.md 要件 3.1, 3.2, 3.5, 3.6, 4.5, 4.6, 4.7, 8.1, 12.3, 12.5, 12.7)。
     ///
     /// <para>
     /// 検証対象:
-    ///   - EVMC4USharedReceiver → InjectBoneRotationForTest → LateUpdate Tick → MotionStream OnNext
+    ///   - VMCSharedReceiver → InjectBoneRotationForTest → LateUpdate Tick → MotionStream OnNext
     ///   - 再注入なしの次フレームでは OnNext が発行されないこと (要件 3.5 _dirty 判定)
     ///   - 55 bone 全注入フレームで全ボーンが BoneLocalRotations に含まれること
     ///   - Muscles.Length == 0 / IsValid == true (要件 3.2)
@@ -27,12 +27,12 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
     ///
     /// <para>
     /// テスト独立性: <c>[SetUp]</c>/<c>[TearDown]</c> で
-    /// <see cref="RegistryLocator.ResetForTest"/> / <see cref="EVMC4USharedReceiver.ResetForTest"/>
+    /// <see cref="RegistryLocator.ResetForTest"/> / <see cref="VMCSharedReceiver.ResetForTest"/>
     /// を呼び出す (要件 12.5)。UDP を介さないため実ポート bind 不要。
     /// </para>
     /// </summary>
     [TestFixture]
-    public class EVMC4UMoCapSourceIntegrationTests
+    public class VMCMoCapSourceIntegrationTests
     {
         /// <summary>テスト専用 UDP ポート (衝突しにくい高位ポートを採用)。</summary>
         private const int TestPort = 49502;
@@ -41,7 +41,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         private const float DefaultTimeoutSeconds = 2.0f;
 
         private VMCMoCapSourceConfig _config;
-        private EVMC4UMoCapSource _source;
+        private VMCMoCapSource _source;
         private FrameRecorder _recorder;
         private IDisposable _subscription;
 
@@ -49,13 +49,13 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         public void SetUp()
         {
             RegistryLocator.ResetForTest();
-            EVMC4USharedReceiver.ResetForTest();
+            VMCSharedReceiver.ResetForTest();
 
             _config = ScriptableObject.CreateInstance<VMCMoCapSourceConfig>();
             _config.port = TestPort;
             _config.bindAddress = "0.0.0.0";
 
-            _source = new EVMC4UMoCapSource(
+            _source = new VMCMoCapSource(
                 slotId: string.Empty,
                 errorChannel: RegistryLocator.ErrorChannel);
             _source.Initialize(_config);
@@ -79,7 +79,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
                 _config = null;
             }
 
-            EVMC4USharedReceiver.ResetForTest();
+            VMCSharedReceiver.ResetForTest();
             RegistryLocator.ResetForTest();
         }
 
@@ -88,11 +88,11 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         [UnityTest]
         public IEnumerator MotionStream_EmitsFrame_WithInjectedBoneRotation()
         {
-            var shared = EVMC4USharedReceiver.EnsureInstance();
+            var shared = VMCSharedReceiver.EnsureInstance();
             try
             {
                 var expected = Quaternion.Euler(11f, 22f, 33f);
-                shared.Receiver.InjectBoneRotationForTest(HumanBodyBones.LeftHand, expected);
+                shared.WriteBoneRotation(HumanBodyBones.LeftHand, expected);
 
                 yield return WaitForFrames(_recorder, expectedCount: 1, timeoutSeconds: DefaultTimeoutSeconds);
 
@@ -118,10 +118,10 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         [UnityTest]
         public IEnumerator MotionStream_DoesNotEmit_WhenNoNewInjection()
         {
-            var shared = EVMC4USharedReceiver.EnsureInstance();
+            var shared = VMCSharedReceiver.EnsureInstance();
             try
             {
-                shared.Receiver.InjectBoneRotationForTest(HumanBodyBones.LeftHand, Quaternion.Euler(1f, 2f, 3f));
+                shared.WriteBoneRotation(HumanBodyBones.LeftHand, Quaternion.Euler(1f, 2f, 3f));
 
                 yield return WaitForFrames(_recorder, expectedCount: 1, timeoutSeconds: DefaultTimeoutSeconds);
 
@@ -146,14 +146,14 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         [UnityTest]
         public IEnumerator MotionStream_EmitsFrame_WithAllBonesIncluded()
         {
-            var shared = EVMC4USharedReceiver.EnsureInstance();
+            var shared = VMCSharedReceiver.EnsureInstance();
             try
             {
                 var injected = new List<HumanBodyBones>();
                 var q = Quaternion.Euler(5f, 10f, 15f);
                 for (var bone = HumanBodyBones.Hips; bone < HumanBodyBones.LastBone; bone++)
                 {
-                    shared.Receiver.InjectBoneRotationForTest(bone, q);
+                    shared.WriteBoneRotation(bone, q);
                     injected.Add(bone);
                 }
 
@@ -182,10 +182,10 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         [UnityTest]
         public IEnumerator MotionStream_Frame_HasEmptyMuscles_AndIsValid()
         {
-            var shared = EVMC4USharedReceiver.EnsureInstance();
+            var shared = VMCSharedReceiver.EnsureInstance();
             try
             {
-                shared.Receiver.InjectBoneRotationForTest(HumanBodyBones.Spine, Quaternion.identity);
+                shared.WriteBoneRotation(HumanBodyBones.Spine, Quaternion.identity);
 
                 yield return WaitForFrames(_recorder, expectedCount: 1, timeoutSeconds: DefaultTimeoutSeconds);
 
@@ -208,10 +208,10 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         [UnityTest]
         public IEnumerator MotionStream_OnError_IsNeverInvoked()
         {
-            var shared = EVMC4USharedReceiver.EnsureInstance();
+            var shared = VMCSharedReceiver.EnsureInstance();
             try
             {
-                shared.Receiver.InjectBoneRotationForTest(HumanBodyBones.Head, Quaternion.identity);
+                shared.WriteBoneRotation(HumanBodyBones.Head, Quaternion.identity);
 
                 yield return WaitForFrames(_recorder, expectedCount: 1, timeoutSeconds: DefaultTimeoutSeconds);
 
@@ -229,10 +229,10 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         [UnityTest]
         public IEnumerator MotionStream_CompletesAfterShutdown()
         {
-            var shared = EVMC4USharedReceiver.EnsureInstance();
+            var shared = VMCSharedReceiver.EnsureInstance();
             try
             {
-                shared.Receiver.InjectBoneRotationForTest(HumanBodyBones.Hips, Quaternion.identity);
+                shared.WriteBoneRotation(HumanBodyBones.Hips, Quaternion.identity);
                 yield return WaitForFrames(_recorder, expectedCount: 1, timeoutSeconds: DefaultTimeoutSeconds);
             }
             finally

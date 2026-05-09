@@ -13,12 +13,12 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
     /// <para>
     /// 検証対象:
     ///   - VMCMoCapSourceConfig を MoCapSourceConfigBase として Create() に渡した場合、
-    ///     EVMC4UMoCapSource が正常に生成される (要件 5.5 / typeId "VMC" の新 Adapter 生成)
+    ///     VMCMoCapSource が正常に生成される (要件 5.5 / typeId "VMC" の新 Adapter 生成)
     ///   - 別の MoCapSourceConfigBase 派生型を渡した場合、ArgumentException がスローされ、
     ///     受け取った型名が例外メッセージに含まれる (要件 5.4)
     ///   - null を渡した場合、ArgumentException がスローされる (要件 5.4)
     ///   - ScriptableObject.CreateInstance&lt;VMCMoCapSourceConfig&gt;() で動的生成した Config を
-    ///     渡した場合、EVMC4UMoCapSource が正常に生成される (要件 5.2 / シナリオ Y)
+    ///     渡した場合、VMCMoCapSource が正常に生成される (要件 5.2 / シナリオ Y)
     /// </para>
     ///
     /// <para>
@@ -58,16 +58,16 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         }
 
         [Test]
-        public void Create_WithVMCMoCapSourceConfigAsBase_ReturnsEVMC4UMoCapSource()
+        public void Create_WithVMCMoCapSourceConfigAsBase_ReturnsVMCMoCapSource()
         {
             var factory = new VMCMoCapSourceFactory();
             MoCapSourceConfigBase config = _config;
 
             var source = factory.Create(config);
 
-            Assert.IsNotNull(source, "EVMC4UMoCapSource は null でないインスタンスが返されるべき。");
-            Assert.IsInstanceOf<EVMC4UMoCapSource>(source,
-                "VMCMoCapSourceConfig を受け取った Factory は EVMC4UMoCapSource を返すべき (tasks.md 5.2 / 要件 5.5)。");
+            Assert.IsNotNull(source, "VMCMoCapSource は null でないインスタンスが返されるべき。");
+            Assert.IsInstanceOf<VMCMoCapSource>(source,
+                "VMCMoCapSourceConfig を受け取った Factory は VMCMoCapSource を返すべき (tasks.md 5.2 / 要件 5.5)。");
         }
 
         [Test]
@@ -92,7 +92,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         }
 
         [Test]
-        public void Create_WithDynamicallyCreatedConfig_ReturnsEVMC4UMoCapSource()
+        public void Create_WithDynamicallyCreatedConfig_ReturnsVMCMoCapSource()
         {
             // シナリオ Y (要件 5.2): ScriptableObject.CreateInstance で動的生成した Config を
             // SO アセット経由のインスタンスと同一コードパスで扱えること。
@@ -103,9 +103,9 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 
                 var source = factory.Create(dynamicConfig);
 
-                Assert.IsNotNull(source, "動的生成 Config でも EVMC4UMoCapSource が返されるべき。");
-                Assert.IsInstanceOf<EVMC4UMoCapSource>(source,
-                    "動的生成 Config は SO アセットと同一コードパスで EVMC4UMoCapSource を生成すべき (要件 5.2 / 5.5)。");
+                Assert.IsNotNull(source, "動的生成 Config でも VMCMoCapSource が返されるべき。");
+                Assert.IsInstanceOf<VMCMoCapSource>(source,
+                    "動的生成 Config は SO アセットと同一コードパスで VMCMoCapSource を生成すべき (要件 5.2 / 5.5)。");
             }
             finally
             {

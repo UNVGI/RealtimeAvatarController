@@ -18,7 +18,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
     /// 検証観点 (3 ケース):
     ///   1. <see cref="SlotSettings"/> に <see cref="VMCMoCapSourceConfig"/> を指定して
     ///      <see cref="SlotManager.AddSlotAsync"/> を呼ぶと Slot が Active に遷移し、
-    ///      <see cref="EVMC4UMoCapSource"/> が Resolve され <c>MotionStream</c> を購読できる (要件 7.1)。
+    ///      <see cref="VMCMoCapSource"/> が Resolve され <c>MotionStream</c> を購読できる (要件 7.1)。
     ///   2. 同一 <see cref="VMCMoCapSourceConfig"/> を共有する 2 つの Slot を追加すると、
     ///      参照共有により同一 Adapter インスタンスが両 Slot に供給される (要件 5.6 / 7.1)。
     ///   3. 1 つの Slot を Remove → 別 Config の Slot を Add する差替フローが例外なく完了する (要件 7.3 / 7.4)。
@@ -26,7 +26,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
     ///
     /// <para>
     /// テスト独立性: <see cref="RegistryLocator.ResetForTest"/> と
-    /// <see cref="EVMC4USharedReceiver.ResetForTest"/> を <c>[SetUp]</c>/<c>[TearDown]</c> で呼び出す。
+    /// <see cref="VMCSharedReceiver.ResetForTest"/> を <c>[SetUp]</c>/<c>[TearDown]</c> で呼び出す。
     /// 実機 Sample Scene の目視確認はタスク 7.2 (DEFERRED TO USER) に委ねる。
     /// </para>
     /// </summary>
@@ -43,7 +43,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         public void SetUp()
         {
             RegistryLocator.ResetForTest();
-            EVMC4USharedReceiver.ResetForTest();
+            VMCSharedReceiver.ResetForTest();
 
             RegistryLocator.ProviderRegistry.Register(
                 ProviderTypeId, new SmokeAvatarProviderFactory(_createdAvatars));
@@ -74,14 +74,14 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
             }
             _createdAssets.Clear();
 
-            EVMC4USharedReceiver.ResetForTest();
+            VMCSharedReceiver.ResetForTest();
             RegistryLocator.ResetForTest();
         }
 
-        // --- ケース 1: SlotSettings + VMCMoCapSourceConfig で Slot 追加 → EVMC4UMoCapSource が Resolve される ---
+        // --- ケース 1: SlotSettings + VMCMoCapSourceConfig で Slot 追加 → VMCMoCapSource が Resolve される ---
 
         [UnityTest]
-        public IEnumerator AddSlot_WithVMCConfig_ResolvesEVMC4USourceAndMotionStreamIsSubscribable()
+        public IEnumerator AddSlot_WithVMCConfig_ResolvesVMCSourceAndMotionStreamIsSubscribable()
             => UniTask.ToCoroutine(async () =>
             {
                 var vmcConfig = CreateVmcConfig(port: 49521);
@@ -97,8 +97,8 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 
                 Assert.That(_manager.TryGetSlotResources("slot-smoke-1", out var source, out _), Is.True,
                     "TryGetSlotResources が IMoCapSource を返すべき (要件 7.1)。");
-                Assert.That(source, Is.InstanceOf<EVMC4UMoCapSource>(),
-                    "VMCMoCapSourceFactory 経由で Resolve される型は EVMC4UMoCapSource であるべき。");
+                Assert.That(source, Is.InstanceOf<VMCMoCapSource>(),
+                    "VMCMoCapSourceFactory 経由で Resolve される型は VMCMoCapSource であるべき。");
                 Assert.That(source.SourceType, Is.EqualTo("VMC"),
                     "SourceType は \"VMC\" であるべき (要件 1.3)。");
 
@@ -117,10 +117,10 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         // 初期化し、その後 Registry から同じ Config を Resolve して参照共有を検証する。
         //
         // Registry.Resolve の 2 回目は Adapter を再 Initialize せず refCount のみ増加させるため、
-        // 既存の Running 状態とも整合する (EVMC4UMoCapSourceSharingTests §5.3 と同じ契約)。
+        // 既存の Running 状態とも整合する (VMCMoCapSourceSharingTests §5.3 と同じ契約)。
 
         [UnityTest]
-        public IEnumerator AddSlot_ThenResolveSameConfigFromRegistry_ReturnsSameEVMC4UMoCapSourceInstance()
+        public IEnumerator AddSlot_ThenResolveSameConfigFromRegistry_ReturnsSameVMCMoCapSourceInstance()
             => UniTask.ToCoroutine(async () =>
             {
                 var vmcConfig = CreateVmcConfig(port: 49522);
@@ -130,7 +130,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 
                 Assert.That(_manager.TryGetSlotResources("slot-smoke-a", out var sourceA, out _), Is.True,
                     "Slot 追加直後は Adapter が Registry 経由で Resolve されているべき。");
-                Assert.That(sourceA, Is.InstanceOf<EVMC4UMoCapSource>());
+                Assert.That(sourceA, Is.InstanceOf<VMCMoCapSource>());
 
                 var descriptor = new MoCapSourceDescriptor
                 {
@@ -175,7 +175,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
                     "Release → Resolve 差替後も新 Slot が Active に遷移するべき (要件 7.3)。");
                 Assert.That(handleY.State, Is.EqualTo(SlotState.Active));
                 Assert.That(_manager.TryGetSlotResources("slot-smoke-y", out var sourceY, out _), Is.True);
-                Assert.That(sourceY, Is.InstanceOf<EVMC4UMoCapSource>());
+                Assert.That(sourceY, Is.InstanceOf<VMCMoCapSource>());
 
                 await _manager.RemoveSlotAsync("slot-smoke-y");
             });
