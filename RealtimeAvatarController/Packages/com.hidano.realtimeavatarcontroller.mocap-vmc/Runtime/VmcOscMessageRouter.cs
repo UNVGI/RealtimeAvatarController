@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace RealtimeAvatarController.MoCap.VMC
 {
-    internal interface IVmcBoneRotationWriter
+    public interface IVmcBoneRotationWriter
     {
         void WriteBoneRotation(HumanBodyBones bone, Quaternion rotation);
 

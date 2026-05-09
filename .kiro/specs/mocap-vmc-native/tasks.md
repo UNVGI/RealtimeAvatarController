@@ -110,7 +110,7 @@
   - 観測完了条件: テストが「型が存在しない」 ビルドエラーで失敗する (RED 確認)
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.6, 8.6, 9.2, 9.7, 11.4_
   - _Boundary: VMCSharedReceiver (新規 / 旧 EVMC4USharedReceiver の後継)_
-- [ ] 3.2 GREEN: 旧 EVMC4USharedReceiver.cs を VMCSharedReceiver.cs にリネーム + GUID 移植 + 内部書換
+- [x] 3.2 GREEN: 旧 EVMC4USharedReceiver.cs を VMCSharedReceiver.cs にリネーム + GUID 移植 + 内部書換
   - `Runtime/EVMC4USharedReceiver.cs` を `Runtime/VMCSharedReceiver.cs` にリネームし、 旧 `.cs.meta` GUID `58052dfd9ff9ad04cae524187979f918` を新 `.cs.meta` に移植する
   - `using EVMC4U;` ステートメントを削除する
   - `MonoBehaviour` 派生で `uOscServer` を `AddComponent` し、 `autoStart=false` を設定して `port` 設定後 `StartServer()` を呼ぶ構造へ書換える (旧 `ExternalReceiver` 抱え込みを撤廃)
