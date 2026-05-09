@@ -1,17 +1,17 @@
 {
   "feature_name": "mocap-vmc-native",
   "created_at": "2026-05-09T19:07:39Z",
-  "updated_at": "2026-05-09T21:30:00Z",
+  "updated_at": "2026-05-09T22:00:00Z",
   "language": "ja",
-  "phase": "requirements-digged",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
-      "approved": false
+      "generated": true,
+      "approved": true
     },
     "tasks": {
       "generated": false,
@@ -29,6 +29,11 @@
       "event": "deep-dig-native",
       "performed_at": "2026-05-09T21:30:00Z",
       "summary": "post-pivot requirements.md (R1〜R12) に対して dig-native.md を作成。 uOSC `Parser.ParseData` の structural alloc / `HumanoidMotionFrame.BoneLocalRotations` 所有権契約とダブルバッファ衝突 / uOSC MainThread 発火の構造的保証 / bone 名マッピングの static 化 を検証。 R-1.5 / R-5.7 / R-7.6 / R-7.7 / R-9.2 / R-10 / R-12.8 / 設計フェーズ research items を是正。"
+    },
+    {
+      "event": "design-generated",
+      "performed_at": "2026-05-09T22:00:00Z",
+      "summary": "design.md / research.md を生成 (auto-approve)。 R-A〜R-H の 8 件 research item を実コード読解に基づき決定: ダブルバッファリング (Decision A)、 Tick 境界配置 (Decision B、 VMCSharedReceiver.Update 末尾)、 bind 失敗検出経路 (Decision C、 _server.isRunning 判定)、 クラス命名 (Decision D、 既存準拠の VMCMoCapSource / VMCSharedReceiver)、 所有権契約補完 (Decision E、 同 frame 完結性前提を Spec 内自己宣言)。 uOSC `DotNet/Udp.StartServer` の bind 失敗握り潰しを発見し R-11.4 経路を再設計。 file-level migration plan (rename + GUID transplant 5 件、 削除 2 件、 新規 5 件) を確定。"
     }
   ]
 }
