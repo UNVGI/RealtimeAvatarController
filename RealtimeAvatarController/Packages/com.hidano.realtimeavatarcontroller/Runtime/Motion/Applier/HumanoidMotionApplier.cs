@@ -240,7 +240,7 @@ namespace RealtimeAvatarController.Motion
                 // 初期版では行わない。VMC Protocol の Root/Pos は「アバター親ノード」姿勢を意図するが、
                 // 多くの送信アプリ (VMagicMirror / VSeeFace 等) は Hips の global 姿勢を Bone rotation に
                 // 含めて送るため、Avatar root に RootRotation を書くと Hips と二重回転になり姿勢が破綻する。
-                // EVMC4U でもデフォルトで Root Transform への書込は無効化されている (Inspector option)。
+                // 一般的な VMC 受信実装でもデフォルトで Root Transform への書込は無効化されている (Inspector option)。
                 // 必要に応じて将来オプションとして追加する。
             }
             else
