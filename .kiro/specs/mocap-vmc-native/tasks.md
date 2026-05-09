@@ -271,7 +271,7 @@
   - 観測完了条件: README から `evmc4u.patch` / `EVMC4U.asmdef` / `Assets/EVMC4U/` の手順記述が消え、 セットアップ手順は uOSC 導入のみで完結する
   - _Requirements: 7.6, 7.7, 12.1_
   - _Boundary: README.md_
-- [ ] 8.2 (P) パッケージ CHANGELOG breaking change エントリ追加
+- [x] 8.2 (P) パッケージ CHANGELOG breaking change エントリ追加
   - `Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/CHANGELOG.md` に EVMC4U 依存撤廃の breaking change エントリを追加する
   - 「Internal: EVMC4U dependency removed in favor of native uOSC subscription. Public API (`IMoCapSource`, `MoCapSourceConfigBase`, `HumanoidMotionFrame`, typeId `VMC`) is unchanged.」 を記載する
   - 観測完了条件: CHANGELOG に当該エントリが日付付きで追加される

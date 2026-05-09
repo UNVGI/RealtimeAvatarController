@@ -6,6 +6,10 @@
 
 ## [0.1.0] - 2026-05-09
 
+### Removed
+
+- Internal: EVMC4U dependency removed in favor of native uOSC subscription. Public API (`IMoCapSource`, `MoCapSourceConfigBase`, `HumanoidMotionFrame`, typeId `VMC`) is unchanged.
+
 ### Added
 
 - 旧コアパッケージ `com.hidano.realtimeavatarcontroller` から VMC Runtime 一式を移動:
