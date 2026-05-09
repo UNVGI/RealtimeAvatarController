@@ -33,5 +33,10 @@ namespace RealtimeAvatarController.MoCap.VMC
 
             return s_map.TryGetValue(boneName, out bone);
         }
+
+        internal static IEnumerable<KeyValuePair<string, HumanBodyBones>> EnumerateForTest()
+        {
+            return s_map;
+        }
     }
 }

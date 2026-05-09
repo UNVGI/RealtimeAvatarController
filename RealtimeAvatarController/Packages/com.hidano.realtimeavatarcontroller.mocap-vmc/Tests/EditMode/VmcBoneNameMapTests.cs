@@ -47,5 +47,29 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
                 "Null input should be ignored without throwing.");
             Assert.That(result, Is.False, "Null input should not resolve.");
         }
+
+        [Test]
+        public void EnumerateForTest_ReturnsExpectedUnityHumanoidBoneCountWithoutLastBone()
+        {
+            const int ExpectedBoneCount = 55;
+            var count = 0;
+            var containsLastBone = false;
+
+            foreach (var entry in VmcBoneNameMap.EnumerateForTest())
+            {
+                count++;
+
+                if (entry.Key == HumanBodyBones.LastBone.ToString() ||
+                    entry.Value == HumanBodyBones.LastBone)
+                {
+                    containsLastBone = true;
+                }
+            }
+
+            Assert.That(count, Is.EqualTo(ExpectedBoneCount),
+                "Unity 6000.3.10f1 HumanBodyBones has 55 usable entries when LastBone is excluded.");
+            Assert.That(containsLastBone, Is.False,
+                "LastBone is a terminator and should not be included in the mapping.");
+        }
     }
 }

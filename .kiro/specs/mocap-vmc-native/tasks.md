@@ -35,7 +35,7 @@
 > 設計上独立した `internal static` ヘルパー 2 個。 互いに参照を持たないため並列実装可能 (`(P)`)。
 > 既存 `EVMC4U*.cs` と asmdef 参照は Phase 4 まで残存するためコンパイル可能な状態を維持できる。
 
-- [ ] 1. VmcBoneNameMap: bone 名 → HumanBodyBones 静的辞書
+- [x] 1. VmcBoneNameMap: bone 名 → HumanBodyBones 静的辞書
 - [x] 1.1 (P) RED: VmcBoneNameMapTests を先行作成して失敗状態を確認
   - `Tests/EditMode/VmcBoneNameMapTests.cs` を新規作成 (ランダム GUID `.meta` 付き)
   - `Enum.GetValues(typeof(HumanBodyBones))` の `LastBone` を除く全 enum メンバが `TryGetValue` で解決できることを検証するテストを追加する
@@ -52,7 +52,7 @@
   - 観測完了条件: 1.1 で追加した全テストが GREEN になる
   - _Requirements: 3.1, 3.2, 3.5, 10.3_
   - _Boundary: VmcBoneNameMap_
-- [ ] 1.3 REFACTOR: 起動時 1 回確保の確認とテスト seam 整備
+- [x] 1.3 REFACTOR: 起動時 1 回確保の確認とテスト seam 整備
   - cctor が起動時に 1 回のみ実行され、 マッピング辞書が 55 entries (Unity 6000.3.10f1 想定) を持つことを assert するテストを追加する
   - `internal static IEnumerable<KeyValuePair<string, HumanBodyBones>> EnumerateForTest()` を test seam として公開する
   - 観測完了条件: 全 EditMode テストが GREEN、 マッピング辞書数の expected 値がテストに記録される
