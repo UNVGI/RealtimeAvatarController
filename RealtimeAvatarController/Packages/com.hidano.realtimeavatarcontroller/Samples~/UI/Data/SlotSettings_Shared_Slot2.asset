@@ -19,8 +19,8 @@ MonoBehaviour:
     ProviderTypeId: Builtin
     Config: {fileID: 11400000, guid: e9c225a171fe4396b71e00e2345a4b85, type: 2}
   moCapSourceDescriptor:
-    SourceTypeId: VMC
-    Config: {fileID: 11400000, guid: 5c4569b4a17944fba4667acebe26c25f, type: 2}
+    SourceTypeId: Stub
+    Config: {fileID: 11400000, guid: 347575537ba946ec98ea4627a923f184, type: 2}
   facialControllerDescriptor:
     ControllerTypeId:
     Config: {fileID: 0}
