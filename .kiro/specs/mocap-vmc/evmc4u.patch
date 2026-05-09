@@ -1,3 +1,5 @@
+# OBSOLETE (2026-05-09) — EVMC4U 依存撤廃により当 patch は適用不要となった。 mocap-vmc-native Spec 参照。
+#
 # EVMC4U local patches for RealtimeAvatarController (mocap-vmc spec)
 #
 # Pristine source : commit 464df2b (initial EVMC4U import, RealtimeAvatarController/Assets/EVMC4U/ExternalReceiver.cs)

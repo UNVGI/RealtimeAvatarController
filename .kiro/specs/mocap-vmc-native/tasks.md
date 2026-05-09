@@ -11,18 +11,18 @@
 > このタスク群は CLAUDE.md グローバルルール「子 Agent は rm/git rm 不可」 に従い、 必ず親セッションで先行実施する。
 > 削除対象には対応する `.meta` ファイルも含む。 削除後 Unity Editor を再起動して `Library/ScriptAssemblies/` キャッシュを再生成すること。
 
-- [ ] 0. 親セッション削除 + OBSOLETE マーカ追記
-- [ ] 0.1 旧 EVMC4U 同梱ディレクトリ全削除
+- [x] 0. 親セッション削除 + OBSOLETE マーカ追記
+- [x] 0.1 旧 EVMC4U 同梱ディレクトリ全削除
   - `RealtimeAvatarController/Assets/EVMC4U/` ディレクトリ全体 (.cs × 7 + LICENSE + 3rdpartylicenses(ExternalReceiverPack).txt + 同梱 .meta 群) を `git rm -rf` で削除する
   - 削除前に `Assets/EVMC4U/3rdpartylicenses(ExternalReceiverPack).txt` の uOSC / UniVRM credit 内容を Phase 6 で `THIRD_PARTY_NOTICES.md` へ転記する目的で控えておく
   - 削除後 Unity Editor を起動した際に `Assets/EVMC4U/` が消えていること、 および Console に `EVMC4U` 関連の missing script 警告が出ないことを目視確認する (compile はこの時点では破綻している前提でよい / Phase 4 で修復する)
   - _Requirements: 7.5, 12.6_
-- [ ] 0.2 廃止対象テストの削除
+- [x] 0.2 廃止対象テストの削除
   - `Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/Tests/EditMode/ExternalReceiverPatchTests.cs` および `.cs.meta` を `git rm` で削除する
   - `Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/Tests/EditMode/EVMC4USharedReceiverTests.cs` および `.cs.meta` を `git rm` で削除する (GUID 移植せず、 Phase 5 で新規作成する `VMCSharedReceiverTests.cs` はランダム新規 GUID を持つ)
   - 削除後 `Tests/EditMode/` 配下に上記 2 ファイルが存在しないことを確認する
   - _Requirements: 9.1, 9.2_
-- [ ] 0.3 旧 evmc4u.patch / handover に OBSOLETE マーカ追記
+- [x] 0.3 旧 evmc4u.patch / handover に OBSOLETE マーカ追記
   - `.kiro/specs/mocap-vmc/evmc4u.patch` の冒頭に `# OBSOLETE (2026-05-09) — EVMC4U 依存撤廃により当 patch は適用不要となった。 mocap-vmc-native Spec 参照。` を追記し、 patch 本体は履歴用に残す
   - `.kiro/specs/mocap-vmc/handover-7.2.md` の patch 関連記述箇所に同等の OBSOLETE マーカを追記する
   - 両ファイル冒頭で OBSOLETE 宣言が読み取れる状態になっていることを `head` または diff で確認する
@@ -36,7 +36,7 @@
 > 既存 `EVMC4U*.cs` と asmdef 参照は Phase 4 まで残存するためコンパイル可能な状態を維持できる。
 
 - [ ] 1. VmcBoneNameMap: bone 名 → HumanBodyBones 静的辞書
-- [ ] 1.1 (P) RED: VmcBoneNameMapTests を先行作成して失敗状態を確認
+- [x] 1.1 (P) RED: VmcBoneNameMapTests を先行作成して失敗状態を確認
   - `Tests/EditMode/VmcBoneNameMapTests.cs` を新規作成 (ランダム GUID `.meta` 付き)
   - `Enum.GetValues(typeof(HumanBodyBones))` の `LastBone` を除く全 enum メンバが `TryGetValue` で解決できることを検証するテストを追加する
   - 大文字小文字の区別 (例: `"hips"` で false) を検証するテストを追加する
