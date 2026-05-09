@@ -190,7 +190,7 @@
 > 完了後の Compile A / B シナリオ (design.md §13) で EVMC4U 不在状態の compile 成功を確認する。
 
 - [ ] 5. Factory + asmdef 一括更新 (atomic)
-- [ ] 5.1 VMCMoCapSourceFactory の Create 戻り値型更新
+- [x] 5.1 VMCMoCapSourceFactory の Create 戻り値型更新
   - `Runtime/VMCMoCapSourceFactory.cs` 内 `new EVMC4UMoCapSource(...)` を `new VMCMoCapSource(...)` に置換する
   - `using EVMC4U;` が残っている場合は削除する (`.meta` GUID は不変)
   - 観測完了条件: Factory.Create が VMCMoCapSource インスタンスを返す

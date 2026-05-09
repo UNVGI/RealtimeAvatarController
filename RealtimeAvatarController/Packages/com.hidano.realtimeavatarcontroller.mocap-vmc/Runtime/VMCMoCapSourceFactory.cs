@@ -5,7 +5,7 @@ using UnityEngine;
 namespace RealtimeAvatarController.MoCap.VMC
 {
     /// <summary>
-    /// <see cref="EVMC4UMoCapSource"/> インスタンスを生成する Factory
+    /// <see cref="VMCMoCapSource"/> インスタンスを生成する Factory
     /// (design.md §4.5, requirements.md 要件 5.4, 5.5, 6.1, 6.2, 6.3, 11.3)。
     /// </summary>
     /// <remarks>
@@ -40,7 +40,7 @@ namespace RealtimeAvatarController.MoCap.VMC
         /// <remarks>
         /// <para>
         /// <paramref name="config"/> を <see cref="VMCMoCapSourceConfig"/> にキャストし、
-        /// <see cref="EVMC4UMoCapSource"/> を生成して返す (design.md §4.5)。
+        /// <see cref="VMCMoCapSource"/> を生成して返す (design.md §4.5)。
         /// </para>
         /// <para>
         /// 生成時の <c>slotId</c> は <see cref="string.Empty"/> を渡し、
@@ -62,7 +62,7 @@ namespace RealtimeAvatarController.MoCap.VMC
                     nameof(config));
             }
 
-            return new EVMC4UMoCapSource(
+            return new VMCMoCapSource(
                 slotId: string.Empty,
                 errorChannel: RegistryLocator.ErrorChannel);
         }
