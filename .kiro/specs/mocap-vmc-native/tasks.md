@@ -100,7 +100,7 @@
 > 旧 `EVMC4USharedReceiver.cs` GUID `58052dfd9ff9ad04cae524187979f918` を新ファイルへ移植し、 `using EVMC4U;` を削除して uOSC 直接購読構造へ書換える。
 
 - [ ] 3. VMCSharedReceiver: uOSC 直接購読 + refCount lifecycle
-- [ ] 3.1 RED: VMCSharedReceiverTests を新規作成して失敗状態を確認
+- [x] 3.1 RED: VMCSharedReceiverTests を新規作成して失敗状態を確認
   - `Tests/EditMode/VMCSharedReceiverTests.cs` を新規作成 (ランダム GUID `.meta` 付き、 削除された旧 `EVMC4USharedReceiverTests.cs` の history は継承しない)
   - `EnsureInstance` 初回で GameObject + uOscServer + receiver 自身が AddComponent されることを検証
   - 重複 `EnsureInstance` で同一 instance が返り、 内部 refCount が 2 になることを検証
