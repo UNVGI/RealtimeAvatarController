@@ -12,8 +12,8 @@
 
 ## Phase 1 — 新パッケージ scaffold + testables 登録
 
-- [ ] 1. 新パッケージ scaffold とテスト解決基盤を確立する
-- [ ] 1.1 新パッケージのルートディレクトリと `package.json` を作成する
+- [x] 1. 新パッケージ scaffold とテスト解決基盤を確立する
+- [x] 1.1 新パッケージのルートディレクトリと `package.json` を作成する
   - `RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/` ディレクトリを新設し、`Runtime/` / `Editor/` / `Tests/EditMode/` / `Tests/PlayMode/` / `Samples~/VMC/Data/` / `Samples~/VMC/Scenes/` の空ディレクトリ階層を準備する (各ディレクトリに対応する `.meta` を含める。`.meta` GUID は乱数生成)。
   - `package.json` を新規作成し、`name = "com.hidano.realtimeavatarcontroller.mocap-vmc"`、`displayName` (VMC 用パッケージである旨)、`unity = "6000.3"`、`unityRelease = "10f1"`、`version = "0.1.0"`、`keywords` を設定する。
   - `dependencies` フィールドにコアパッケージ `com.hidano.realtimeavatarcontroller` を**固定バージョン**で記述する (range 演算子 `^` `~` 不使用)。EVMC4U / uOSC / UniRx は `dependencies` に含めず、利用者プロジェクト側および core 経由で解決させる。
@@ -22,7 +22,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6_
   - _Boundary: NewPackageManifest_
 
-- [ ] 1.2 リポジトリ `Packages/manifest.json` の `testables` に新パッケージを登録する
+- [x] 1.2 リポジトリ `Packages/manifest.json` の `testables` に新パッケージを登録する
   - `RealtimeAvatarController/Packages/manifest.json` の `testables` 配列に `"com.hidano.realtimeavatarcontroller.mocap-vmc"` を追加する。現状 `testables: ["com.hidano.realtimeavatarcontroller"]` のみのため、追加しないと Phase 2 完了後に Test Runner ウィンドウへ新パッケージのテストが列挙されない。
   - 同 `dependencies` セクションに新パッケージ参照を追加 (ローカルパッケージ参照、リポジトリ内 `Packages/` 配下を Unity Package Manager に認識させる) する。
   - 観測可能な完了状態: Unity Editor を起動した際にコンパイルが通り、Package Manager ウィンドウで両パッケージがリスト表示される。
@@ -36,8 +36,8 @@
 
 > **重要**: Phase 2 のすべての移動は Unity Editor を閉じた状態で `git mv` を用いて実施し、`.meta` GUID を保全する。移動完了後に Editor を再起動して Library 再生成を許容する。
 
-- [ ] 2. VMC コードと asmdef を新パッケージへ GUID 据置で物理移動する
-- [ ] 2.1 VMC Runtime 一式を新パッケージ Runtime/ へ移動する
+- [x] 2. VMC コードと asmdef を新パッケージへ GUID 据置で物理移動する
+- [x] 2.1 VMC Runtime 一式を新パッケージ Runtime/ へ移動する
   - 旧 `Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/` 配下の全ソース (`VMCMoCapSourceConfig.cs` / `VMCMoCapSourceFactory.cs` / `EVMC4UMoCapSource.cs` / `EVMC4USharedReceiver.cs` / `AssemblyInfo.cs`) と `RealtimeAvatarController.MoCap.VMC.asmdef` および対応 `.meta` を新パッケージ `Runtime/` 直下へ `git mv` で移動する。
   - asmdef 名 (`RealtimeAvatarController.MoCap.VMC`)、`rootNamespace`、`references` (`["RealtimeAvatarController.Core","RealtimeAvatarController.Motion","uOSC.Runtime","UniRx","EVMC4U"]`)、`includePlatforms` / `excludePlatforms` (空) を据置する。
   - `.meta` 内 `guid` 値および C# `namespace` (`RealtimeAvatarController.MoCap.VMC`) は変更禁止。
@@ -45,28 +45,28 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
   - _Boundary: VmcRuntimeAsmdef_
 
-- [ ] 2.2 (P) VMC Editor 一式を新パッケージ Editor/ へ移動する
+- [x] 2.2 (P) VMC Editor 一式を新パッケージ Editor/ へ移動する
   - 旧 `Packages/com.hidano.realtimeavatarcontroller/Editor/MoCap/VMC/` 配下の `VmcMoCapSourceFactoryEditorRegistrar.cs` および `RealtimeAvatarController.MoCap.VMC.Editor.asmdef` と各 `.meta` を新パッケージ `Editor/` 直下へ `git mv` で移動する。
   - asmdef 名 (`RealtimeAvatarController.MoCap.VMC.Editor`)、`includePlatforms: ["Editor"]`、`references` (`["RealtimeAvatarController.MoCap.VMC","RealtimeAvatarController.Core"]` 等の据置構成) を変更しない。
   - 観測可能な完了状態: 新パッケージ Editor/ 配下に 1 つの `.cs` + 1 つの `.asmdef` + 各 `.meta` が配置され、Editor asmdef GUID が旧位置と一致する。
   - _Requirements: 3.1, 3.2, 3.3_
   - _Boundary: VmcEditorAsmdef_
 
-- [ ] 2.3 (P) VMC EditMode テストを新パッケージ Tests/EditMode/ へ平置きで移動する
+- [x] 2.3 (P) VMC EditMode テストを新パッケージ Tests/EditMode/ へ平置きで移動する
   - 旧 `Packages/com.hidano.realtimeavatarcontroller/Tests/EditMode/mocap-vmc/` 配下の全テストファイル (`EVMC4USharedReceiverTests.cs` / `EVMC4UMoCapSourceTests.cs` / `ExternalReceiverPatchTests.cs` / `VmcConfigCastTests.cs` / `VmcFactoryRegistrationTests.cs`) と `RealtimeAvatarController.MoCap.VMC.Tests.EditMode.asmdef` および各 `.meta` を新パッケージ `Tests/EditMode/` 直下へ平置きで `git mv` する (中間 `mocap-vmc/` ディレクトリは再現しない)。
   - asmdef 名と GUID、`references` 構成 (`RealtimeAvatarController.MoCap.VMC` / Test Framework / EVMC4U 等) を据置する。
   - 観測可能な完了状態: 新パッケージ Tests/EditMode/ 直下に 5 つのテスト `.cs` + 1 つの `.asmdef` + 各 `.meta` が配置される。
   - _Requirements: 4.1, 4.3, 4.6_
   - _Boundary: VmcTestsEditAsmdef_
 
-- [ ] 2.4 (P) VMC PlayMode テストを新パッケージ Tests/PlayMode/ へ平置きで移動する
+- [x] 2.4 (P) VMC PlayMode テストを新パッケージ Tests/PlayMode/ へ平置きで移動する
   - 旧 `Packages/com.hidano.realtimeavatarcontroller/Tests/PlayMode/mocap-vmc/` 配下の全テストファイル (`EVMC4UMoCapSourceIntegrationTests.cs` / `EVMC4UMoCapSourceSharingTests.cs` / `SampleSceneSmokeTests.cs`) と `RealtimeAvatarController.MoCap.VMC.Tests.PlayMode.asmdef` および各 `.meta` を新パッケージ `Tests/PlayMode/` 直下へ平置きで `git mv` する。
   - asmdef 名と GUID、`references` 構成を据置する。
   - 観測可能な完了状態: 新パッケージ Tests/PlayMode/ 直下に 3 つのテスト `.cs` + 1 つの `.asmdef` + 各 `.meta` が配置される。
   - _Requirements: 4.2, 4.3, 4.6_
   - _Boundary: VmcTestsPlayAsmdef_
 
-- [ ] 2.5 Phase 2 完了チェックポイント — Test Runner ウィンドウでの目視検証
+- [x] 2.5 Phase 2 完了チェックポイント — Test Runner ウィンドウでの目視検証
   - Unity Editor を起動し Library 再生成を待機後、`Window → General → Test Runner` を開く。
   - `EditMode` タブと `PlayMode` タブで `RealtimeAvatarController.MoCap.VMC.Tests.EditMode` / `RealtimeAvatarController.MoCap.VMC.Tests.PlayMode` の両 asmdef がリスト表示されることを目視確認する。
   - Console の Errors == 0 を確認する。表示されない場合は Phase 1.2 の `manifest.json.testables` 設定または Phase 2.3/2.4 の asmdef GUID 据置に問題があるため、Phase 5 に進まずに `git revert` で rollback する。
@@ -80,8 +80,8 @@
 
 > **方針**: Stub Source は UI Sample の VMC 非依存化のためのダミー実装。Editor 自己登録は既存 `RealtimeAvatarController.Samples.UI.Editor` asmdef へ別ファイルとして追加し、Runtime asmdef との `#if UNITY_EDITOR` 同居は禁止する (VMC 既存パターン整合)。
 
-- [ ] 3. UI Sample を Stub MoCap Source 経由で動作する provider-agnostic 構成へ再構成する
-- [ ] 3.1 Stub MoCap Source / Stub Config / Stub Factory の Runtime 実装を新設する
+- [x] 3. UI Sample を Stub MoCap Source 経由で動作する provider-agnostic 構成へ再構成する
+- [x] 3.1 Stub MoCap Source / Stub Config / Stub Factory の Runtime 実装を新設する
   - `Packages/com.hidano.realtimeavatarcontroller/Samples~/UI/Runtime/` に `StubMoCapSourceConfig.cs` を新設する (`MoCapSourceConfigBase` 継承の空 SO、`[CreateAssetMenu]` を付与)。
   - 同階層に `StubMoCapSource.cs` を新設する (`IMoCapSource` 実装、`SourceType => "Stub"`、`MotionStream` は `Subject<MotionFrame>().Synchronize().Publish().RefCount()` で空ストリーム emit、Initialize/Shutdown/Dispose の状態機械は `EVMC4UMoCapSource` と同等)。
   - 同階層に `StubMoCapSourceFactory.cs` を新設する (`IMoCapSourceFactory` 実装、`Create` で Config キャストと `StubMoCapSource` 生成、`[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` で `RegistryLocator.MoCapSourceRegistry` へ typeId="Stub" 自己登録、登録衝突時は `RegistryLocator.ErrorChannel` 通知)。
@@ -90,7 +90,7 @@
   - _Requirements: 5.3, 5.4, 5.5_
   - _Boundary: StubMoCapSource, StubMoCapSourceConfig, StubMoCapSourceFactory_
 
-- [ ] 3.2 Stub Editor 自己登録を `Samples.UI.Editor` asmdef に分離追加する
+- [x] 3.2 Stub Editor 自己登録を `Samples.UI.Editor` asmdef に分離追加する
   - `Packages/com.hidano.realtimeavatarcontroller/Samples~/UI/Editor/StubMoCapSourceFactoryEditorRegistrar.cs` を新規作成し、`[UnityEditor.InitializeOnLoadMethod]` で `RegistryLocator.MoCapSourceRegistry` へ typeId="Stub" 自己登録する (VMC 既存実装 `VmcMoCapSourceFactoryEditorRegistrar.cs` と同構造)。
   - 既存の `RealtimeAvatarController.Samples.UI.Editor.asmdef` (`includePlatforms: ["Editor"]`) はそのまま使用し、`asmdef` の編集は不要。
   - `.cs` の `.meta` GUID は新規ランダム生成する。
@@ -99,7 +99,7 @@
   - _Depends: 3.1_
   - _Boundary: StubMoCapSourceFactoryEditorRegistrar_
 
-- [ ] 3.3 UI Sample asmdef references から VMC 参照を削除する
+- [x] 3.3 UI Sample asmdef references から VMC 参照を削除する
   - `Packages/com.hidano.realtimeavatarcontroller/Samples~/UI/Runtime/RealtimeAvatarController.Samples.UI.asmdef` の `references` 配列から `"RealtimeAvatarController.MoCap.VMC"` を削除する。
   - 残存 references が `["RealtimeAvatarController.Core","RealtimeAvatarController.Motion","RealtimeAvatarController.Avatar.Builtin","UniRx","UniTask"]` 構成になることを確認する。
   - Samples~/UI/Runtime 配下の C# ソース内に `using RealtimeAvatarController.MoCap.VMC;` または同 namespace の型直接参照が残っていないことを Grep で確認する。
@@ -108,7 +108,7 @@
   - _Depends: 3.1_
   - _Boundary: UISampleAsmdef_
 
-- [ ] 3.4 Stub Config SO アセットを生成する
+- [x] 3.4 Stub Config SO アセットを生成する
   - `Packages/com.hidano.realtimeavatarcontroller/Samples~/UI/Data/StubMoCapSourceConfig_Shared.asset` を Unity Editor の CreateAssetMenu 経由で新規作成する。
   - 対応 `.meta` の GUID は PowerShell `[guid]::NewGuid().ToString('N')` で乱数 32 桁 hex として生成し、既存 21 GUID と一致しないこと、相互シフトパターンを取らないことを Grep / 目視で確認する。
   - 観測可能な完了状態: `.asset` と `.meta` がリポジトリに追加され、Inspector で Stub Config が表示される。
@@ -116,7 +116,7 @@
   - _Depends: 3.1_
   - _Boundary: StubMoCapSourceConfig_
 
-- [ ] 3.5 SlotSettings_Shared_Slot1/2 の Config 参照を Stub Config に差し替える
+- [x] 3.5 SlotSettings_Shared_Slot1/2 の Config 参照を Stub Config に差し替える
   - Unity Editor で `Packages/com.hidano.realtimeavatarcontroller/Samples~/UI/Data/SlotSettings_Shared_Slot1.asset` を Inspector で開き、`moCapSourceDescriptor.SourceTypeId` を `"VMC"` → `"Stub"` に変更する。
   - 同 `moCapSourceDescriptor.Config` 欄に Stub Config (`StubMoCapSourceConfig_Shared.asset`) をドラッグ&ドロップで割り当て、`Config.guid` を Stub Config の新規 GUID へ更新する。`fileID: 11400000` / `type: 2` は据置。
   - `SlotSettings_Shared_Slot2.asset` も同様に編集する。
@@ -129,15 +129,15 @@
 
 ## Phase 4 — 新パッケージ Samples~/VMC の新設
 
-- [ ] 4. 新パッケージ側に VMC サンプル一式を新設する
-- [ ] 4.1 VMCMoCapSourceConfig_Shared.asset を新パッケージ Samples~/VMC/Data/ へ GUID 据置で移動する
+- [x] 4. 新パッケージ側に VMC サンプル一式を新設する
+- [x] 4.1 VMCMoCapSourceConfig_Shared.asset を新パッケージ Samples~/VMC/Data/ へ GUID 据置で移動する
   - 旧 `Packages/com.hidano.realtimeavatarcontroller/Samples~/UI/Data/VMCMoCapSourceConfig_Shared.asset` および対応 `.meta` を Unity Editor を閉じた状態で `git mv` で新パッケージ `Samples~/VMC/Data/VMCMoCapSourceConfig_Shared.asset` へ移動する。
   - `.meta` の `guid: 5c4569b4a17944fba4667acebe26c25f` を**変更禁止**で据置する (既存 SO 参照を壊さない要)。
   - 観測可能な完了状態: 移動先 `.meta` の GUID 値が `5c4569b4a17944fba4667acebe26c25f` であることを確認できる。
   - _Requirements: 6.2_
   - _Boundary: VmcSamples_
 
-- [ ] 4.2 (P) 新パッケージ単独完結用 BuiltinAvatarProviderConfig_VmcDemo.asset を新規作成する
+- [x] 4.2 (P) 新パッケージ単独完結用 BuiltinAvatarProviderConfig_VmcDemo.asset を新規作成する
   - `Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/Samples~/VMC/Data/BuiltinAvatarProviderConfig_VmcDemo.asset` を Unity Editor の CreateAssetMenu 経由で新規作成する (script ref はコアパッケージの `BuiltinAvatarProviderConfig`、`avatarPrefab` は `null` で利用者が VMC 受信デモで Inspector から設定する前提)。
   - **UI Sample 側の `BuiltinAvatarProviderConfig_AvatarA.asset` 等とは Sample 間 GUID 参照を持たない独立コピー**として作成する (Unity Sample import 時のバージョンサフィックス付きパス展開への耐性確保)。
   - `.meta` GUID は乱数 32 桁 hex で新規生成する。
@@ -145,7 +145,7 @@
   - _Requirements: 6.3_
   - _Boundary: VmcSamples_
 
-- [ ] 4.3 SlotSettings_VMC_Slot1.asset を新規作成する
+- [x] 4.3 SlotSettings_VMC_Slot1.asset を新規作成する
   - `Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/Samples~/VMC/Data/SlotSettings_VMC_Slot1.asset` を新規作成する。
   - `slotId: "vmc-slot-01"` / `displayName: "VMC Slot 1"`、`avatarProviderDescriptor.ProviderTypeId: "Builtin"` + `Config` 参照は同パッケージ `BuiltinAvatarProviderConfig_VmcDemo.asset`、`moCapSourceDescriptor.SourceTypeId: "VMC"` + `Config` 参照は移動済み `VMCMoCapSourceConfig_Shared.asset` (GUID `5c4569b4a17944fba4667acebe26c25f`) を割当てる。
   - `.meta` GUID は乱数生成する。
@@ -154,7 +154,7 @@
   - _Depends: 4.1, 4.2_
   - _Boundary: VmcSamples_
 
-- [ ] 4.4 VMCReceiveDemo.unity シーンを新規作成する
+- [x] 4.4 VMCReceiveDemo.unity シーンを新規作成する
   - `Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/Samples~/VMC/Scenes/VMCReceiveDemo.unity` を新規作成する。
   - 最小構成: Camera + DirectionalLight + `SlotManagerBehaviour` (initialSlots に `SlotSettings_VMC_Slot1` を割当)。
   - `.meta` GUID は乱数生成する。
@@ -169,30 +169,30 @@
 
 > **重要**: Phase 5 のすべての削除タスクは Subagent 実行不可 (`feedback_subagent_file_deletion.md` ルールにより `rm` / `git rm` が Subagent から呼べない)。**必ず親セッションで実施**する。
 
-- [ ] 5. コアパッケージから旧 VMC パスを完全削除する **(親セッション専用 / Subagent 不可)**
-- [ ] 5.1 旧 VMC Runtime ディレクトリをコアパッケージから削除する **(親セッション専用)**
+- [x] 5. コアパッケージから旧 VMC パスを完全削除する **(親セッション専用 / Subagent 不可)**
+- [x] 5.1 旧 VMC Runtime ディレクトリをコアパッケージから削除する **(親セッション専用)**
   - Unity Editor を閉じた状態で `git rm -r Packages/com.hidano.realtimeavatarcontroller/Runtime/MoCap/VMC/` を親セッションで実行する。配下の `.cs` / `.asmdef` / `.meta` および `MoCap/VMC/` ディレクトリ自体の `.meta` も含めて完全削除する。
   - 観測可能な完了状態: コアパッケージ Runtime/MoCap/ 配下に VMC ディレクトリと残存 `.meta` が一切存在しない。
   - _Requirements: 2.7_
 
-- [ ] 5.2 旧 VMC Editor ディレクトリをコアパッケージから削除する **(親セッション専用)**
+- [x] 5.2 旧 VMC Editor ディレクトリをコアパッケージから削除する **(親セッション専用)**
   - 親セッションで `git rm -r Packages/com.hidano.realtimeavatarcontroller/Editor/MoCap/VMC/` を実行する。
   - 観測可能な完了状態: コアパッケージ Editor/MoCap/ 配下に VMC ディレクトリと `.meta` が残存しない。
   - _Requirements: 3.5_
 
-- [ ] 5.3 旧 VMC EditMode/PlayMode テストディレクトリをコアパッケージから削除する **(親セッション専用)**
+- [x] 5.3 旧 VMC EditMode/PlayMode テストディレクトリをコアパッケージから削除する **(親セッション専用)**
   - 親セッションで `git rm -r Packages/com.hidano.realtimeavatarcontroller/Tests/EditMode/mocap-vmc/` および `git rm -r Packages/com.hidano.realtimeavatarcontroller/Tests/PlayMode/mocap-vmc/` を実行する。
   - 観測可能な完了状態: コアパッケージ Tests/EditMode および Tests/PlayMode 配下に `mocap-vmc/` ディレクトリが存在しない。
   - _Requirements: 4.5_
 
-- [ ] 5.4 旧 UI Sample 内 VMCMoCapSourceConfig_Shared.asset の削除確認 **(親セッション専用)**
+- [x] 5.4 旧 UI Sample 内 VMCMoCapSourceConfig_Shared.asset の削除確認 **(親セッション専用)**
   - Phase 4.1 の `git mv` により旧 `Packages/com.hidano.realtimeavatarcontroller/Samples~/UI/Data/VMCMoCapSourceConfig_Shared.asset(.meta)` は新パッケージ側へ既に移動済み。改めて Git status で旧位置に該当ファイルが**残存していない**ことを親セッションで確認する。
   - 万一旧位置に残存ファイルがあれば `git rm` で削除する。
   - 観測可能な完了状態: コアパッケージ `Samples~/UI/Data/` 配下に `VMCMoCapSourceConfig_Shared.asset` が存在しない。
   - _Requirements: 5.8_
   - _Depends: 4.1_
 
-- [ ] 5.5 コアパッケージ内 VMC 名前参照ゼロ件を Grep で検証する
+- [x] 5.5 コアパッケージ内 VMC 名前参照ゼロ件を Grep で検証する
   - `Packages/com.hidano.realtimeavatarcontroller/` 配下の全 `.cs` および `.asmdef` に対し `Grep "RealtimeAvatarController.MoCap.VMC"` および `Grep "EVMC4U"` および `Grep "uOSC.Runtime"` を実行し、ヒットゼロ件を確認する。
   - ヒットがあれば該当 asmdef を不合格として扱い、Phase 3 / 5 の修正完了まで Phase 6 に進まない。
   - 観測可能な完了状態: コアパッケージ全 `.cs` / `.asmdef` で VMC / EVMC4U / uOSC.Runtime 関連名前参照が全件ヒットゼロ。
@@ -203,8 +203,8 @@
 
 ## Phase 6 — ドキュメンテーション (README / CHANGELOG / steering)
 
-- [ ] 6. 両パッケージのドキュメントとプロジェクト steering を新構成に整合させる
-- [ ] 6.1 (P) コアパッケージ README に VMC 分離記述を追記する
+- [x] 6. 両パッケージのドキュメントとプロジェクト steering を新構成に整合させる
+- [x] 6.1 (P) コアパッケージ README に VMC 分離記述を追記する
   - リポジトリルートまたは `Packages/com.hidano.realtimeavatarcontroller/README.md` に「VMC 受信機能は別パッケージ `com.hidano.realtimeavatarcontroller.mocap-vmc` に分離されました」記述を追加する。
   - VMC 利用者向け移行手順 (新パッケージ追加導入の手順) と新パッケージ README へのリンクを記載する。
   - 「UI Sample は Stub MoCap Source 経由で動作し、Slot UI 検証が VMC 不要で完結する」旨を明記する。
@@ -212,14 +212,14 @@
   - _Requirements: 5.10, 9.1_
   - _Boundary: CoreReadmeUpdate_
 
-- [ ] 6.2 (P) コアパッケージ CHANGELOG に変更記録を追加する
+- [x] 6.2 (P) コアパッケージ CHANGELOG に変更記録を追加する
   - `Packages/com.hidano.realtimeavatarcontroller/CHANGELOG.md` に新バージョン (例: `[0.2.0] - YYYY-MM-DD`) を追記する。
   - `### Removed` (VMC Runtime / Editor / Tests / Sample Data 移動)、`### Changed` (UI Sample asmdef references / SlotSettings 差替)、`### Added` (Stub MoCap Source / Stub Config 新設)、`### Migration` (利用者向け案内) のセクションを記述する。
   - 観測可能な完了状態: CHANGELOG に新バージョンエントリが追加される。
   - _Requirements: 9.2_
   - _Boundary: CoreChangelogUpdate_
 
-- [ ] 6.3 (P) 新パッケージ README を新設する
+- [x] 6.3 (P) 新パッケージ README を新設する
   - `Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/README.md` を新規作成する。
   - 導入手順 (`manifest.json` への両パッケージ追加方法)、利用者準備手順 (a. `Assets/EVMC4U/` への EVMC4U インポート、b. EVMC4U 用 asmdef 自作手順 — 本家 unitypackage に asmdef が含まれない理由含む、c. uOSC 導入手順、d. コアパッケージとのバージョン整合確認) を記載する。
   - 既存 `mocap-vmc` Spec で確定した動作 (typeId="VMC" / 属性ベース自己登録 / 共有 ExternalReceiver / `HumanoidMotionFrame` 発行) が新パッケージ移行後も継承される旨を明記する。
@@ -228,14 +228,14 @@
   - _Requirements: 6.5, 8.3, 8.4, 8.5, 9.3_
   - _Boundary: NewPackageReadme_
 
-- [ ] 6.4 (P) 新パッケージ CHANGELOG を新設する
+- [x] 6.4 (P) 新パッケージ CHANGELOG を新設する
   - `Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/CHANGELOG.md` を新規作成する。
   - `[0.1.0] - YYYY-MM-DD` 初回バージョンエントリ。`### Added` で旧コアパッケージから移動したファイル群 (Runtime / Editor / Tests / Sample Data) の要約と動作確認済みバージョン表 (UniRx / uOSC / EVMC4U / Unity) を記述する。
   - 観測可能な完了状態: CHANGELOG が作成される。
   - _Requirements: 9.4_
   - _Boundary: NewPackageChangelog_
 
-- [ ] 6.5 (P) `.kiro/steering/structure.md` を新規作成する
+- [x] 6.5 (P) `.kiro/steering/structure.md` を新規作成する
   - `.kiro/steering/structure.md` を新規作成し、`## Packages` (両パッケージ概要)、`## Dependency Direction` (新 → コア一方向)、`## Sample Imports` (UI Sample / VMC Sample 併用パターン) の最小スコープで記述する。
   - 既存 `tech.md` / `product.md` 等が `.kiro/steering/` に存在しないため新規作成のみで完結する。
   - 観測可能な完了状態: steering ファイルが作成され、後続 spec が依存マップを参照できる。
@@ -248,8 +248,8 @@
 
 > 検証手順は `.kiro/specs/mocap-vmc-package-split/validation.md` または README に記録し、再現可能な runbook 形式で残す (要件 10.6)。
 
-- [ ] 7. 検証シナリオ A / B を実施し合否を判定する
-- [ ] 7.1 検証シナリオ A — コアパッケージ単独運用での合否判定
+- [x] 7. 検証シナリオ A / B を実施し合否を判定する
+- [x] 7.1 検証シナリオ A — コアパッケージ単独運用での合否判定
   - 新規 Unity プロジェクト (Unity 6000.3.10f1) に対し `Packages/manifest.json.dependencies` にコアパッケージのみ追加する (新パッケージ・EVMC4U・uOSC は追加しない)。
   - Unity Editor を起動し Console をクリア後、コンパイルを実行して **Errors == 0** を確認する。
   - Package Manager で UI Sample をインポートし、`Assets/Samples/Realtime Avatar Controller/<version>/UI/Scenes/SlotManagementDemo.unity` を開く。Console Errors == 0 を確認する。
@@ -259,7 +259,7 @@
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 10.1, 10.3, 10.5, 10.6_
   - _Depends: 5.5, 6.5_
 
-- [ ] 7.2 検証シナリオ B — 両パッケージ + EVMC4U + uOSC 環境での合否判定
+- [x] 7.2 検証シナリオ B — 両パッケージ + EVMC4U + uOSC 環境での合否判定
   - 検証シナリオ A の環境に対し、新パッケージを `manifest.json.dependencies` に追加。`Assets/EVMC4U/` に EVMC4U unitypackage を取り込み `EVMC4U.asmdef` (`name: "EVMC4U"`, `references: ["uOSC.Runtime"]`) を新規作成する。uOSC を `manifest.json.dependencies` に追加する。
   - Unity Editor を再起動し Console Errors == 0 を確認する。
   - `Window → General → Test Runner` で `EditMode` / `PlayMode` の `RealtimeAvatarController.MoCap.VMC.Tests.*` を全件実行し、**全 pass** を合否基準とする。または CLI: `Unity.exe -batchmode -runTests -projectPath <path> -testPlatform EditMode|PlayMode -testResults <path>` で検証する。
@@ -268,7 +268,7 @@
   - _Requirements: 1.7, 4.4, 6.4, 8.1, 8.2, 10.2, 10.4, 10.5, 10.6_
   - _Depends: 7.1_
 
-- [ ] 7.3 spec 完了判定と未完了時 rollback 手順の確認
+- [x] 7.3 spec 完了判定と未完了時 rollback 手順の確認
   - シナリオ A / B のいずれかが失敗した場合は本 spec を未完了として扱い、原因特定後に再実施する (要件 10.5)。
   - rollback triggers (design.md Migration Strategy 参照): Phase 2 後にテスト未列挙 → Phase 1 まで `git revert`、Phase 3 後にコア単独コンパイル失敗 → Phase 2 まで `git revert`、Phase 5 後にシナリオ A 失敗 → Phase 4 まで `git revert`。
   - 観測可能な完了状態: シナリオ A / B 双方が pass し、`spec.json.phase` を `tasks-approved` または後続実装フェーズへ遷移可能な状態となる。

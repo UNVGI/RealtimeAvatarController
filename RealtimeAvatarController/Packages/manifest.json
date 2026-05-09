@@ -21,6 +21,7 @@
     "com.hidano.realtimeavatarcontroller.mocap-vmc"
   ],
   "dependencies": {
+    "com.cysharp.unitask": "2.5.10",
     "com.hidano.realtimeavatarcontroller.mocap-vmc": "file:com.hidano.realtimeavatarcontroller.mocap-vmc",
     "com.hidano.uosc": "1.0.0",
     "com.neuecc.unirx": "7.1.0",

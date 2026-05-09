@@ -1,10 +1,25 @@
 {
   "dependencies": {
+    "com.cysharp.unitask": {
+      "version": "2.5.10",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://package.openupm.com"
+    },
     "com.hidano.realtimeavatarcontroller": {
       "version": "file:com.hidano.realtimeavatarcontroller",
       "depth": 0,
       "source": "embedded",
       "dependencies": {}
+    },
+    "com.hidano.realtimeavatarcontroller.mocap-vmc": {
+      "version": "file:com.hidano.realtimeavatarcontroller.mocap-vmc",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.hidano.realtimeavatarcontroller": "0.1.0"
+      }
     },
     "com.hidano.uosc": {
       "version": "1.0.0",
