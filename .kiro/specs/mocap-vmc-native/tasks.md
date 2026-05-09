@@ -262,7 +262,7 @@
 > 利用者向け準備手順を「uOSC を導入する。これだけ。」 に縮約し、 EVMC4U 撤廃の breaking change を記録する。
 > EVMC4U inspiration credit と uOSC / UniVRM credit を `THIRD_PARTY_NOTICES.md` にまとめる。
 
-- [ ] 8. パッケージドキュメント全面改訂
+- [x] 8. パッケージドキュメント全面改訂
 - [x] 8.1 (P) パッケージ README 全面改訂
   - `Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/README.md` の利用者準備手順を「uOSC を導入する。これだけ。」 に縮約する
   - EVMC4U `.unitypackage` インポート / `EVMC4U.asmdef` 自作 / `evmc4u.patch git apply` の旧手順を全削除する
@@ -291,7 +291,7 @@
   - 観測完了条件: ルート / core README の VMC 関連記述が「uOSC のみ依存」 表現に統一される
   - _Requirements: 12.3_
   - _Boundary: README.md (root / core)_
-- [ ] 8.5 .kiro/steering/structure.md の VMC パッケージ説明更新
+- [x] 8.5 .kiro/steering/structure.md の VMC パッケージ説明更新
   - `.kiro/steering/structure.md` の VMC パッケージ説明を「EVMC4U 連携による VMC 受信」 から「自前実装による VMC 受信 (uOSC のみ依存)」 へ更新する
   - 利用者側セットアップ要件記述を「core + uOSC」に変更する (EVMC4U を除外)
   - 観測完了条件: structure.md を読んだ AI / 開発者が「VMC パッケージは EVMC4U 不要」 と理解できる状態になる
