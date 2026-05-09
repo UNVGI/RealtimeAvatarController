@@ -326,7 +326,7 @@
   - 観測完了条件: Runtime ループバックでアバター追従、 自動 integration test GREEN
   - _Requirements: 1.1, 1.2, 1.3, 1.5, 2.1, 2.2, 5.2, 5.5, 11.1_
   - _Boundary: VMC sample 統合_
-- [ ] 9.4* アプリ層 Tick あたり alloc 0 byte 計測
+- [x] 9.4* アプリ層 Tick あたり alloc 0 byte 計測
   - Unity Profiler `GC.Allocated` を `_writeBufferRef` への copy + swap + `new HumanoidMotionFrame` 区間に限定して計測する
   - `HumanoidMotionFrame` 1 個分 (= 既知の不可避 alloc) 以外が 0 byte であることを確認する
   - IL2CPP / Mono 双方で計測する (uOSC 由来 boxing は計測区間外)
