@@ -73,7 +73,7 @@
   - 観測完了条件: テストが「型が存在しない」 ビルドエラーで失敗する (RED 確認)
   - _Requirements: 1.3, 1.4, 2.1, 2.2, 2.6, 3.3, 9.5, 9.6_
   - _Boundary: VmcOscMessageRouter (新規 internal static)_
-- [ ] 2.2 GREEN: IVmcBoneRotationWriter + VmcOscMessageRouter を実装してテストを通す
+- [x] 2.2 GREEN: IVmcBoneRotationWriter + VmcOscMessageRouter を実装してテストを通す
   - `Runtime/VmcOscMessageRouter.cs` を新規作成 (ランダム GUID `.meta` 付き)
   - 同ファイル内または同じ Runtime 配下に `internal interface IVmcBoneRotationWriter { WriteBoneRotation; WriteRoot; }` を定義
   - address 定数 `AddressBonePos = "/VMC/Ext/Bone/Pos"` / `AddressRootPos = "/VMC/Ext/Root/Pos"` を定義
