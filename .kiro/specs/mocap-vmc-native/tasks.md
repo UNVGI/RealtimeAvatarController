@@ -45,7 +45,7 @@
   - 観測完了条件: テストが「型が存在しない」 ビルドエラーで失敗する状態に到達 (RED 確認)
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 9.5_
   - _Boundary: VmcBoneNameMap (新規 internal static)_
-- [ ] 1.2 GREEN: VmcBoneNameMap を実装してテストを通す
+- [x] 1.2 GREEN: VmcBoneNameMap を実装してテストを通す
   - `Runtime/VmcBoneNameMap.cs` を新規作成 (ランダム GUID `.meta` 付き)
   - `static readonly Dictionary<string, HumanBodyBones>` を cctor で `Enum.GetValues(typeof(HumanBodyBones))` から構築し、 `LastBone` を除外する (`StringComparer.Ordinal`)
   - `TryGetValue(string boneName, out HumanBodyBones bone)` を public 静的 API として提供する
