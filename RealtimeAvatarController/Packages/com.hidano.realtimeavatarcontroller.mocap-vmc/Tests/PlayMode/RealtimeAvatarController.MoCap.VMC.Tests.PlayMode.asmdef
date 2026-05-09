@@ -7,7 +7,7 @@
     "RealtimeAvatarController.MoCap.VMC",
     "RealtimeAvatarController.Core",
     "RealtimeAvatarController.Motion",
-    "EVMC4U",
+    "uOSC.Runtime",
     "UniTask"
   ],
   "includePlatforms": [],

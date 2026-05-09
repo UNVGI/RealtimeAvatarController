@@ -196,7 +196,7 @@
   - 観測完了条件: Factory.Create が VMCMoCapSource インスタンスを返す
   - _Requirements: 5.3, 7.4, 8.1_
   - _Boundary: VMCMoCapSourceFactory_
-- [ ] 5.2 4 つの asmdef references から "EVMC4U" を一括削除
+- [x] 5.2 4 つの asmdef references から "EVMC4U" を一括削除
   - `Runtime/RealtimeAvatarController.MoCap.VMC.asmdef` の `references` 配列から `"EVMC4U"` を削除し `"uOSC.Runtime"` を維持する
   - `Editor/RealtimeAvatarController.MoCap.VMC.Editor.asmdef` を確認し `"EVMC4U"` 参照があれば削除する (元から無い想定だが verify)
   - `Tests/EditMode/RealtimeAvatarController.MoCap.VMC.Tests.EditMode.asmdef` の `references` から `"EVMC4U"` 削除、 `"uOSC.Runtime"` 維持

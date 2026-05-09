@@ -7,8 +7,7 @@
     "RealtimeAvatarController.MoCap.VMC",
     "RealtimeAvatarController.Core",
     "RealtimeAvatarController.Motion",
-    "uOSC.Runtime",
-    "EVMC4U"
+    "uOSC.Runtime"
   ],
   "includePlatforms": ["Editor"],
   "excludePlatforms": [],
