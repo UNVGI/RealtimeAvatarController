@@ -59,7 +59,7 @@
   - _Requirements: 3.1, 3.5_
   - _Boundary: VmcBoneNameMap_
 
-- [ ] 2. VmcOscMessageRouter: OSC address dispatch + 8 引数構造解釈
+- [x] 2. VmcOscMessageRouter: OSC address dispatch + 8 引数構造解釈
 - [x] 2.1 (P) RED: VmcOscMessageRouterTests を先行作成して失敗状態を確認
   - `Tests/EditMode/VmcOscMessageRouterTests.cs` を新規作成 (ランダム GUID `.meta` 付き)
   - `IVmcBoneRotationWriter` の test double (mock / fake) を作成する
@@ -84,7 +84,7 @@
   - 観測完了条件: 2.1 で追加した全テストが GREEN になる
   - _Requirements: 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.3, 3.4, 10.2, 10.3, 11.2_
   - _Boundary: VmcOscMessageRouter, IVmcBoneRotationWriter_
-- [ ] 2.3 REFACTOR: test seam の追加と alloc 0 確認
+- [x] 2.3 REFACTOR: test seam の追加と alloc 0 確認
   - `internal static bool TryParseBoneMessage(in uOSC.Message, out HumanBodyBones, out Quaternion)` および `TryParseRootMessage(...)` を test seam として公開する
   - 上記 test seam を直接呼ぶ単体テストを追加する
   - dispatch table に列挙された全 silently-ignored アドレス (`/VMC/Ext/Blend/*` / `/VMC/Ext/Cam` / `/VMC/Ext/Light` / `/VMC/Ext/Hmd/*` / `/VMC/Ext/Con/*` / `/VMC/Ext/Tra/*` / `/VMC/Ext/Setting/*` / `/VMC/Ext/OK` / `/VMC/Ext/T` / `/VMC/Ext/VRM` / `/VMC/Ext/Root/T`) について writer 呼出なしを検証する

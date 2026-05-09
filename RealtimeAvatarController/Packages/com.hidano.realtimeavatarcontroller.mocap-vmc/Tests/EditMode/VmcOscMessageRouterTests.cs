@@ -11,6 +11,189 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         private const string RootPosAddress = "/VMC/Ext/Root/Pos";
 
         [Test]
+        public void TryParseBoneMessage_WithValidBoneMessage_ReturnsBoneAndRotation()
+        {
+            var message = CreateMessage(
+                BonePosAddress,
+                "Hips",
+                1f,
+                2f,
+                3f,
+                0.1f,
+                0.2f,
+                0.3f,
+                0.4f);
+
+            var parsed = VmcOscMessageRouter.TryParseBoneMessage(
+                in message,
+                out var bone,
+                out var rotation);
+
+            Assert.That(parsed, Is.True);
+            Assert.That(bone, Is.EqualTo(HumanBodyBones.Hips));
+            Assert.That(rotation.x, Is.EqualTo(0.1f));
+            Assert.That(rotation.y, Is.EqualTo(0.2f));
+            Assert.That(rotation.z, Is.EqualTo(0.3f));
+            Assert.That(rotation.w, Is.EqualTo(0.4f));
+        }
+
+        [TestCase(0)]
+        [TestCase(7)]
+        [TestCase(9)]
+        public void TryParseBoneMessage_WithLengthMismatch_ReturnsFalse(int argumentCount)
+        {
+            var message = CreateMessage(BonePosAddress, CreateArguments(BonePosAddress, argumentCount));
+
+            var parsed = VmcOscMessageRouter.TryParseBoneMessage(
+                in message,
+                out _,
+                out _);
+
+            Assert.That(parsed, Is.False);
+        }
+
+        [Test]
+        public void TryParseBoneMessage_WithTypeMismatch_ReturnsFalse()
+        {
+            var message = CreateMessage(
+                BonePosAddress,
+                "Hips",
+                1f,
+                2f,
+                3f,
+                "not-a-float",
+                0.2f,
+                0.3f,
+                0.4f);
+
+            var parsed = VmcOscMessageRouter.TryParseBoneMessage(
+                in message,
+                out _,
+                out _);
+
+            Assert.That(parsed, Is.False);
+        }
+
+        [Test]
+        public void TryParseBoneMessage_WithUnknownBoneName_ReturnsFalse()
+        {
+            var message = CreateMessage(
+                BonePosAddress,
+                "Foo",
+                1f,
+                2f,
+                3f,
+                0.1f,
+                0.2f,
+                0.3f,
+                0.4f);
+
+            var parsed = VmcOscMessageRouter.TryParseBoneMessage(
+                in message,
+                out _,
+                out _);
+
+            Assert.That(parsed, Is.False);
+        }
+
+        [Test]
+        public void TryParseRootMessage_WithEightArguments_ReturnsPositionAndRotation()
+        {
+            var message = CreateMessage(
+                RootPosAddress,
+                "root",
+                1f,
+                2f,
+                3f,
+                0.1f,
+                0.2f,
+                0.3f,
+                0.4f);
+
+            var parsed = VmcOscMessageRouter.TryParseRootMessage(
+                in message,
+                out var position,
+                out var rotation);
+
+            Assert.That(parsed, Is.True);
+            Assert.That(position, Is.EqualTo(new Vector3(1f, 2f, 3f)));
+            Assert.That(rotation.x, Is.EqualTo(0.1f));
+            Assert.That(rotation.y, Is.EqualTo(0.2f));
+            Assert.That(rotation.z, Is.EqualTo(0.3f));
+            Assert.That(rotation.w, Is.EqualTo(0.4f));
+        }
+
+        [Test]
+        public void TryParseRootMessage_WithFourteenArguments_UsesFirstEightArguments()
+        {
+            var message = CreateMessage(
+                RootPosAddress,
+                "root",
+                1f,
+                2f,
+                3f,
+                0.1f,
+                0.2f,
+                0.3f,
+                0.4f,
+                10f,
+                11f,
+                12f,
+                13f,
+                14f,
+                15f);
+
+            var parsed = VmcOscMessageRouter.TryParseRootMessage(
+                in message,
+                out var position,
+                out var rotation);
+
+            Assert.That(parsed, Is.True);
+            Assert.That(position, Is.EqualTo(new Vector3(1f, 2f, 3f)));
+            Assert.That(rotation.x, Is.EqualTo(0.1f));
+            Assert.That(rotation.y, Is.EqualTo(0.2f));
+            Assert.That(rotation.z, Is.EqualTo(0.3f));
+            Assert.That(rotation.w, Is.EqualTo(0.4f));
+        }
+
+        [TestCase(0)]
+        [TestCase(7)]
+        [TestCase(9)]
+        public void TryParseRootMessage_WithLengthMismatch_ReturnsFalse(int argumentCount)
+        {
+            var message = CreateMessage(RootPosAddress, CreateArguments(RootPosAddress, argumentCount));
+
+            var parsed = VmcOscMessageRouter.TryParseRootMessage(
+                in message,
+                out _,
+                out _);
+
+            Assert.That(parsed, Is.False);
+        }
+
+        [Test]
+        public void TryParseRootMessage_WithTypeMismatch_ReturnsFalse()
+        {
+            var message = CreateMessage(
+                RootPosAddress,
+                "root",
+                "not-a-float",
+                2f,
+                3f,
+                0.1f,
+                0.2f,
+                0.3f,
+                0.4f);
+
+            var parsed = VmcOscMessageRouter.TryParseRootMessage(
+                in message,
+                out _,
+                out _);
+
+            Assert.That(parsed, Is.False);
+        }
+
+        [Test]
         public void RouteMessage_WithBonePosEightArguments_WritesBoneRotationOnce()
         {
             var writer = new FakeVmcBoneRotationWriter();
@@ -151,13 +334,19 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
             AssertNoWrites(writer);
         }
 
+        [TestCase("/VMC/Ext/Blend/Apply")]
         [TestCase("/VMC/Ext/Blend/Val")]
         [TestCase("/VMC/Ext/Cam")]
+        [TestCase("/VMC/Ext/Light")]
+        [TestCase("/VMC/Ext/Hmd/Pos")]
+        [TestCase("/VMC/Ext/Con/Pos")]
+        [TestCase("/VMC/Ext/Tra/Pos")]
+        [TestCase("/VMC/Ext/Setting/Color")]
         [TestCase("/VMC/Ext/OK")]
         [TestCase("/VMC/Ext/T")]
         [TestCase("/VMC/Ext/VRM")]
         [TestCase("/VMC/Ext/Root/T")]
-        public void RouteMessage_WithUnknownOscAddress_DoesNotCallWriterWithoutException(string address)
+        public void RouteMessage_WithSilentlyIgnoredOscAddress_DoesNotCallWriterWithoutException(string address)
         {
             var writer = new FakeVmcBoneRotationWriter();
             var message = CreateMessage(

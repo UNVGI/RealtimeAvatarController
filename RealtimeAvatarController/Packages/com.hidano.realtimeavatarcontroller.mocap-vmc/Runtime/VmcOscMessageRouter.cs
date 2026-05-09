@@ -23,20 +23,32 @@ namespace RealtimeAvatarController.MoCap.VMC
 
             if (message.address == AddressBonePos)
             {
-                RouteBonePosition(in message, writer);
+                if (TryParseBoneMessage(in message, out var bone, out var rotation))
+                {
+                    writer.WriteBoneRotation(bone, rotation);
+                }
             }
             else if (message.address == AddressRootPos)
             {
-                RouteRootPosition(in message, writer);
+                if (TryParseRootMessage(in message, out var position, out var rotation))
+                {
+                    writer.WriteRoot(position, rotation);
+                }
             }
         }
 
-        private static void RouteBonePosition(in uOSC.Message message, IVmcBoneRotationWriter writer)
+        internal static bool TryParseBoneMessage(
+            in uOSC.Message message,
+            out HumanBodyBones bone,
+            out Quaternion rotation)
         {
+            bone = default;
+            rotation = default;
+
             var values = message.values;
             if (values == null || values.Length != 8)
             {
-                return;
+                return false;
             }
 
             if (!(values[0] is string boneName) ||
@@ -45,30 +57,38 @@ namespace RealtimeAvatarController.MoCap.VMC
                 !(values[6] is float rotZ) ||
                 !(values[7] is float rotW))
             {
-                return;
+                return false;
             }
 
             if (!(values[1] is float) ||
                 !(values[2] is float) ||
                 !(values[3] is float))
             {
-                return;
+                return false;
             }
 
-            if (!VmcBoneNameMap.TryGetValue(boneName, out var bone))
+            if (!VmcBoneNameMap.TryGetValue(boneName, out var parsedBone))
             {
-                return;
+                return false;
             }
 
-            writer.WriteBoneRotation(bone, new Quaternion(rotX, rotY, rotZ, rotW));
+            bone = parsedBone;
+            rotation = new Quaternion(rotX, rotY, rotZ, rotW);
+            return true;
         }
 
-        private static void RouteRootPosition(in uOSC.Message message, IVmcBoneRotationWriter writer)
+        internal static bool TryParseRootMessage(
+            in uOSC.Message message,
+            out Vector3 position,
+            out Quaternion rotation)
         {
+            position = default;
+            rotation = default;
+
             var values = message.values;
             if (values == null || (values.Length != 8 && values.Length != 14))
             {
-                return;
+                return false;
             }
 
             if (!(values[0] is string) ||
@@ -80,12 +100,12 @@ namespace RealtimeAvatarController.MoCap.VMC
                 !(values[6] is float rotZ) ||
                 !(values[7] is float rotW))
             {
-                return;
+                return false;
             }
 
-            writer.WriteRoot(
-                new Vector3(posX, posY, posZ),
-                new Quaternion(rotX, rotY, rotZ, rotW));
+            position = new Vector3(posX, posY, posZ);
+            rotation = new Quaternion(rotX, rotY, rotZ, rotW);
+            return true;
         }
     }
 }
