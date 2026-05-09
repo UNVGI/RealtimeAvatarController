@@ -1,9 +1,9 @@
 {
   "feature_name": "mocap-vmc-native",
   "created_at": "2026-05-09T19:07:39Z",
-  "updated_at": "2026-05-09T22:00:00Z",
+  "updated_at": "2026-05-09T22:30:00Z",
   "language": "ja",
-  "phase": "design-generated",
+  "phase": "tasks-generated",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -14,11 +14,11 @@
       "approved": true
     },
     "tasks": {
-      "generated": false,
-      "approved": false
+      "generated": true,
+      "approved": true
     }
   },
-  "ready_for_implementation": false,
+  "ready_for_implementation": true,
   "history": [
     {
       "renamed_from": "mocap-vmc-reflection-loading",
@@ -34,6 +34,11 @@
       "event": "design-generated",
       "performed_at": "2026-05-09T22:00:00Z",
       "summary": "design.md / research.md を生成 (auto-approve)。 R-A〜R-H の 8 件 research item を実コード読解に基づき決定: ダブルバッファリング (Decision A)、 Tick 境界配置 (Decision B、 VMCSharedReceiver.Update 末尾)、 bind 失敗検出経路 (Decision C、 _server.isRunning 判定)、 クラス命名 (Decision D、 既存準拠の VMCMoCapSource / VMCSharedReceiver)、 所有権契約補完 (Decision E、 同 frame 完結性前提を Spec 内自己宣言)。 uOSC `DotNet/Udp.StartServer` の bind 失敗握り潰しを発見し R-11.4 経路を再設計。 file-level migration plan (rename + GUID transplant 5 件、 削除 2 件、 新規 5 件) を確定。"
+    },
+    {
+      "event": "tasks-generated",
+      "performed_at": "2026-05-09T22:30:00Z",
+      "summary": "tasks.md を生成 (auto-approve)。 Phase 0 (親セッション専用 rm + OBSOLETE マーカ) → Phase 1 (VmcBoneNameMap / VmcOscMessageRouter TDD、 並列可) → Phase 2 (VMCSharedReceiver リネーム + GUID 移植) → Phase 3 (VMCMoCapSource リネーム + GUID 移植 + ダブルバッファ swap) → Phase 4 (Factory + asmdef references 一括更新、 N-R3 atomic 制約) → Phase 5 (PlayMode テスト書換 + 不変系テスト調整) → Phase 6 (README / CHANGELOG / steering / THIRD_PARTY_NOTICES) → Phase 7 (Compile A/B/Runtime C 検証) の 8 phase 構成。 全 R1〜R12 要件を担当タスクに mapping し、 R-8.4 / R-11.6 は設計フェーズ既決として coverage note で除外明示。 (P) 並列マーカは Phase 1 (1.1, 2.1) / Phase 6 (8.1, 8.2, 8.3) / Phase 5 (7.1, 7.2) に適用。"
     }
   ]
 }
