@@ -22,6 +22,8 @@ namespace RealtimeAvatarController.MoCap.VMC
         private Dictionary<HumanBodyBones, Quaternion> _writeRotations = new(64);
         private Vector3 _writeRootPosition;
         private Quaternion _writeRootRotation = Quaternion.identity;
+        // MainThread only: Subscribe/Unsubscribe and Update-driven Tick iteration run on Unity's
+        // main thread, so this HashSet does not require locking or thread-safe add/remove.
         private readonly HashSet<IVmcMoCapAdapter> _subscribers = new();
         private readonly List<IVmcMoCapAdapter> _tickSnapshot = new();
 

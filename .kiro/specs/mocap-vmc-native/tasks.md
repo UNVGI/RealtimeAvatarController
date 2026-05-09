@@ -99,7 +99,7 @@
 > Phase 1 で作成した `VmcOscMessageRouter` / `IVmcBoneRotationWriter` / `VmcBoneNameMap` に依存する。
 > 旧 `EVMC4USharedReceiver.cs` GUID `58052dfd9ff9ad04cae524187979f918` を新ファイルへ移植し、 `using EVMC4U;` を削除して uOSC 直接購読構造へ書換える。
 
-- [ ] 3. VMCSharedReceiver: uOSC 直接購読 + refCount lifecycle
+- [x] 3. VMCSharedReceiver: uOSC 直接購読 + refCount lifecycle
 - [x] 3.1 RED: VMCSharedReceiverTests を新規作成して失敗状態を確認
   - `Tests/EditMode/VMCSharedReceiverTests.cs` を新規作成 (ランダム GUID `.meta` 付き、 削除された旧 `EVMC4USharedReceiverTests.cs` の history は継承しない)
   - `EnsureInstance` 初回で GameObject + uOscServer + receiver 自身が AddComponent されることを検証
@@ -127,7 +127,7 @@
   - 観測完了条件: 3.1 のテストが GREEN、 `Runtime/` 配下に `EVMC4USharedReceiver.cs` が存在せず `VMCSharedReceiver.cs` が GUID `58052dfd9ff9ad04cae524187979f918` を保持する
   - _Requirements: 1.1, 1.2, 1.5, 1.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 6.3, 7.4, 8.2, 8.3, 8.6, 8.7, 11.3, 11.4_
   - _Boundary: VMCSharedReceiver_
-- [ ] 3.3 REFACTOR: writeBuffer 設計と adapter Tick 駆動の整理
+- [x] 3.3 REFACTOR: writeBuffer 設計と adapter Tick 駆動の整理
   - `IVmcMoCapAdapter` interface を Runtime 配下に internal 定義 (`Tick()` / `HandleTickException(Exception)`)
   - `_subscribers: HashSet<IVmcMoCapAdapter>` の add / remove が thread-safe である必要がない (MainThread 構造保証) ことをコードコメントで明示する
   - bind 失敗テスト (3.1 のうち port 占有 / 同 port 二重 bind ケース) を実 `uOscServer` で再現できるよう PlayMode 側に補助テストを追加 or EditMode で test double 経路を整備する

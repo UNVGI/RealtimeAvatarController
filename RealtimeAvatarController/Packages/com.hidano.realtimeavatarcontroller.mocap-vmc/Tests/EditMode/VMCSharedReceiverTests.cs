@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using NUnit.Framework;
 using uOSC;
 using UnityEngine;
@@ -83,6 +84,29 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         }
 
         [Test]
+        public void SubsystemRegistrationReset_ClearsStaticInstanceAndRefCount()
+        {
+            var receiver = VMCSharedReceiver.EnsureInstance();
+            VMCSharedReceiver.EnsureInstance();
+            var host = receiver.gameObject;
+
+            try
+            {
+                InvokeSubsystemRegistrationReset();
+
+                Assert.That(VMCSharedReceiver.RefCountStaticForTest, Is.Zero);
+                Assert.That(VMCSharedReceiver.InstanceForTest, Is.Null);
+            }
+            finally
+            {
+                if (host != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(host);
+                }
+            }
+        }
+
+        [Test]
         public void ApplyReceiverSettings_WhenServerStartLeavesServerNotRunning_ThrowsInvalidOperationException()
         {
             var receiver = VMCSharedReceiver.EnsureInstance();
@@ -107,6 +131,28 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
             socket.Bind(new IPEndPoint(IPAddress.Any, 0));
             port = ((IPEndPoint)socket.LocalEndPoint).Port;
             return socket;
+        }
+
+        private static void InvokeSubsystemRegistrationReset()
+        {
+            var method = typeof(VMCSharedReceiver).GetMethod(
+                "ResetStaticsOnSubsystemRegistration",
+                BindingFlags.NonPublic | BindingFlags.Static);
+
+            Assert.That(method, Is.Not.Null);
+
+            var attribute = method.GetCustomAttribute<RuntimeInitializeOnLoadMethodAttribute>();
+            Assert.That(attribute, Is.Not.Null);
+            Assert.That(attribute.loadType, Is.EqualTo(RuntimeInitializeLoadType.SubsystemRegistration));
+
+            try
+            {
+                method.Invoke(null, null);
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException != null)
+            {
+                throw ex.InnerException;
+            }
         }
     }
 }
