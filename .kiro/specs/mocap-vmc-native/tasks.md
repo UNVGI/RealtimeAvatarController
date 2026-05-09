@@ -319,7 +319,7 @@
   - 観測完了条件: sample import + scene open で警告ゼロ、 既存 GUID 不変
   - _Requirements: 6.1, 6.4, 12.7_
   - _Boundary: Samples~/VMC/_
-- [ ] 9.3 Runtime C: 実 OSC packet ループバックでアバター追従検証
+- [x] 9.3 Runtime C: 実 OSC packet ループバックでアバター追従検証
   - sample scene `VMCReceiveDemo.unity` を Play、 同一 Unity プロセス内 `uOscClient` または別プロセス VMC 送信側 (VirtualMotionCapture / VSeeFace 等) から実 OSC packet を `127.0.0.1:port` に流す
   - アバターが正常に追従することを目視で確認する
   - PlayMode 自動テスト (Phase 5.1 で書換た integration test) が同一シナリオで GREEN になることを確認する
