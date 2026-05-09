@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-05-09
+
+### Removed
+
+- VMC Runtime / Editor / Tests / Sample Data moved to new package "com.hidano.realtimeavatarcontroller.mocap-vmc".
+
+### Changed
+
+- UI Sample asmdef references no longer reference RealtimeAvatarController.MoCap.VMC.
+- SlotSettings_Shared_Slot1/2.asset now reference Stub MoCap Source instead of VMC.
+
+### Added
+
+- Stub MoCap Source / StubMoCapSourceConfig / StubMoCapSourceFactory in Samples~/UI/Runtime/.
+
+### Migration
+
+- Install the new mocap-vmc package alongside core if VMC reception is needed; see the new package README.
+
 ## [0.1.0] - 2026-05-08
 
 ### Added
