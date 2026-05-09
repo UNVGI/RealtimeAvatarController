@@ -66,3 +66,72 @@
 
 - Phase 7.2 spec の完全な受け入れには、`manifest.json` に UniTask を追加して core compile failure を解消したあと、Unity Editor の Test Runner で `RealtimeAvatarController.MoCap.VMC.Tests.EditMode` / `RealtimeAvatarController.MoCap.VMC.Tests.PlayMode` を手動実行し、全 pass を確認する必要がある。
 - VMC sample import と `VMCReceiveDemo.unity` の Play Mode 起動確認も、同じく UniTask 導入後に手動で実行する。
+
+## 2026-05-09: 7.3 spec 完了判定と rollback 手順
+
+- Date: 2026-05-09
+- Task: 7.3 spec 完了判定と未完了時 rollback 手順の確認
+- Verdict: 構造完了。手動受け入れ検証待ち。
+
+### Batch run summary
+
+git log と既存 validation 記録に基づく 29 task の最終状態は以下の通り。
+
+| Task | Evidence | Outcome |
+|------|----------|---------|
+| 1.1 新パッケージ root / package.json | `0a9ba09` | PASS |
+| 1.2 repository `Packages/manifest.json` testables 登録 | `d8891ec` | PASS |
+| 2.1 VMC Runtime 移動 | `4e069d4` | PASS |
+| 2.2 VMC Editor 移動 | `815a190` | PASS |
+| 2.3 VMC EditMode tests 移動 | `adb845b` | PASS |
+| 2.4 VMC PlayMode tests 移動 | `c24f09e` | PASS |
+| 2.5 Phase 2 Test Runner 列挙チェック | 移動済み test asmdef と `testables` 設定 | STRUCTURAL PASS / GUI 目視は手動受け入れ時に確認 |
+| 3.1 Stub Runtime 実装 | `d737cf4` | PASS |
+| 3.2 Stub Editor 自己登録 | `c22fd6f` | PASS |
+| 3.3 UI Sample asmdef から VMC 参照削除 | `aca97df` | PASS |
+| 3.4 Stub Config SO 生成 | `8977e99` | PASS |
+| 3.5 SlotSettings 参照差し替え | `6ecf88b` | PASS |
+| 4.1 VMC Config asset GUID 据置移動 | `898aa0e` | PASS |
+| 4.2 VMC demo avatar provider config 作成 | `572d479` | PASS |
+| 4.3 `SlotSettings_VMC_Slot1.asset` 作成 | `544d2f7` | PASS |
+| 4.4 `VMCReceiveDemo.unity` 作成 | `6d05b55` | PASS |
+| 5.1 旧 VMC Runtime 削除 | `2157e16` | PASS |
+| 5.2 旧 VMC Editor 削除 | `7bd945e` | PASS |
+| 5.3 旧 VMC EditMode/PlayMode test directory 削除 | Phase 2 move 後の core 側残存確認 | PASS |
+| 5.4 旧 UI Sample 内 VMC Config 削除確認 | Phase 4.1 GUID 据置 move 後の旧位置残存なし | PASS |
+| 5.5 core 内 VMC/EVMC4U/uOSC 参照 grep 検証 | `8d59cf5` / 7.1 validation | PASS |
+| 6.1 core README 更新 | `0497abf` | PASS |
+| 6.2 core CHANGELOG 更新 | `a9f941c` | PASS |
+| 6.3 new package README 作成 | `eaf59d6` | PASS |
+| 6.4 new package CHANGELOG 作成 | `e07aae9` | PASS |
+| 6.5 `.kiro/steering/structure.md` 作成 | `0178ece` | PASS |
+| 7.1 Scenario A 合否判定 | `6fb3039` / validation 7.1 | STRUCTURAL PASS / manual acceptance DEFERRED |
+| 7.2 Scenario B 合否判定 | `1435edd` / validation 7.2 | STRUCTURAL PASS / manual acceptance DEFERRED |
+| 7.3 spec 完了判定と rollback 手順 | this section | PASS |
+
+### Spec completion verdict
+
+- Structural completion: PASS。
+  - Tasks 1.1 through 6.5 は完了。
+  - Phase 5.5 grep verification により、core compile graph の `.cs` / `.asmdef` に `VMC` / `EVMC4U` / `uOSC` 参照が残っていないことを確認済み。
+  - Phase 7.2 により、新パッケージ `com.hidano.realtimeavatarcontroller.mocap-vmc` の Runtime / Editor / EditMode Tests / PlayMode Tests / Samples~/VMC の構造整合性を確認済み。
+- Manual acceptance verdict: DEFERRED。
+  - Scenario A / B は spec requirements 7.1 / 7.2 / 10.5 / 10.6 により、Unity Editor の Test Runner UI と Play Mode 操作による手動確認が必要。
+  - 今回の batch run では Unity batchmode が host project 側の unrelated dependency-resolution issue で停止した。具体的には `manifest.json` に `com.cysharp.unitask` が存在せず、`Cysharp.Threading.Tasks` / `UniTask` が解決できない。
+  - Project memory 上、依存 package の選定と manifest への導入は user project の責務であり、この spec の変更対象ではない。
+- Therefore: this spec is structurally complete; ready for manual acceptance verification by user.
+
+### Rollback procedures
+
+design.md Migration Strategy から抽出した rollback 手順:
+
+- Phase 2 後に Test Runner へ VMC test asmdef が列挙されない場合: Phase 1 まで `git revert`。
+- Phase 3 後に core 単独 compile が失敗する場合: Phase 2 まで `git revert`。
+- Phase 5 後に Scenario A が失敗する場合: Phase 4 まで `git revert`。
+
+### Recommended next steps
+
+1. `RealtimeAvatarController/Packages/manifest.json` に `com.cysharp.unitask` を追加する。または OpenUPM scoped registry 経由で UniTask を解決する。
+2. Unity Editor を開き、両パッケージ enabled の状態で Test Runner の EditMode / PlayMode を実行する。
+3. Original requirements に従い、Scenario A (UI Sample with Stub) と Scenario B (VMC Sample with EVMC4U + uOSC) が pass することを確認する。
+4. 手動検証が pass した時点で、本 spec は fully accepted として扱える。
