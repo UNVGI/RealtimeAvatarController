@@ -1,9 +1,9 @@
 {
   "feature_name": "mocap-vmc-native",
   "created_at": "2026-05-09T19:07:39Z",
-  "updated_at": "2026-05-09T22:30:00Z",
+  "updated_at": "2026-05-09T14:33:58Z",
   "language": "ja",
-  "phase": "tasks-generated",
+  "phase": "implementation-complete",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -39,6 +39,11 @@
       "event": "tasks-generated",
       "performed_at": "2026-05-09T22:30:00Z",
       "summary": "tasks.md を生成 (auto-approve)。 Phase 0 (親セッション専用 rm + OBSOLETE マーカ) → Phase 1 (VmcBoneNameMap / VmcOscMessageRouter TDD、 並列可) → Phase 2 (VMCSharedReceiver リネーム + GUID 移植) → Phase 3 (VMCMoCapSource リネーム + GUID 移植 + ダブルバッファ swap) → Phase 4 (Factory + asmdef references 一括更新、 N-R3 atomic 制約) → Phase 5 (PlayMode テスト書換 + 不変系テスト調整) → Phase 6 (README / CHANGELOG / steering / THIRD_PARTY_NOTICES) → Phase 7 (Compile A/B/Runtime C 検証) の 8 phase 構成。 全 R1〜R12 要件を担当タスクに mapping し、 R-8.4 / R-11.6 は設計フェーズ既決として coverage note で除外明示。 (P) 並列マーカは Phase 1 (1.1, 2.1) / Phase 6 (8.1, 8.2, 8.3) / Phase 5 (7.1, 7.2) に適用。"
+    },
+    {
+      "event": "implementation-complete",
+      "performed_at": "2026-05-09T14:33:58Z",
+      "summary": "9.5 spec.json メタデータ更新と最終確認を実施。EVMC4U 依存撤廃後の実装タスク完了状態として phase を implementation-complete に更新し、tasks approval と ready_for_implementation が true であることを確認。`using EVMC4U;` grep 0 件、VMC asmdef references `EVMC4U` grep 0 件、Assets/EVMC4U 不在。最終テストは EditMode 383/383 passed, failed 0、PlayMode 36/36 passed, failed 0。"
     }
   ]
 }

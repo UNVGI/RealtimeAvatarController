@@ -304,7 +304,7 @@
 
 > design.md §13 に対応する 3 段階の検証を実施し、 EVMC4U 撤廃が破壊的影響を持たないことを確認する。
 
-- [ ] 9. 統合検証
+- [x] 9. 統合検証
 - [x] 9.1 Compile A: VMC パッケージ単体 + uOSC のみで compile 成功
   - 利用者プロジェクトに `com.hidano.realtimeavatarcontroller.mocap-vmc` + `com.hidano.uosc` のみインストールした状態を再現する
   - `Assets/EVMC4U/` が存在しなくても compile error が出ないことを確認する
@@ -333,7 +333,7 @@
   - 観測完了条件: アプリ層 Tick あたり alloc が `HumanoidMotionFrame` 1 個分のみ
   - _Requirements: 10.1, 10.2, 10.3, 10.5, 10.6_
   - _Boundary: VMCMoCapSource (perf 計測)_
-- [ ] 9.5 spec.json メタデータ更新と最終確認
+- [x] 9.5 spec.json メタデータ更新と最終確認
   - `.kiro/specs/mocap-vmc-native/spec.json` の `phase` を `"tasks-generated"` に更新する
   - `approvals.tasks.generated = true`、 `approvals.tasks.approved = true` (auto-approve) に設定する
   - `updated_at` をタスク完了タイムスタンプに更新する
