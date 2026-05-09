@@ -142,7 +142,7 @@
 > Phase 2 完成後に着手。 旧 `EVMC4UMoCapSource.cs` GUID `42ced34567d8f9012ab345678901cdef` を新ファイルへ移植する。
 > ダブルバッファリング戦略 (Decision A / E) と `HumanoidMotionFrame` 同 frame 完結性前提を実装に反映する。
 
-- [ ] 4. VMCMoCapSource: IMoCapSource Adapter + ダブルバッファ swap
+- [x] 4. VMCMoCapSource: IMoCapSource Adapter + ダブルバッファ swap
 - [x] 4.1 RED: VMCMoCapSourceTests を旧テストからリネーム + GUID 移植 + 失敗状態を確認
   - `Tests/EditMode/EVMC4UMoCapSourceTests.cs` を `Tests/EditMode/VMCMoCapSourceTests.cs` にリネームし、 旧 `.cs.meta` GUID `964bca5178c164b4e8d31bde1a9235b2` を新 `.cs.meta` に移植する
   - `using EVMC4U;` を削除する
@@ -172,7 +172,7 @@
   - 観測完了条件: 4.1 のテストが GREEN、 `Runtime/` 配下に `EVMC4UMoCapSource.cs` が存在せず `VMCMoCapSource.cs` が GUID `42ced34567d8f9012ab345678901cdef` を保持する
   - _Requirements: 1.5, 5.1, 5.2, 5.5, 5.6, 5.7, 5.8, 5.9, 6.3, 7.4, 8.1, 8.3, 8.5, 8.7, 10.1, 10.4, 10.5, 10.6, 11.1, 11.5, 11.7_
   - _Boundary: VMCMoCapSource_
-- [ ] 4.3 REFACTOR: ダブルバッファ swap 順序検証 + 例外伝播経路
+- [x] 4.3 REFACTOR: ダブルバッファ swap 順序検証 + 例外伝播経路
   - `Tick` 内で例外発生時に `IVmcMoCapAdapter.HandleTickException` 経路で `ISlotErrorChannel.Publish(SlotError(slotId, SlotErrorCategory.VmcReceive, ex, UtcNow))` を発行し `MotionStream.OnError` を呼ばないことを検証するテストを追加
   - swap 順序検証: ForceTickForTest を呼んで `_readBufferRef` が前 Tick 値、 `_writeBufferRef` が次 Tick 用に Clear 済みであることを assert (PlayMode で実施)
   - 空 dict の Tick で OnNext が抑制されることを検証

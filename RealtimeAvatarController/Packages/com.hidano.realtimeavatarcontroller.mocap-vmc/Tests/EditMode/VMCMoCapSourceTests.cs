@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 using RealtimeAvatarController.Core;
 using UnityEngine;
@@ -28,6 +29,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
     public class VMCMoCapSourceTests
     {
         private const int ValidTestPort = 49501;
+        private const int ExceptionTestPort = 49503;
 
         [SetUp]
         public void SetUp()
@@ -194,6 +196,70 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 
         // --- ヘルパー ---
 
+        // --- Task 4.3: Tick error propagation / completion ---
+
+        [Test]
+        public void TickException_IsForwardedToSlotErrorChannel_AndDoesNotCallMotionStreamOnError()
+        {
+            var errorChannel = new SpySlotErrorChannel();
+            var source = new VMCMoCapSource("slot-vmc-tick", errorChannel);
+            var config = ScriptableObject.CreateInstance<VMCMoCapSourceConfig>();
+            var recorder = new FrameRecorder();
+            var subscription = source.MotionStream.Subscribe(recorder);
+            try
+            {
+                config.port = ExceptionTestPort;
+                source.Initialize(config);
+
+                var exception = new InvalidOperationException("simulated VMC Tick failure");
+                var before = DateTime.UtcNow;
+                source.ThrowOnNextTickForTest(exception);
+                source.ForceTickForTest();
+                var after = DateTime.UtcNow;
+
+                Assert.That(errorChannel.Published.Count, Is.EqualTo(1),
+                    "Tick exception must be published once through ISlotErrorChannel.");
+                var error = errorChannel.Published[0];
+                Assert.That(error.SlotId, Is.EqualTo("slot-vmc-tick"));
+                Assert.That(error.Category, Is.EqualTo(SlotErrorCategory.VmcReceive));
+                Assert.That(error.Exception, Is.SameAs(exception));
+                Assert.That(error.Timestamp, Is.InRange(before, after));
+                Assert.That(recorder.Errors, Is.Empty,
+                    "Tick exceptions must not be forwarded to MotionStream.OnError.");
+                Assert.That(recorder.Frames, Is.Empty);
+            }
+            finally
+            {
+                subscription.Dispose();
+                source.Dispose();
+                UnityEngine.Object.DestroyImmediate(config);
+            }
+        }
+
+        [Test]
+        public void Shutdown_NotifiesMotionStreamCompletion()
+        {
+            var source = CreateSource();
+            var recorder = new FrameRecorder();
+            var subscription = source.MotionStream.Subscribe(recorder);
+            try
+            {
+                source.Shutdown();
+
+                Assert.That(recorder.Completed, Is.True,
+                    "Shutdown must notify MotionStream subscribers with OnCompleted.");
+                Assert.That(recorder.Errors, Is.Empty,
+                    "Shutdown must not invoke MotionStream.OnError.");
+            }
+            finally
+            {
+                subscription.Dispose();
+                source.Dispose();
+            }
+        }
+
+        // --- Helpers ---
+
         private static VMCMoCapSource CreateSource()
         {
             return new VMCMoCapSource(
@@ -206,6 +272,49 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         /// </summary>
         private sealed class OtherMoCapSourceConfig : MoCapSourceConfigBase
         {
+        }
+
+        private sealed class SpySlotErrorChannel : ISlotErrorChannel
+        {
+            public List<SlotError> Published { get; } = new List<SlotError>();
+
+            public IObservable<SlotError> Errors => NoOpObservable.Instance;
+
+            public void Publish(SlotError error)
+            {
+                Published.Add(error);
+            }
+
+            private sealed class NoOpObservable : IObservable<SlotError>
+            {
+                public static readonly NoOpObservable Instance = new NoOpObservable();
+
+                public IDisposable Subscribe(IObserver<SlotError> observer) => NoOpDisposable.Instance;
+            }
+
+            private sealed class NoOpDisposable : IDisposable
+            {
+                public static readonly NoOpDisposable Instance = new NoOpDisposable();
+
+                public void Dispose()
+                {
+                }
+            }
+        }
+
+        private sealed class FrameRecorder : IObserver<MotionFrame>
+        {
+            public List<MotionFrame> Frames { get; } = new List<MotionFrame>();
+
+            public List<Exception> Errors { get; } = new List<Exception>();
+
+            public bool Completed { get; private set; }
+
+            public void OnNext(MotionFrame value) => Frames.Add(value);
+
+            public void OnError(Exception error) => Errors.Add(error);
+
+            public void OnCompleted() => Completed = true;
         }
     }
 }

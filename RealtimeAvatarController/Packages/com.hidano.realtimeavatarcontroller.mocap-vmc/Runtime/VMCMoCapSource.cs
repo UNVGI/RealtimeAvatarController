@@ -37,6 +37,7 @@ namespace RealtimeAvatarController.MoCap.VMC
         private Vector3 _readRootPosition;
         private Quaternion _readRootRotation = Quaternion.identity;
         private bool _hasInjectedDataForTest;
+        private Exception _tickExceptionForTest;
         private State _state = State.Uninitialized;
 
         public string SourceType => "VMC";
@@ -44,6 +45,10 @@ namespace RealtimeAvatarController.MoCap.VMC
         public IObservable<MotionFrame> MotionStream => _stream;
 
         internal State CurrentState => _state;
+
+        internal IReadOnlyDictionary<HumanBodyBones, Quaternion> ReadBufferForTest => _readBufferRef;
+
+        internal IReadOnlyDictionary<HumanBodyBones, Quaternion> WriteBufferForTest => _writeBufferRef;
 
         internal VMCMoCapSource(string slotId, ISlotErrorChannel errorChannel)
         {
@@ -134,49 +139,50 @@ namespace RealtimeAvatarController.MoCap.VMC
                 return;
             }
 
-            try
+            if (_tickExceptionForTest != null)
             {
-                if (_hasInjectedDataForTest)
-                {
-                    _hasInjectedDataForTest = false;
-                }
-                else
-                {
-                    _writeBufferRef.Clear();
-                    var receiverBuffer = _sharedReceiver.ReadAndClearWriteBuffer(
-                        out _writeRootPosition,
-                        out _writeRootRotation);
-
-                    foreach (var kv in receiverBuffer)
-                    {
-                        _writeBufferRef[kv.Key] = kv.Value;
-                    }
-                }
-
-                SwapBuffers();
-
-                _readRootPosition = _writeRootPosition;
-                _readRootRotation = _writeRootRotation;
-
-                if (_readBufferRef.Count == 0)
-                {
-                    return;
-                }
-
-                var timestamp = Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
-                var frame = new HumanoidMotionFrame(
-                    timestamp,
-                    Array.Empty<float>(),
-                    _readRootPosition,
-                    _readRootRotation,
-                    _readBufferRef);
-
-                _subject.OnNext(frame);
+                var exception = _tickExceptionForTest;
+                _tickExceptionForTest = null;
+                throw exception;
             }
-            catch (Exception ex)
+
+            if (_hasInjectedDataForTest)
             {
-                PublishError(SlotErrorCategory.VmcReceive, ex);
+                _hasInjectedDataForTest = false;
             }
+            else
+            {
+                _writeBufferRef.Clear();
+                var receiverBuffer = _sharedReceiver.ReadAndClearWriteBuffer(
+                    out _writeRootPosition,
+                    out _writeRootRotation);
+
+                foreach (var kv in receiverBuffer)
+                {
+                    _writeBufferRef[kv.Key] = kv.Value;
+                }
+            }
+
+            SwapBuffers();
+
+            _readRootPosition = _writeRootPosition;
+            _readRootRotation = _writeRootRotation;
+            _writeBufferRef.Clear();
+
+            if (_readBufferRef.Count == 0)
+            {
+                return;
+            }
+
+            var timestamp = Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
+            var frame = new HumanoidMotionFrame(
+                timestamp,
+                Array.Empty<float>(),
+                _readRootPosition,
+                _readRootRotation,
+                _readBufferRef);
+
+            _subject.OnNext(frame);
         }
 
         void IVmcMoCapAdapter.HandleTickException(Exception exception)
@@ -204,7 +210,19 @@ namespace RealtimeAvatarController.MoCap.VMC
 
         internal void ForceTickForTest()
         {
-            ((IVmcMoCapAdapter)this).Tick();
+            try
+            {
+                ((IVmcMoCapAdapter)this).Tick();
+            }
+            catch (Exception ex)
+            {
+                ((IVmcMoCapAdapter)this).HandleTickException(ex);
+            }
+        }
+
+        internal void ThrowOnNextTickForTest(Exception exception)
+        {
+            _tickExceptionForTest = exception ?? throw new ArgumentNullException(nameof(exception));
         }
 
         private void SwapBuffers()
