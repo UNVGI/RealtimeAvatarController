@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace RealtimeAvatarController.MoCap.VMC
 {
-    internal interface IVmcMoCapAdapter
+    public interface IVmcMoCapAdapter
     {
         void Tick();
 

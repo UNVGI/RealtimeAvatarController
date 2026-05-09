@@ -155,7 +155,7 @@
   - 観測完了条件: テストが「型 `VMCMoCapSource` が存在しない」 ビルドエラーで失敗する (RED 確認)
   - _Requirements: 5.1, 5.2, 8.1, 8.5, 9.4, 11.5, 11.7_
   - _Boundary: VMCMoCapSource_
-- [ ] 4.2 GREEN: 旧 EVMC4UMoCapSource.cs を VMCMoCapSource.cs にリネーム + GUID 移植 + 内部書換
+- [x] 4.2 GREEN: 旧 EVMC4UMoCapSource.cs を VMCMoCapSource.cs にリネーム + GUID 移植 + 内部書換
   - `Runtime/EVMC4UMoCapSource.cs` を `Runtime/VMCMoCapSource.cs` にリネームし、 旧 `.cs.meta` GUID `42ced34567d8f9012ab345678901cdef` を新 `.cs.meta` に移植する
   - `using EVMC4U;` を削除する
   - `IMoCapSource` / `IDisposable` / `IVmcMoCapAdapter` を実装する sealed class へ書換える
