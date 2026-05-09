@@ -277,7 +277,7 @@
   - 観測完了条件: CHANGELOG に当該エントリが日付付きで追加される
   - _Requirements: 12.2_
   - _Boundary: CHANGELOG.md_
-- [ ] 8.3 (P) THIRD_PARTY_NOTICES.md 新規作成
+- [x] 8.3 (P) THIRD_PARTY_NOTICES.md 新規作成
   - `Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/THIRD_PARTY_NOTICES.md` を新規作成する (ランダム GUID `.meta` 付き)
   - uOSC `com.hidano.uosc` (MIT) credit を `Library/PackageCache` 内の license から転記する
   - VMC プロトコル仕様 (`https://protocol.vmc.info/specification`) への準拠表明を記載する
