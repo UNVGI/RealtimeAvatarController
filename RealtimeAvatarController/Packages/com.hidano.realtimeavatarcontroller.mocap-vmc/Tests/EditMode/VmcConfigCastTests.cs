@@ -31,6 +31,8 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
     [TestFixture]
     public class VmcConfigCastTests
     {
+        private const string VmcSourceTypeId = "VMC";
+
         private VMCMoCapSourceConfig _config;
         private OtherMoCapSourceConfig _otherConfig;
 
@@ -68,6 +70,8 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
             Assert.IsNotNull(source, "VMCMoCapSource は null でないインスタンスが返されるべき。");
             Assert.IsInstanceOf<VMCMoCapSource>(source,
                 "VMCMoCapSourceConfig を受け取った Factory は VMCMoCapSource を返すべき (tasks.md 5.2 / 要件 5.5)。");
+            Assert.That(source.SourceType, Is.EqualTo(VmcSourceTypeId),
+                "Config cast 経路で生成した source は typeId='VMC' を維持するべき。");
         }
 
         [Test]
@@ -106,6 +110,8 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
                 Assert.IsNotNull(source, "動的生成 Config でも VMCMoCapSource が返されるべき。");
                 Assert.IsInstanceOf<VMCMoCapSource>(source,
                     "動的生成 Config は SO アセットと同一コードパスで VMCMoCapSource を生成すべき (要件 5.2 / 5.5)。");
+                Assert.That(source.SourceType, Is.EqualTo(VmcSourceTypeId),
+                    "動的生成 Config 経路でも source typeId='VMC' を維持するべき。");
             }
             finally
             {

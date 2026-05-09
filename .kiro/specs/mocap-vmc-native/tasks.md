@@ -241,7 +241,7 @@
   - _Boundary: VMCMoCapSourceSharingTests, VMCSharedReceiver_
 
 - [ ] 7. 不変維持系テストの調整
-- [ ] 7.1 (P) VmcConfigCastTests / VmcFactoryRegistrationTests の維持確認
+- [x] 7.1 (P) VmcConfigCastTests / VmcFactoryRegistrationTests の維持確認
   - `Tests/EditMode/VmcConfigCastTests.cs` および `Tests/EditMode/VmcFactoryRegistrationTests.cs` の `using EVMC4U;` を削除する (`.meta` GUID は不変)
   - typeId `"VMC"` / Factory 自己登録 / Config キャスト経路が新実装でも維持されていることを検証するテストを追加または既存検証を実行する
   - 観測完了条件: EditMode runner で 2 ファイルとも GREEN を維持

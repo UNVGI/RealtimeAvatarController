@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using NUnit.Framework;
 using RealtimeAvatarController.Core;
+using UnityEngine;
 
 namespace RealtimeAvatarController.MoCap.VMC.Tests
 {
@@ -55,6 +56,13 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
             RegistryLocator.ResetForTest();
         }
 
+        [Test]
+        public void FactorySourceTypeId_RemainsVmc()
+        {
+            Assert.That(VMCMoCapSourceFactory.VmcSourceTypeId, Is.EqualTo(VmcSourceTypeId),
+                "VMCMoCapSourceFactory の公開 typeId 定数は 'VMC' を維持するべき。");
+        }
+
         // --- タスク 8-1 テストケース ---
 
         /// <summary>
@@ -72,6 +80,35 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 
             CollectionAssert.Contains(typeIds, VmcSourceTypeId,
                 "RegisterRuntime() 呼び出し後は IMoCapSourceRegistry に typeId='VMC' が登録されているべき (要件 9-5, 9-7)。");
+        }
+
+        [Test]
+        public void RegisterRuntime_RegisteredFactoryResolvesVMCMoCapSource_WithVmcConfig()
+        {
+            InvokeRegisterRuntime();
+
+            var config = ScriptableObject.CreateInstance<VMCMoCapSourceConfig>();
+            IMoCapSource source = null;
+            try
+            {
+                var descriptor = new MoCapSourceDescriptor
+                {
+                    SourceTypeId = VmcSourceTypeId,
+                    Config = config,
+                };
+
+                source = RegistryLocator.MoCapSourceRegistry.Resolve(descriptor);
+
+                Assert.That(source, Is.InstanceOf<VMCMoCapSource>(),
+                    "自己登録された Factory は VMCMoCapSourceConfig から VMCMoCapSource を生成するべき。");
+                Assert.That(source.SourceType, Is.EqualTo(VmcSourceTypeId),
+                    "自己登録経由で解決した source は typeId='VMC' を維持するべき。");
+            }
+            finally
+            {
+                RegistryLocator.MoCapSourceRegistry.Release(source);
+                UnityEngine.Object.DestroyImmediate(config);
+            }
         }
 
         /// <summary>
