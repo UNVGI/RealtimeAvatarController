@@ -65,7 +65,7 @@ VMC プロトコルを EVMC4U に依存せず自前で受信する MoCap source 
 2. When `Initialize(VMCMoCapSourceConfig)` が完了したとき, the VMC native receiver shall `uOscServer.port` に `VMCMoCapSourceConfig.port` を、`uOscServer.autoStart` に `false` を設定したうえで `StartServer()` を呼び出して受信を開始する。
 3. The VMC native receiver shall OSC メッセージのアドレス文字列が `/VMC/Ext/Bone/Pos` の場合に bone OSC ハンドラへ、`/VMC/Ext/Root/Pos` の場合に root OSC ハンドラへ振り分ける。
 4. The VMC native receiver shall 上記以外の OSC アドレス (`/VMC/Ext/Blend/Val`、`/VMC/Ext/Cam`、`/VMC/Ext/OK`、`/VMC/Ext/T` 等) を受信した場合は無視 (parse もデータ更新も行わない) し、例外を発生させない。
-5. While VMC native receiver の OSC ハンドラが MainThread で起動されている前提下, the VMC native receiver shall 受信処理を MainThread で完結させ、追加スレッドを生成しない (`uOscServer.Update` 内 dequeue モデルを踏襲する)。
+5. The VMC native receiver shall uOSC `uOscServer.Update` 内 dequeue により `onDataReceived` が MainThread で発火するという uOSC 2.x 系列の構造的保証 (`uOscServer.cs` の `Update`→`UpdateReceive`→`onDataReceived.Invoke` 経路、 dig-native.md N-C2 で実コード確認済み) に依存して受信処理を MainThread で完結させ、追加スレッドを生成しない。
 6. When `Shutdown()` または `Dispose()` が呼ばれたとき, the VMC native receiver shall `uOscServer.StopServer()` を呼び、`onDataReceived` 購読を解除し、関連する内部辞書 / バッファをクリアする。
 7. The VMC native receiver shall いかなる runtime / editor / tests コードからも `EVMC4U` 名前空間および `Assets/EVMC4U/` 配下のクラスへ参照を持たない。
 
@@ -129,7 +129,7 @@ VMC プロトコルを EVMC4U に依存せず自前で受信する MoCap source 
 4. The VMC native factory shall `[UnityEditor.InitializeOnLoadMethod]` を持つ静的メソッド (`RealtimeAvatarController.MoCap.VMC.Editor` asmdef 内) により Editor 起動時にも同等の自己登録を行う。
 5. The VMC native MoCap source shall 各 Tick で `BoneLocalRotations` を内部 Dictionary の **snapshot コピー** として渡し、参照を直接渡さない (`HumanoidMotionFrame` のイミュータビリティ要件に準拠)。
 6. The VMC native MoCap source shall `HumanoidMotionFrame.Muscles` には `Array.Empty<float>()` を渡し、適用経路を `BoneLocalRotations` のみに限定する。
-7. The VMC native MoCap source shall `HumanoidMotionFrame.Timestamp` を `Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency` で打刻し、VMC 送信側のタイムスタンプは使用しない。
+7. The VMC native MoCap source shall `HumanoidMotionFrame.Timestamp` を `Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency` で受信時点で打刻する。OSC bundle 層の timestamp (uOSC `Timestamp` 構造体) は使用しない (VMC アプリ層基本部の OSC メッセージには送信側 timestamp 引数自体が存在しない / dig-native.md N-F1 参照)。
 8. If 内部 bone Dictionary がまだ空の状態で Tick が発火したとき, then the VMC native MoCap source shall `HumanoidMotionFrame` を発行しない (空 frame の連続発行を抑制)。
 9. While 既存テストおよび既存 `VMCMoCapSourceConfig.asset` の serialized 形式, the VMC native implementation shall `VMCMoCapSourceConfig` の public フィールド `bindAddress` / `port` を同一名・同一型・同一既定値で維持する。
 
@@ -160,8 +160,8 @@ VMC プロトコルを EVMC4U に依存せず自前で受信する MoCap source 
 3. The `RealtimeAvatarController.MoCap.VMC.Tests.EditMode` および `RealtimeAvatarController.MoCap.VMC.Tests.PlayMode` asmdef shall `references` から `"EVMC4U"` を削除し、`"uOSC.Runtime"` を維持する。
 4. The VMC native implementation shall ランタイム / Editor / Tests のいずれの `.cs` においても `using EVMC4U;` ステートメントを含まない。
 5. If 利用者プロジェクトの `Assets/EVMC4U/` ディレクトリが存在しない場合, then the VMC native implementation shall コンパイル / Play Mode / Test Runner のいずれも追加のセットアップを要求せず正常動作する (utility としての uOSC 導入のみで完結)。
-6. The VMC native implementation shall README からも EVMC4U の `.unitypackage` インポート手順 / `EVMC4U.asmdef` 作成手順 / `evmc4u.patch` 適用手順を削除する (これらは利用者作業として不要となるため)。
-7. Where VMC プロトコル仕様の理解や bone 名マッピング実装の参照元として EVMC4U 由来の知見を借用した場合, the VMC native implementation shall README / CHANGELOG / コード内コメントで credit / inspiration を明記する (license 互換性は design フェーズで確認)。
+6. README 改訂 (EVMC4U `.unitypackage` インポート手順 / `EVMC4U.asmdef` 作成手順 / `evmc4u.patch` 適用手順の削除を含む) は Requirement 12 (R-12.1) に集約する。本 Requirement 7 では「これらの手順が利用者作業として不要となる」 という事実宣言のみを行い、文書改訂タスクとしての分担は重複しない (dig-native.md N-H1 参照)。
+7. Where VMC プロトコル仕様の理解として EVMC4U の解読 / 設計から借用した知見 (例: 共有 receiver パターン / refCount 生存管理 / `SubsystemRegistration` リセット) があれば, the VMC native implementation shall README / CHANGELOG / コード内コメントで EVMC4U (MIT) への credit / inspiration を明記する。bone 名 ↔ `HumanBodyBones` マッピングテーブルそのものは Unity 公開 `HumanBodyBones` enum の機械的列挙であり、EVMC4U 由来のオリジナリティを借用しないため license credit 義務は発生しない (dig-native.md N-C3 / N-F2 で確定)。
 
 ---
 
@@ -188,7 +188,7 @@ VMC プロトコルを EVMC4U に依存せず自前で受信する MoCap source 
 #### Acceptance Criteria
 
 1. The VMC native implementation shall 既存 `Tests/EditMode/ExternalReceiverPatchTests.cs` を削除する (`evmc4u.patch` が存在しなくなるため検証対象が消滅)。
-2. The VMC native implementation shall 既存 `Tests/EditMode/EVMC4USharedReceiverTests.cs` を新クラス名対応のテストにリネームし、refCount / DontDestroyOnLoad / SubsystemRegistration リセット / 重複 `Acquire` の挙動を新実装に対して検証する内容へ書き換える。
+2. The VMC native implementation shall 既存 `Tests/EditMode/EVMC4USharedReceiverTests.cs` を **削除** し、新規 `Tests/EditMode/VmcSharedReceiverTests.cs` (もしくは design フェーズで確定する後継クラス名に対応する新規テストファイル) を新規追加する。新規テストは refCount / DontDestroyOnLoad / `[RuntimeInitializeOnLoadMethod(SubsystemRegistration)]` での static リセット / 重複 `Acquire` の挙動を新実装に対して検証する。 git rename での history 継承は行わない (テスト対象が `EVMC4U.ExternalReceiver` 依存から uOSC 直接購読モデルへ抜本的に変わるため、 dig-native.md N-H2 参照)。
 3. The VMC native implementation shall 既存 `Tests/PlayMode/EVMC4UMoCapSourceIntegrationTests.cs` を、実 OSC パケットを `uOscServer` 経由で投入する (もしくは内部公開された注入 API を経由する) 統合テストとして書き換える。
 4. The VMC native implementation shall 既存 `Tests/EditMode/EVMC4UMoCapSourceTests.cs` / `Tests/PlayMode/EVMC4UMoCapSourceSharingTests.cs` / `Tests/EditMode/VmcConfigCastTests.cs` / `Tests/EditMode/VmcFactoryRegistrationTests.cs` / `Tests/PlayMode/SampleSceneSmokeTests.cs` を新クラス名へのリネーム / using 削除 / API 不変性 (`SourceType=="VMC"` / `Initialize` 動作 / Factory 登録) の再検証に絞って維持する。
 5. The VMC native implementation shall 新規 EditMode テストとして以下を追加する:
@@ -205,18 +205,21 @@ VMC プロトコルを EVMC4U に依存せず自前で受信する MoCap source 
 
 ---
 
-### Requirement 10: 性能・アロケーション要件 (Tick ホットパス)
+### Requirement 10: 性能・アロケーション要件 (Tick ホットパス、 アプリケーション層スコープ)
 
-**Objective:** As a ランタイム統合者, I want Tick あたりの managed allocation を限りなくゼロに保てる実装方針, so that GC スパイクによる avatar アニメーションの揺らぎが発生せず、複数 Slot 同時稼働時もフレームレートが安定する。
+**Objective:** As a ランタイム統合者, I want アプリケーション層 (本パッケージ Runtime) が Tick あたりに発生させる managed allocation を限りなくゼロに保てる実装方針, so that GC スパイクによる avatar アニメーションの揺らぎが発生せず、複数 Slot 同時稼働時もフレームレートが安定する。
+
+> **本要件のスコープ境界 (dig-native.md N-C1 で確定)**:
+> uOSC `Parser.ParseData` は受信メッセージごとに `new object[n]` + `float` boxing 等の structural alloc を **必ず発生させる** (uOSC 2.x 系列の構造的特性、現行 `Library/PackageCache/com.hidano.uosc@*/Runtime/Core/Parser.cs` で確認済み)。 これは uOSC の API 仕様に組込まれた所与の挙動であり、 本パッケージは uOSC を fork せずに利用するため (Out of Scope)、 本要件は uOSC layer 内の structural alloc を **対象外** とする。 計測の対象範囲は「`onDataReceived` ハンドラ受領後 (= `uOSC.Message message` を受け取って以降)」 から「`HumanoidMotionFrame` を `MotionStream` に OnNext する直前まで」 のアプリケーション層内に限定する。
 
 #### Acceptance Criteria
 
-1. The VMC native MoCap source shall Tick (`HumanoidMotionFrame` 1 回発行) あたりの managed allocation を、`HumanoidMotionFrame` 構造体生成 / `BoneLocalRotations` snapshot 辞書生成に伴う避けられないものに限定する。
-2. The VMC native MoCap source shall OSC ハンドラのホットパス (1 メッセージ受信あたり) において、`new` による `Dictionary` 生成 / `List` 生成 / `string` 連結 / `string.Split` / `ToLower` 等のアロケーションを行わない。
-3. The VMC native MoCap source shall bone 名 → `HumanBodyBones` 検索を 1 回の `Dictionary<string, HumanBodyBones>.TryGetValue` のみで完結させる。
-4. The VMC native MoCap source shall snapshot 用の Dictionary バッファを再利用 (フィールドに保持して `Clear()` + 再投入) する設計を採用する (`HumanoidMotionFrame` がイミュータブルである要件と両立する snapshot コピー戦略は design フェーズで確定し、`IReadOnlyDictionary` ラッパや `ImmutableDictionary` の使用要否を判断する)。
-5. While CI 上の性能測定が利用可能な場合, the VMC native implementation shall Tick あたり target allocation を `0 byte` (snapshot 辞書のサイズ拡張に伴う再アロケート除く) として設計し、IL2CPP / Mono 双方で達成可能な範囲を design / validation で実測する。
-6. The VMC native MoCap source shall パース処理で受け取る OSC 引数オブジェクト (`object[]` 等) の内容を boxing 前提で利用する場合の影響を design フェーズで評価し、必要に応じて uOSC 側の API 利用方法を最適化する (生 byte buffer から直接読む等)。
+1. The VMC native MoCap source shall アプリケーション層内 Tick (`HumanoidMotionFrame` 1 回発行) あたりの追加 managed allocation を、`HumanoidMotionFrame` インスタンス生成 / `BoneLocalRotations` 用の snapshot コンテナ提供 (再利用バッファ ロテーション戦略を採るため初期化後は alloc 0、 詳細は R-A) に伴う避けられないものに限定する。
+2. The VMC native MoCap source shall OSC ハンドラのアプリケーション層処理 (1 メッセージ受信あたり、 uOSC `Parser` 完了後) において、`new` による `Dictionary` 生成 / `List` 生成 / `string` 連結 / `string.Split` / `ToLower` 等の追加 allocation を行わない。 受信した bone name string および `object[] values` (uOSC 由来) は読み取りのみ行い、 コピーは取らない。
+3. The VMC native MoCap source shall bone 名 → `HumanBodyBones` 検索を 1 回の `Dictionary<string, HumanBodyBones>.TryGetValue` のみで完結させる。 マッピング辞書は `Enum.GetValues(typeof(HumanBodyBones))` ベースの static readonly 辞書として起動時 1 回のみ確保する (dig-native.md N-C3)。
+4. The VMC native MoCap source shall snapshot 用の Dictionary バッファをダブルバッファリング (受信書込側 + Tick 読み出し側、 詳細は R-A) で再利用する設計を採用する。 `HumanoidMotionFrame.BoneLocalRotations` の所有権契約 (Applier への移譲) と両立する具体的な参照寿命管理は design フェーズで確定し、 同 frame 完結性前提を `HumanoidMotionApplier` の実コードで確認する (dig-native.md N-C4)。
+5. While CI 上の性能測定が利用可能な場合, the VMC native implementation shall アプリケーション層内 Tick あたり target allocation を `0 byte` (起動時の固定バッファ確保および `HumanoidMotionFrame` インスタンス生成は除外) として設計し、IL2CPP / Mono 双方で達成可能な範囲を design / validation で実測する。 計測区間は本要件冒頭の「スコープ境界」 で示した範囲とする。
+6. The VMC native MoCap source shall uOSC `Message.values` (`object[]` 形式 / float boxing 済み) からの読み取り経路を boxing 前提として受け入れ、 アプリケーション層側で追加の boxing / unboxing コピーを発生させない実装に留める。 uOSC 側 API 改修 (生 byte buffer の expose 等) は本 Spec の Out of Scope (uOSC fork は実施しない / dig-native.md N-C1)。
 
 ---
 
@@ -250,9 +253,10 @@ VMC プロトコルを EVMC4U に依存せず自前で受信する MoCap source 
 6. The VMC native implementation shall リポジトリ内の `RealtimeAvatarController/Assets/EVMC4U/` ディレクトリを **削除** することを既定方針とし (旧テスト用に保持していたため)、historical reference として残す必要があれば `.kiro/specs/mocap-vmc/handover-*.md` 等に移動する。実際の削除は親セッションでのみ実施可能 (子 Agent は rm 不可) であることを tasks.md で明示する。
 7. While 既存 VMC サンプル (`Samples~/VMC/`) 内のシーンおよびアセット, the VMC native implementation shall サンプルを開いた際の `.asset` GUID 参照が破壊されないことを検証シナリオで確認する。
 8. The VMC native implementation shall design フェーズで以下を research item として明示する:
-   - 旧クラス向け `[MovedFrom]` 属性 (Unity の `UnityEngine.Scripting.APIUpdating.MovedFromAttribute`) の必要性と適用範囲
-   - bone 名 mapping の参照元 license 互換性 (EVMC4U のソースから borrowed する場合の MIT credit 義務)
+   - 旧クラス向け `[MovedFrom]` 属性 (Unity の `UnityEngine.Scripting.APIUpdating.MovedFromAttribute`) の必要性と適用範囲 (dig-native.md N-R2 で「不要」 が暫定結論、design で実コード確認のうえ確定)
    - VMC v2.1 拡張 (Root 14 引数版・BlendShape 等) の将来サポート可否
+   - uOSC `DotNet/Udp.StartServer` 同期/非同期挙動と R-11.4 `SocketException` 伝播経路の妥当性確認 (dig-native.md N-H3)
+   - VMC 公式仕様での bone 名 PascalCase 規定確認と case-sensitive matching の妥当性 (dig-native.md N-F3)
 
 ---
 
@@ -260,9 +264,13 @@ VMC プロトコルを EVMC4U に依存せず自前で受信する MoCap source 
 
 設計フェーズで明示的に決定すべき技術的論点 (要件レベルでは方針のみ記載):
 
-- R-A. snapshot Dictionary の再利用戦略: `Dictionary<HumanBodyBones, Quaternion>` をフィールドに保持して `Clear()` する案 vs `IReadOnlyDictionary` ラッパで wrap した固定バッファ案 vs ダブルバッファリング (受信側 / Tick 読み出し側) の三択。Requirement 5.5 のイミュータビリティ要件と Requirement 10.4 のアロケーション要件を両立する選択を確定。
-- R-B. uOSC `onDataReceived` がメインスレッド以外で発火する余地が残っていないか実コードレベルで再検証 (`Library/PackageCache/com.hidano.uosc@*` のソース読解)。
-- R-C. 旧クラス名 (`EVMC4UMoCapSource` / `EVMC4USharedReceiver`) を `[MovedFrom]` で残すか否か。利用者プロジェクト内で旧クラスへの直接参照は想定されないが、SerializeReference 等の polymorphic 参照に影響しないかを design で結論する。
-- R-D. bone 名マッピングテーブルを「EVMC4U の `BoneNameToBone` 等を借用」する場合の license / credit の具体的書面 (MIT 互換、credit 表記の場所)。
-- R-E. VMC v2.1 拡張 (Root 14 引数版・`/VMC/Ext/Blend/Val` 等) のサポート可否を「本 Spec で実装する / 後続 Spec へ繰り越す」で明確化。現状方針は「基本部のみ」だが、実装難易度が低い拡張は同梱するかを design で再検討。
-- R-F. `evmc4u.patch` および `Assets/EVMC4U/` の削除 / 保持方針 (Requirement 12.5 / 12.6) の最終確定。
+- R-A. snapshot Dictionary の再利用戦略 (推奨方向: ダブルバッファリング + 同 frame 完結性前提による契約緩和): `Dictionary<HumanBodyBones, Quaternion>` をフィールドに 2 個保持して交互に書込/発行する案を本命とし、 `HumanoidMotionApplier` が同 frame 内で消費完了する前提を実コード読解で確認する (dig-native.md N-C4)。 確認できなければ毎 Tick 新規 `Dictionary` 生成 (= 現行実装と同等、 alloc 0 不可) に retreat する。 `MotionCache` 等の他購読者が frame をまたいで参照保持する経路がないかも要確認。
+- R-C. 旧クラス名 (`EVMC4UMoCapSource` / `EVMC4USharedReceiver`) を `[MovedFrom]` で残すか否か。 旧 `EVMC4UMoCapSource` は plain C# (MonoBehaviour ではない / SerializeReference 参照無し)、 `EVMC4USharedReceiver` は MonoBehaviour だが factory 経由で動的生成のみでシーンに配置されない。 これらが本当に外部参照を持たないかを design で実コード確認の上、 結論として `[MovedFrom]` 不要と確定する見込み (dig-native.md N-R2)。
+- R-E. VMC v2.1 拡張 (Root 14 引数版・`/VMC/Ext/Blend/Val` 等) のサポート可否を「本 Spec で実装する / 後続 Spec へ繰り越す」 で明確化。 現状方針は「基本部のみ」 だが、 実装難易度が低い拡張は同梱するかを design で再検討。
+- R-F. `evmc4u.patch` および `Assets/EVMC4U/` の削除 / 保持方針 (Requirement 12.5 / 12.6) の最終確定。 推奨方向: 全削除 + uOSC / VRM / UniGLTF credit を `THIRD_PARTY_NOTICES.md` (新規) へ転記 (dig-native.md N-M1)。
+- R-G. uOSC `DotNet/Udp.StartServer` のポートバインドが MainThread 同期かワーカー非同期かを `Library/PackageCache/com.hidano.uosc@*/Runtime/Core/DotNet/Udp.cs` で実コード確認し、 R-11.4 の `SocketException` MainThread 伝播経路の妥当性を確定する (dig-native.md N-H3)。 非同期だった場合は `uOscServer.onServerStarted` UnityEvent + 別 callback による bind 失敗検出経路へ再設計する。
+- R-H. VMC 公式仕様 (https://protocol.vmc.info/) で bone 名が PascalCase 規定かを文書レベルで確認し、 case-sensitive matching (R-3.4 「ToLower 等を行わない」) が安全な選択かを確定する (dig-native.md N-F3)。 規定が緩い場合は case-insensitive 経路を予備実装として残す可能性。
+
+> 解消済み research items (本 dig 中に解決):
+> - 旧 R-B (uOSC `onDataReceived` のメインスレッド発火再検証): uOSC 2.x 系列で `uOscServer.UpdateReceive`→`onDataReceived.Invoke` 経路が MainThread から発火することを構造的に保証することを実コード確認済み (dig-native.md N-C2)。
+> - 旧 R-D (bone 名マッピング license credit): マッピングテーブルは Unity 公開 `HumanBodyBones` enum の機械的列挙であり EVMC4U 由来のオリジナリティを借用しないため license credit 義務なし。 設計借用元としての EVMC4U credit は R-7.7 で別途明記する (dig-native.md N-C3 / N-F2)。
