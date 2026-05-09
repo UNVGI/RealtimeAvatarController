@@ -143,7 +143,7 @@
 > ダブルバッファリング戦略 (Decision A / E) と `HumanoidMotionFrame` 同 frame 完結性前提を実装に反映する。
 
 - [ ] 4. VMCMoCapSource: IMoCapSource Adapter + ダブルバッファ swap
-- [ ] 4.1 RED: VMCMoCapSourceTests を旧テストからリネーム + GUID 移植 + 失敗状態を確認
+- [x] 4.1 RED: VMCMoCapSourceTests を旧テストからリネーム + GUID 移植 + 失敗状態を確認
   - `Tests/EditMode/EVMC4UMoCapSourceTests.cs` を `Tests/EditMode/VMCMoCapSourceTests.cs` にリネームし、 旧 `.cs.meta` GUID `964bca5178c164b4e8d31bde1a9235b2` を新 `.cs.meta` に移植する
   - `using EVMC4U;` を削除する
   - `SourceType == "VMC"` を検証

@@ -6,7 +6,7 @@ using UnityEngine;
 namespace RealtimeAvatarController.MoCap.VMC.Tests
 {
     /// <summary>
-    /// <see cref="EVMC4UMoCapSource"/> の基本契約を検証する EditMode テスト
+    /// <see cref="VMCMoCapSource"/> の基本契約を検証する EditMode テスト
     /// (tasks.md タスク 4.1 / design.md §4.2, §5.1 / requirements.md 要件 1.1, 1.2, 1.3, 1.4, 1.5, 5.3, 7.5)。
     ///
     /// <para>
@@ -25,7 +25,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
     /// </para>
     /// </summary>
     [TestFixture]
-    public class EVMC4UMoCapSourceTests
+    public class VMCMoCapSourceTests
     {
         private const int ValidTestPort = 49501;
 
@@ -33,13 +33,13 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
         public void SetUp()
         {
             RegistryLocator.ResetForTest();
-            EVMC4USharedReceiver.ResetForTest();
+            VMCSharedReceiver.ResetForTest();
         }
 
         [TearDown]
         public void TearDown()
         {
-            EVMC4USharedReceiver.ResetForTest();
+            VMCSharedReceiver.ResetForTest();
             RegistryLocator.ResetForTest();
         }
 
@@ -51,7 +51,7 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
             var source = CreateSource();
 
             Assert.That(source.SourceType, Is.EqualTo("VMC"),
-                "EVMC4UMoCapSource.SourceType は常に \"VMC\" を返すべき (要件 1.3)。");
+                "VMCMoCapSource.SourceType は常に \"VMC\" を返すべき (要件 1.3)。");
         }
 
         // --- MotionStream 型 (要件 1.4) ---
@@ -194,9 +194,9 @@ namespace RealtimeAvatarController.MoCap.VMC.Tests
 
         // --- ヘルパー ---
 
-        private static EVMC4UMoCapSource CreateSource()
+        private static VMCMoCapSource CreateSource()
         {
-            return new EVMC4UMoCapSource(
+            return new VMCMoCapSource(
                 slotId: string.Empty,
                 errorChannel: RegistryLocator.ErrorChannel);
         }
