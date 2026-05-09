@@ -60,7 +60,7 @@
   - _Boundary: VmcBoneNameMap_
 
 - [ ] 2. VmcOscMessageRouter: OSC address dispatch + 8 引数構造解釈
-- [ ] 2.1 (P) RED: VmcOscMessageRouterTests を先行作成して失敗状態を確認
+- [x] 2.1 (P) RED: VmcOscMessageRouterTests を先行作成して失敗状態を確認
   - `Tests/EditMode/VmcOscMessageRouterTests.cs` を新規作成 (ランダム GUID `.meta` 付き)
   - `IVmcBoneRotationWriter` の test double (mock / fake) を作成する
   - `/VMC/Ext/Bone/Pos` 8 引数で `WriteBoneRotation` が 1 回呼ばれることを検証
