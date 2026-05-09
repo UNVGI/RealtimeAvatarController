@@ -312,7 +312,7 @@
   - 観測完了条件: VMC パッケージ単体 compile 成功 + Console clean
   - _Requirements: 1.7, 7.5, 7.1, 7.2, 7.3_
   - _Boundary: パッケージ統合_
-- [ ] 9.2 Compile B: VMC パッケージ + Sample import で compile 成功 + sample scene 開閉
+- [x] 9.2 Compile B: VMC パッケージ + Sample import で compile 成功 + sample scene 開閉
   - VMC sample (`Samples~/VMC/`) を import し、 sample scene `VMCReceiveDemo.unity` を Editor で開く
   - `MissingReferenceException` / `The associated script can not be loaded` 系警告が出ないことを目視確認する
   - `VMCMoCapSourceConfig_Shared.asset` の GUID `5c4569b4a17944fba4667acebe26c25f` が不変であることを `.meta` 確認する
