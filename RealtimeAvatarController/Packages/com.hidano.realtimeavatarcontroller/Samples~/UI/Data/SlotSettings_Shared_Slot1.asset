@@ -17,10 +17,10 @@ MonoBehaviour:
   weight: 1
   avatarProviderDescriptor:
     ProviderTypeId: Builtin
-    Config: {fileID: 11400000, guid: 8e5f6a7b8c9d0e1f2a3b4c5d6e7f8091, type: 2}
+    Config: {fileID: 11400000, guid: f115607e0d4e4002808dacd6077de77a, type: 2}
   moCapSourceDescriptor:
     SourceTypeId: VMC
-    Config: {fileID: 11400000, guid: 7d4e5f6a7b8c9d0e1f2a3b4c5d6e7f80, type: 2}
+    Config: {fileID: 11400000, guid: 5c4569b4a17944fba4667acebe26c25f, type: 2}
   facialControllerDescriptor:
     ControllerTypeId:
     Config: {fileID: 0}
