@@ -2,6 +2,34 @@
 
 VTuber ユースケース向けのランタイムアバターコントローラーです。Slot ベースの MoCap ソース管理、アバタープロバイダ抽象化、モーションパイプラインを Unity 向けに提供します。
 
+## VMC 分離
+
+VMC (Virtual Motion Capture) 受信機能は、コアパッケージから別パッケージ `com.hidano.realtimeavatarcontroller.mocap-vmc` に分離されました。VMC を利用するプロジェクトでは、既存のコアパッケージに加えて VMC パッケージを `Packages/manifest.json` の `dependencies` に追加してください。
+
+```json
+{
+  "dependencies": {
+    "com.hidano.realtimeavatarcontroller": "0.1.0",
+    "com.hidano.realtimeavatarcontroller.mocap-vmc": "0.1.0"
+  }
+}
+```
+
+git URL で直接導入している場合は、同じ `dependencies` に VMC パッケージのパスも追加します。
+
+```json
+{
+  "dependencies": {
+    "com.hidano.realtimeavatarcontroller": "https://github.com/Hidano-Dev/RealtimeAvatarController.git?path=RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller",
+    "com.hidano.realtimeavatarcontroller.mocap-vmc": "https://github.com/Hidano-Dev/RealtimeAvatarController.git?path=RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller.mocap-vmc"
+  }
+}
+```
+
+VMC 側の導入手順、EVMC4U / uOSC の準備、VMC Sample の利用方法は [VMC パッケージ README](../com.hidano.realtimeavatarcontroller.mocap-vmc/README.md) を参照してください。
+
+UI Sample は Stub MoCap Source 経由で動作するため、VMC パッケージや EVMC4U / uOSC を導入しなくても Slot UI の検証を完結できます。
+
 ## 前提条件
 
 - **Unity 6000.3.10f1** 以降
