@@ -50,6 +50,8 @@ namespace RealtimeAvatarController.MoCap.VMC
 
         internal IReadOnlyDictionary<HumanBodyBones, Quaternion> WriteBufferForTest => _writeBufferRef;
 
+        internal VMCSharedReceiver SharedReceiverForTest => _sharedReceiver;
+
         internal VMCMoCapSource(string slotId, ISlotErrorChannel errorChannel)
         {
             _slotId = slotId ?? string.Empty;
@@ -88,7 +90,7 @@ namespace RealtimeAvatarController.MoCap.VMC
                     "VMCMoCapSourceConfig.port must be in the range 1025..65535.");
             }
 
-            _sharedReceiver = VMCSharedReceiver.EnsureInstance();
+            _sharedReceiver = VMCSharedReceiver.EnsureInstance(vmcConfig);
             try
             {
                 _sharedReceiver.ApplyReceiverSettings(vmcConfig.port);

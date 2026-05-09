@@ -219,7 +219,7 @@
 > Phase 4 まで完了で compile が通る状態。 Phase 5 では既存 PlayMode / EditMode テストを新クラス名 + internal 注入 API へ書換える。
 > リネーム + GUID 移植は 3 ファイル、 不変維持は 3 ファイル、 新規追加は 0 (Phase 1〜3 で作成済み)。
 
-- [ ] 6. PlayMode 統合テスト書換
+- [x] 6. PlayMode 統合テスト書換
 - [x] 6.1 VMCMoCapSourceIntegrationTests へリネーム + uOscClient ループバック化
   - `Tests/PlayMode/EVMC4UMoCapSourceIntegrationTests.cs` を `Tests/PlayMode/VMCMoCapSourceIntegrationTests.cs` にリネームし、 旧 `.cs.meta` GUID `9184bfd5f018a534393e68abc0c0dc3b` を移植する
   - `using EVMC4U;` を削除し `Receiver` プロパティ経由のテスト経路を internal 注入 API (`InjectBoneRotationForTest` / `InjectRootForTest` / `ForceTickForTest`) に書換える (旧 `InjectBoneRotationForTest` 経路は廃止 / 新たな internal 注入 API へ統合)
@@ -230,7 +230,7 @@
   - 観測完了条件: PlayMode テスト runner で integration tests が GREEN
   - _Requirements: 5.2, 5.5, 9.3, 9.7, 11.1_
   - _Boundary: VMCMoCapSourceIntegrationTests, VMCMoCapSource, VMCSharedReceiver_
-- [ ] 6.2 VMCMoCapSourceSharingTests へリネーム + 共有 lifecycle 検証
+- [x] 6.2 VMCMoCapSourceSharingTests へリネーム + 共有 lifecycle 検証
   - `Tests/PlayMode/EVMC4UMoCapSourceSharingTests.cs` を `Tests/PlayMode/VMCMoCapSourceSharingTests.cs` にリネームし、 旧 `.cs.meta` GUID `53c1e6a7f8b94e2cb6d5a89e0c1f2345` を移植する
   - `using EVMC4U;` を削除し `EVMC4USharedReceiver` 参照を `VMCSharedReceiver` に置換する
   - 同一 `VMCMoCapSourceConfig` で複数 Slot が refCount 経由で同一 `VMCSharedReceiver` を共有することを検証する

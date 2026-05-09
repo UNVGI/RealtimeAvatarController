@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace RealtimeAvatarController.MoCap.VMC
@@ -15,70 +16,82 @@ namespace RealtimeAvatarController.MoCap.VMC
     {
         private const string HostGameObjectName = "VMCSharedReceiver";
 
+        private static readonly Dictionary<VMCMoCapSourceConfig, ReceiverEntry> s_configEntries =
+            new Dictionary<VMCMoCapSourceConfig, ReceiverEntry>(ConfigReferenceComparer.Instance);
+
+        private static VMCSharedReceiver s_defaultInstance;
+        private static int s_defaultRefCount;
+
         private static VMCSharedReceiver s_instance;
         private static int s_refCount;
 
         private uOSC.uOscServer _server;
-        private Dictionary<HumanBodyBones, Quaternion> _writeRotations = new(64);
+        private Dictionary<HumanBodyBones, Quaternion> _writeRotations = new Dictionary<HumanBodyBones, Quaternion>(64);
         private Vector3 _writeRootPosition;
         private Quaternion _writeRootRotation = Quaternion.identity;
+        private VMCMoCapSourceConfig _configKey;
+        private int _localRefCount;
         // MainThread only: Subscribe/Unsubscribe and Update-driven Tick iteration run on Unity's
         // main thread, so this HashSet does not require locking or thread-safe add/remove.
-        private readonly HashSet<IVmcMoCapAdapter> _subscribers = new();
-        private readonly List<IVmcMoCapAdapter> _tickSnapshot = new();
+        private readonly HashSet<IVmcMoCapAdapter> _subscribers = new HashSet<IVmcMoCapAdapter>();
+        private readonly List<IVmcMoCapAdapter> _tickSnapshot = new List<IVmcMoCapAdapter>();
 
         public static VMCSharedReceiver EnsureInstance()
         {
-            if (s_instance == null)
+            if (s_defaultInstance == null)
             {
-                s_instance = CreateInstance();
+                s_defaultInstance = CreateInstance(null);
             }
 
-            s_refCount++;
-            return s_instance;
+            s_defaultRefCount++;
+            s_defaultInstance._localRefCount = s_defaultRefCount;
+            RefreshTestStatics();
+            return s_defaultInstance;
+        }
+
+        internal static VMCSharedReceiver EnsureInstance(VMCMoCapSourceConfig config)
+        {
+            if (config == null)
+            {
+                return EnsureInstance();
+            }
+
+            if (s_configEntries.TryGetValue(config, out var entry))
+            {
+                entry.RefCount++;
+                entry.Receiver._localRefCount = entry.RefCount;
+                s_configEntries[config] = entry;
+                RefreshTestStatics();
+                return entry.Receiver;
+            }
+
+            var receiver = CreateInstance(config);
+            receiver._configKey = config;
+            receiver._localRefCount = 1;
+            s_configEntries.Add(config, new ReceiverEntry { Receiver = receiver, RefCount = 1 });
+            RefreshTestStatics();
+            return receiver;
         }
 
         public void Release()
         {
-            if (s_refCount <= 0)
+            if (!ReferenceEquals(_configKey, null))
             {
+                ReleaseConfigInstance();
                 return;
             }
 
-            s_refCount--;
-            if (s_refCount > 0)
-            {
-                return;
-            }
-
-            var instance = s_instance;
-            var host = instance != null ? instance.gameObject : null;
-            s_instance = null;
-            s_refCount = 0;
-
-            if (instance != null)
-            {
-                instance.DisposeReceiverResources();
-            }
-
-            if (host == null)
-            {
-                return;
-            }
-
-            if (Application.isPlaying)
-            {
-                Destroy(host);
-            }
-            else
-            {
-                DestroyImmediate(host);
-            }
+            ReleaseDefaultInstance();
         }
 
         public void ApplyReceiverSettings(int port)
         {
             EnsureServer();
+
+            if (_server.isRunning && _server.port == port)
+            {
+                return;
+            }
 
             _server.StopServer();
             _server.autoStart = false;
@@ -136,39 +149,51 @@ namespace RealtimeAvatarController.MoCap.VMC
 
         internal static void ResetForTest()
         {
-            if (s_instance != null)
+            var receivers = new List<VMCSharedReceiver>();
+            if (s_defaultInstance != null)
             {
-                var instance = s_instance;
-                var host = instance.gameObject;
-                s_instance = null;
-                s_refCount = 0;
-                instance.DisposeReceiverResources();
-
-                if (host != null)
-                {
-                    if (Application.isPlaying)
-                    {
-                        Destroy(host);
-                    }
-                    else
-                    {
-                        DestroyImmediate(host);
-                    }
-                }
-
-                return;
+                receivers.Add(s_defaultInstance);
             }
 
+            foreach (var entry in s_configEntries.Values)
+            {
+                if (entry.Receiver != null && !receivers.Contains(entry.Receiver))
+                {
+                    receivers.Add(entry.Receiver);
+                }
+            }
+
+            s_defaultInstance = null;
+            s_defaultRefCount = 0;
+            s_configEntries.Clear();
+            s_instance = null;
             s_refCount = 0;
+
+            for (var i = 0; i < receivers.Count; i++)
+            {
+                DestroyReceiverHost(receivers[i]);
+            }
         }
 
         internal static VMCSharedReceiver InstanceForTest => s_instance;
 
         internal static int RefCountStaticForTest => s_refCount;
 
-        private static VMCSharedReceiver CreateInstance()
+        internal static int InstanceCountForTest
         {
-            var go = new GameObject(HostGameObjectName);
+            get
+            {
+                var count = s_defaultInstance != null ? 1 : 0;
+                count += s_configEntries.Count;
+                return count;
+            }
+        }
+
+        internal int RefCountForTest => _localRefCount;
+
+        private static VMCSharedReceiver CreateInstance(VMCMoCapSourceConfig config)
+        {
+            var go = new GameObject(CreateHostName(config));
             go.SetActive(false);
 
             var receiver = go.AddComponent<VMCSharedReceiver>();
@@ -183,6 +208,11 @@ namespace RealtimeAvatarController.MoCap.VMC
 
             go.SetActive(true);
             return receiver;
+        }
+
+        private static string CreateHostName(VMCMoCapSourceConfig config)
+        {
+            return config == null ? HostGameObjectName : HostGameObjectName + ":" + config.port;
         }
 
         private void Initialize(uOSC.uOscServer server)
@@ -207,6 +237,94 @@ namespace RealtimeAvatarController.MoCap.VMC
             _server.autoStart = false;
             _server.onDataReceived.RemoveListener(OnOscMessage);
             _server.onDataReceived.AddListener(OnOscMessage);
+        }
+
+        private void ReleaseConfigInstance()
+        {
+            if (!s_configEntries.TryGetValue(_configKey, out var entry) || !ReferenceEquals(entry.Receiver, this))
+            {
+                return;
+            }
+
+            entry.RefCount--;
+            if (entry.RefCount > 0)
+            {
+                _localRefCount = entry.RefCount;
+                s_configEntries[_configKey] = entry;
+                RefreshTestStatics();
+                return;
+            }
+
+            s_configEntries.Remove(_configKey);
+            _localRefCount = 0;
+            RefreshTestStatics();
+            DestroyReceiverHost(this);
+        }
+
+        private void ReleaseDefaultInstance()
+        {
+            if (!ReferenceEquals(s_defaultInstance, this) || s_defaultRefCount <= 0)
+            {
+                return;
+            }
+
+            s_defaultRefCount--;
+            if (s_defaultRefCount > 0)
+            {
+                _localRefCount = s_defaultRefCount;
+                RefreshTestStatics();
+                return;
+            }
+
+            s_defaultInstance = null;
+            _localRefCount = 0;
+            RefreshTestStatics();
+            DestroyReceiverHost(this);
+        }
+
+        private static void DestroyReceiverHost(VMCSharedReceiver receiver)
+        {
+            if (receiver == null)
+            {
+                return;
+            }
+
+            var host = receiver.gameObject;
+            receiver._configKey = null;
+            receiver._localRefCount = 0;
+            receiver.DisposeReceiverResources();
+
+            if (host == null)
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(host);
+            }
+            else
+            {
+                DestroyImmediate(host);
+            }
+        }
+
+        private static void RefreshTestStatics()
+        {
+            var totalRefCount = s_defaultRefCount;
+            VMCSharedReceiver first = s_defaultInstance;
+
+            foreach (var entry in s_configEntries.Values)
+            {
+                totalRefCount += entry.RefCount;
+                if (first == null)
+                {
+                    first = entry.Receiver;
+                }
+            }
+
+            s_refCount = totalRefCount;
+            s_instance = first;
         }
 
         private void OnOscMessage(uOSC.Message message)
@@ -258,11 +376,20 @@ namespace RealtimeAvatarController.MoCap.VMC
         {
             DisposeReceiverResources();
 
-            if (s_instance == this)
+            if (ReferenceEquals(s_defaultInstance, this))
             {
-                s_instance = null;
-                s_refCount = 0;
+                s_defaultInstance = null;
+                s_defaultRefCount = 0;
             }
+
+            if (!ReferenceEquals(_configKey, null)
+                && s_configEntries.TryGetValue(_configKey, out var entry)
+                && ReferenceEquals(entry.Receiver, this))
+            {
+                s_configEntries.Remove(_configKey);
+            }
+
+            RefreshTestStatics();
         }
 
         private void DisposeReceiverResources()
@@ -283,8 +410,32 @@ namespace RealtimeAvatarController.MoCap.VMC
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStaticsOnSubsystemRegistration()
         {
+            s_defaultInstance = null;
+            s_defaultRefCount = 0;
+            s_configEntries.Clear();
             s_instance = null;
             s_refCount = 0;
+        }
+
+        private struct ReceiverEntry
+        {
+            public VMCSharedReceiver Receiver;
+            public int RefCount;
+        }
+
+        private sealed class ConfigReferenceComparer : IEqualityComparer<VMCMoCapSourceConfig>
+        {
+            public static readonly ConfigReferenceComparer Instance = new ConfigReferenceComparer();
+
+            public bool Equals(VMCMoCapSourceConfig x, VMCMoCapSourceConfig y)
+            {
+                return ReferenceEquals(x, y);
+            }
+
+            public int GetHashCode(VMCMoCapSourceConfig obj)
+            {
+                return RuntimeHelpers.GetHashCode(obj);
+            }
         }
     }
 }
