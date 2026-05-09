@@ -220,7 +220,7 @@
 > リネーム + GUID 移植は 3 ファイル、 不変維持は 3 ファイル、 新規追加は 0 (Phase 1〜3 で作成済み)。
 
 - [ ] 6. PlayMode 統合テスト書換
-- [ ] 6.1 VMCMoCapSourceIntegrationTests へリネーム + uOscClient ループバック化
+- [x] 6.1 VMCMoCapSourceIntegrationTests へリネーム + uOscClient ループバック化
   - `Tests/PlayMode/EVMC4UMoCapSourceIntegrationTests.cs` を `Tests/PlayMode/VMCMoCapSourceIntegrationTests.cs` にリネームし、 旧 `.cs.meta` GUID `9184bfd5f018a534393e68abc0c0dc3b` を移植する
   - `using EVMC4U;` を削除し `Receiver` プロパティ経由のテスト経路を internal 注入 API (`InjectBoneRotationForTest` / `InjectRootForTest` / `ForceTickForTest`) に書換える (旧 `InjectBoneRotationForTest` 経路は廃止 / 新たな internal 注入 API へ統合)
   - in-process uOSC `uOscClient` を作成して `127.0.0.1:port` に既知 bone OSC packet を送出するループバックテストを追加する
