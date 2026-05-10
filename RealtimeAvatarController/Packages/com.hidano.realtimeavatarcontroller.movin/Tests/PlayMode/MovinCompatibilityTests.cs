@@ -32,7 +32,7 @@ namespace RealtimeAvatarController.MoCap.Movin.Tests
         public void SetUp()
         {
             DestroyMovinHosts();
-            VMCSharedReceiver.ResetForTest();
+            ResetVmcSharedReceiver();
             DestroyVmcHosts();
             RegistryLocator.ResetForTest();
         }
@@ -47,7 +47,7 @@ namespace RealtimeAvatarController.MoCap.Movin.Tests
             _sources.Clear();
 
             DestroyMovinHosts();
-            VMCSharedReceiver.ResetForTest();
+            ResetVmcSharedReceiver();
             DestroyVmcHosts();
 
             foreach (var config in _configs)
@@ -299,16 +299,38 @@ namespace RealtimeAvatarController.MoCap.Movin.Tests
 
         private static void DestroyVmcHosts()
         {
-            var hosts = Object.FindObjectsByType<VMCSharedReceiver>(
+            var receiverType = ResolveVmcSharedReceiverType();
+            if (receiverType == null)
+            {
+                return;
+            }
+
+            var hosts = Object.FindObjectsByType(
+                receiverType,
                 FindObjectsInactive.Include,
                 FindObjectsSortMode.None);
             foreach (var host in hosts)
             {
-                if (host != null)
+                if (host is Component component && component != null)
                 {
-                    Object.DestroyImmediate(host.gameObject);
+                    Object.DestroyImmediate(component.gameObject);
                 }
             }
+        }
+
+        private static void ResetVmcSharedReceiver()
+        {
+            var receiverType = ResolveVmcSharedReceiverType();
+            var method = receiverType?.GetMethod(
+                "ResetForTest",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            method?.Invoke(null, null);
+        }
+
+        private static Type ResolveVmcSharedReceiverType()
+        {
+            return Type.GetType(
+                "RealtimeAvatarController.MoCap.VMC.VMCSharedReceiver, RealtimeAvatarController.MoCap.VMC");
         }
     }
 }
