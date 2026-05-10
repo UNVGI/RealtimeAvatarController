@@ -1,7 +1,7 @@
 {
   "name": "jp.co.unvgi.realtimeavatarcontroller.movin",
   "displayName": "Realtime Avatar Controller MOVIN",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "unity": "6000.3",
   "unityRelease": "10f1",
   "description": "MOVIN Studio MoCap source package for Realtime Avatar Controller.",
@@ -10,7 +10,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "jp.co.unvgi.realtimeavatarcontroller": "0.1.1-fork.3"
+    "jp.co.unvgi.realtimeavatarcontroller": "0.2.0-fork.1"
   },
   "samples": [
     {

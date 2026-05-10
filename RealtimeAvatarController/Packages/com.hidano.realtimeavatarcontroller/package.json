@@ -1,7 +1,7 @@
 {
   "name": "jp.co.unvgi.realtimeavatarcontroller",
   "displayName": "Realtime Avatar Controller",
-  "version": "0.1.1-fork.3",
+  "version": "0.2.0-fork.1",
   "unity": "6000.3",
   "unityRelease": "10f1",
   "description": "Runtime avatar controller for VTuber use cases. Provides slot-based MoCap source management, avatar provider abstraction, and motion pipeline for Unity.",
@@ -10,8 +10,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "jp.co.unvgi.uosc": "1.0.0",
-    "jp.co.unvgi.external.gpsnmeajp.evmc4u": "0.5.1-fork.1"
+    "jp.co.unvgi.uosc": "1.0.0"
   },
   "samples": [
     {
