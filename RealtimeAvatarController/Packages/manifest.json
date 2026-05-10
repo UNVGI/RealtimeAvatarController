@@ -22,10 +22,8 @@
   ],
   "dependencies": {
     "com.cysharp.unitask": "2.5.10",
-    "com.hidano.realtimeavatarcontroller.mocap-vmc": "file:com.hidano.realtimeavatarcontroller.mocap-vmc",
     "com.hidano.uosc": "1.0.0",
     "com.neuecc.unirx": "7.1.0",
-    "com.unity.ai.assistant": "2.6.0-pre.1",
     "com.unity.ide.rider": "3.0.40",
     "com.unity.multiplayer.center": "1.0.1",
     "com.unity.test-framework": "1.4.5",
