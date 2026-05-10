@@ -1,9 +1,5 @@
 fileFormatVersion: 2
-<<<<<<<< HEAD:RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller.movin/Editor/MoCap/Movin/MovinMoCapSourceFactoryEditorRegistrar.cs.meta
-guid: 35318975407d47ab89e25ef3086c7ea7
-========
 guid: 44146a6466a347ff9829bf3cd87ae70a
->>>>>>>> upstream/main:RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/Runtime/VMCMoCapSourceConfig.cs.meta
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2

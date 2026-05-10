@@ -1,9 +1,5 @@
 fileFormatVersion: 2
-<<<<<<<< HEAD:RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller.movin/Runtime/MovinBoneTable.cs.meta
-guid: aa380b6196134b4f94a93db7e4d8a10b
-========
 guid: 3bd810584bc34ed6915adb6e0ee3e18b
->>>>>>>> upstream/main:RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/Runtime/VmcBoneNameMap.cs.meta
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2

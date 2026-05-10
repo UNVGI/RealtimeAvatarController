@@ -1,11 +1,6 @@
 fileFormatVersion: 2
-<<<<<<<< HEAD:RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller.movin/package.json.meta
-guid: fbf95b362d3029545bedc0c2ac2ae0cd
-PackageManifestImporter:
-========
 guid: bc0d5052b27d44e697ddc63921288a41
 TextScriptImporter:
->>>>>>>> upstream/main:RealtimeAvatarController/Packages/com.hidano.realtimeavatarcontroller.mocap-vmc/THIRD_PARTY_NOTICES.md.meta
   externalObjects: {}
   userData: 
   assetBundleName: 
