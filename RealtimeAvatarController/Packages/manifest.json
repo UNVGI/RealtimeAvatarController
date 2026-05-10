@@ -17,7 +17,8 @@
     }
   ],
   "testables": [
-    "com.hidano.realtimeavatarcontroller"
+    "com.hidano.realtimeavatarcontroller",
+    "com.hidano.realtimeavatarcontroller.mocap-vmc"
   ],
   "dependencies": {
     "com.cysharp.unitask": "2.5.10",

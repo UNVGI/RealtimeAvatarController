@@ -1,3 +1,5 @@
+# OBSOLETE (2026-05-09) — EVMC4U 依存撤廃により当 spec の patch 関連工程は不要となった。 mocap-vmc-native Spec 参照。
+
 # タスク 7.2 ハンドオーバー: Sample Scene 目視確認は DEFERRED TO USER
 
 - **対象タスク**: tasks.md §7.2 [Research] Sample Scene の `SlotManagementDemo` が無改修で動作することの目視確認

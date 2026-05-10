@@ -1,0 +1,23 @@
+{
+  "name": "RealtimeAvatarController.MoCap.VMC.Tests.PlayMode",
+  "rootNamespace": "RealtimeAvatarController.MoCap.VMC.Tests",
+  "references": [
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner",
+    "RealtimeAvatarController.MoCap.VMC",
+    "RealtimeAvatarController.Core",
+    "RealtimeAvatarController.Motion",
+    "uOSC.Runtime",
+    "UniTask"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll"],
+  "autoReferenced": false,
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+  "optionalUnityReferences": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

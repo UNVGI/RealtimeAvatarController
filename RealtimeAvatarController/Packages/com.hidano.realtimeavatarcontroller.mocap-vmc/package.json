@@ -1,0 +1,31 @@
+{
+  "name": "com.hidano.realtimeavatarcontroller.mocap-vmc",
+  "displayName": "Realtime Avatar Controller MoCap VMC",
+  "version": "0.1.0",
+  "unity": "6000.3",
+  "unityRelease": "10f1",
+  "description": "VMC MoCap source package for Realtime Avatar Controller. Provides a native uOSC-based VMC receiver integration for Unity.",
+  "author": {
+    "name": "Hidano",
+    "email": "n.hidano@hidano-dev.com",
+    "url": "https://github.com/NHidano"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "com.hidano.realtimeavatarcontroller": "0.2.0"
+  },
+  "samples": [
+    {
+      "displayName": "VMC Sample",
+      "description": "Minimal VMC receiver sample for Realtime Avatar Controller.",
+      "path": "Samples~/VMC"
+    }
+  ],
+  "keywords": [
+    "avatar",
+    "mocap",
+    "vmc",
+    "vtuber",
+    "realtime"
+  ]
+}

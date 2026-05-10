@@ -164,12 +164,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 100100000}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9, type: 3}
+  m_Script: {fileID: 11500000, guid: 99f941ef52bd449c96bbe5c7da334adc, type: 3}
   m_Name:
   m_EditorClassIdentifier:
   initialSlots:
-  - {fileID: 11400000, guid: a07b8c9d0e1f2a3b4c5d6e7f8091a2b3, type: 2}
-  - {fileID: 11400000, guid: b18c9d0e1f2a3b4c5d6e7f8091a2b3c4, type: 2}
+  - {fileID: 11400000, guid: 9fe37a1406634fce9638b1d8cf0668ae, type: 2}
+  - {fileID: 11400000, guid: a26b196c5c3a4b8094f8f2c0f9dbe195, type: 2}
 --- !u!1 &100200000
 GameObject:
   m_ObjectHideFlags: 0
@@ -325,14 +325,14 @@ MonoBehaviour:
   m_GameObject: {fileID: 100210000}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6, type: 3}
+  m_Script: {fileID: 11500000, guid: e597a6ad1ce547a4836fbe96d00ad4d0, type: 3}
   m_Name:
   m_EditorClassIdentifier:
   slotManagerBehaviour: {fileID: 100100002}
   addSlotButton: {fileID: 100212004}
   slotListScrollView: {fileID: 100213004}
   slotListContent: {fileID: 100213001}
-  slotListItemPrefab: {fileID: 300100000, guid: e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1, type: 3}
+  slotListItemPrefab: {fileID: 300100000, guid: b2abfca1c6024c0288d06840a1a1a4a7, type: 3}
   addSlotTemplate: {fileID: 0}
 --- !u!1 &100211000
 GameObject:
@@ -808,7 +808,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 100214000}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2, type: 3}
+  m_Script: {fileID: 11500000, guid: 020ee5b0a8494877a7985185c0ef978e, type: 3}
   m_Name:
   m_EditorClassIdentifier:
   slotManagerBehaviour: {fileID: 100100002}
@@ -866,7 +866,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 100220000}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8, type: 3}
+  m_Script: {fileID: 11500000, guid: 32f0844db4c248b6b58efacab166e055, type: 3}
   m_Name:
   m_EditorClassIdentifier:
   slotManagerBehaviour: {fileID: 100100002}
@@ -1478,11 +1478,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 100230000}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8, type: 3}
+  m_Script: {fileID: 11500000, guid: 6bfae851a0ab472f88b6c513986dc21b, type: 3}
   m_Name:
   m_EditorClassIdentifier:
   _logContainer: {fileID: 100231001}
-  _logItemPrefab: {fileID: 200100000, guid: a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2, type: 3}
+  _logItemPrefab: {fileID: 200100000, guid: 32ab9669182f465e90dd23969385a982, type: 3}
   _maxDisplayCount: 20
 --- !u!1 &100231000
 GameObject:
@@ -2143,7 +2143,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 100233000}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a1b2c3d4e5f60718293a4b5c6d7e8f90, type: 3}
+  m_Script: {fileID: 11500000, guid: 51aaa78ba4ed4932a6dc675df617f1ef, type: 3}
   m_Name:
   m_EditorClassIdentifier:
   slotManagerBehaviour: {fileID: 100100002}
@@ -2600,7 +2600,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 100240000}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b2c3d4e5f60718293a4b5c6d7e8f90a1, type: 3}
+  m_Script: {fileID: 11500000, guid: ff22ac900e354093b2e770328b10e6e5, type: 3}
   m_Name:
   m_EditorClassIdentifier:
   slotDetailPanel: {fileID: 100220002}
