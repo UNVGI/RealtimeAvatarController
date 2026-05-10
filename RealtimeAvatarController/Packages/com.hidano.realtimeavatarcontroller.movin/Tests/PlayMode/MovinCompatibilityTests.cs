@@ -32,7 +32,7 @@ namespace RealtimeAvatarController.MoCap.Movin.Tests
         public void SetUp()
         {
             DestroyMovinHosts();
-            EVMC4USharedReceiver.ResetForTest();
+            VMCSharedReceiver.ResetForTest();
             DestroyVmcHosts();
             RegistryLocator.ResetForTest();
         }
@@ -47,7 +47,7 @@ namespace RealtimeAvatarController.MoCap.Movin.Tests
             _sources.Clear();
 
             DestroyMovinHosts();
-            EVMC4USharedReceiver.ResetForTest();
+            VMCSharedReceiver.ResetForTest();
             DestroyVmcHosts();
 
             foreach (var config in _configs)
@@ -299,7 +299,7 @@ namespace RealtimeAvatarController.MoCap.Movin.Tests
 
         private static void DestroyVmcHosts()
         {
-            var hosts = Object.FindObjectsByType<EVMC4USharedReceiver>(
+            var hosts = Object.FindObjectsByType<VMCSharedReceiver>(
                 FindObjectsInactive.Include,
                 FindObjectsSortMode.None);
             foreach (var host in hosts)
